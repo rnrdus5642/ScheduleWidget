@@ -1,343 +1,216 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.IO;
-using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Interop;
-using Newtonsoft.Json;
-using Microsoft.Win32;
-using System.Windows.Forms; // NotifyIcon, ContextMenuStrip
-using System.Drawing;       // Icon
+using System.Windows.Forms;
+using System.Windows.Threading; 
 
 namespace ScheduleWidget
 {
     public partial class MainWindow : Window
     {
-        // 윈도우 핸들 찾기
-        [DllImport("user32.dll", SetLastError = true)] static extern IntPtr FindWindow(string lpClassName, string lpWindowName);
+        private AppData appData;
+        private readonly DataManager dataManager = new DataManager();
+        private readonly TrayService trayService = new TrayService();
 
-        // 하위 윈도우 핸들 찾기
-        [DllImport("user32.dll", SetLastError = true)] static extern IntPtr FindWindowEx(IntPtr hWndParent, IntPtr hWndChildAfter, string lpszClass, string lpszWindow);
+        private DispatcherTimer dayChangeTimer;
 
-        // 부모 윈도우 설정
-        [DllImport("user32.dll", SetLastError = true)] static extern IntPtr SetParent(IntPtr hWndChild, IntPtr hWndNewParent);
-
-        // 윈도우의 확장 스타일을 변경하는 함수
-        [DllImport("user32.dll", SetLastError = true)] static extern int SetWindowLong(IntPtr hWnd, int nIndex, int dwNewLong);
-
-        //GetWindowLong으로 가져온 창 스타일을 변경하는 함수 
-        [DllImport("user32.dll", SetLastError = true)] static extern int GetWindowLong(IntPtr hWnd, int nIndex);  
-
-        const int GWL_EXSTYLE = -20;                      // 창의 확장 스타일 값을 가져오거나 설정
-        const int WS_EX_TOOLWINDOW = 0x00000080;          // ALT+TAB에 표시되지 않게 하는 플래그
-
-        private string jsonPath;                          // Json 파일 경로
-        private AppData appData = new AppData();          // 저장할 정보 데이터 객체
-                                                          
-        private const string AppName = "ScheduleWidget";  // 앱 이름
-        private NotifyIcon trayIcon;                      // 시스템 트레이 아이콘
-
-        private Screen currentScreen;
-
-        // 초기화
         public MainWindow()
         {
-            InitializeComponent(); // WPF 창 초기화
+            InitializeComponent();
 
-            // 일정 데이터 경로 불러오기
-            string exeDir = AppDomain.CurrentDomain.BaseDirectory;
-            jsonPath = Path.Combine(exeDir, "schedules.json");
+            SourceInitialized += MainWindow_SourceInitialized;
+            Loaded += MainWindow_Loaded;
 
+            ModeToggle.IsChecked = false;
+            this.ResizeMode = ResizeMode.NoResize;
 
-            SourceInitialized += MainWindow_SourceInitialized; // WinAPI를 사용할 수 있게 된 순간 호출
-            Loaded += MainWindow_Loaded; // 창이 화면에 보이기 직전에 호출
+            InitDateSelectors();
+            dataManager.EnableStartup();
+            trayService.Initialize(this);
 
-            ModeToggle.IsChecked = false; // 창 변환 토글 스위치 비활성화
-            this.ResizeMode = ResizeMode.NoResize; // 사용자가 창 크기를 변경하지 못하도록 막음
-
-            InitDateSelectors();  // 날짜 선택 UI 초기화
-            EnableStartup();      // 윈도우 시작 시 자동 실행 설정
-            InitTrayIcon();       // 트레이 아이콘 생성 및 이벤트 등록
+            SetTimerForMidnight();
         }
 
-        // 사용자가 창을 닫으려고 시도할 때 호출
-        protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
-        {
-            e.Cancel = true; // 닫기 방지
-        }
+        protected override void OnClosing(System.ComponentModel.CancelEventArgs e) => e.Cancel = true;
 
-        // 창이 실제로 닫힌 이후 호출
-        protected override void OnClosed(EventArgs e)
-        {
-            base.OnClosed(e);
-        }
-
-        //바탕화면을 부모로 지정
         private void MainWindow_SourceInitialized(object sender, EventArgs e)
         {
-            foreach (var screen in Screen.AllScreens)
-            {
-                Console.WriteLine($"Device Name: {screen.DeviceName}");
-                Console.WriteLine($"  Primary: {screen.Primary}");
-                Console.WriteLine($"  Bounds: {screen.Bounds}");
-                Console.WriteLine($"  Working Area: {screen.WorkingArea}");
-                Console.WriteLine();
-            }
-
             var hwnd = new WindowInteropHelper(this).Handle;
             if (hwnd == IntPtr.Zero) return;
 
-            // 메인 모니터 작업 영역 가져오기
-            var mainScreen = Screen.PrimaryScreen;
-            var bounds = mainScreen.WorkingArea;
+            // 바탕화면 고정
+            NativeMethods.SetToDesktop(hwnd);
 
-            // 창 위치를 메인 모니터 안으로 보정
-            this.Left = bounds.Left;
-            this.Top = bounds.Top;
-
-            // 부모를 메인 모니터 바탕화면 SysListView32로 설정
-            IntPtr hProgman = FindWindow("Progman", null);
-            IntPtr hShellDefView = FindWindowEx(hProgman, IntPtr.Zero, "SHELLDLL_DefView", null);
-            IntPtr hDesktop = FindWindowEx(hShellDefView, IntPtr.Zero, "SysListView32", null);
-
-            if (hDesktop != IntPtr.Zero)
-                SetParent(hwnd, hDesktop);
-
-            // Alt+Tab에서 숨기기
-            int exStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
-            SetWindowLong(hwnd, GWL_EXSTYLE, exStyle | WS_EX_TOOLWINDOW);
+            // Alt+Tab 숨기기
+            int exStyle = NativeMethods.GetWindowLong(hwnd, NativeMethods.GWL_EXSTYLE);
+            NativeMethods.SetWindowLong(hwnd, NativeMethods.GWL_EXSTYLE, exStyle | NativeMethods.WS_EX_TOOLWINDOW);
         }
 
-        //창이 화면에 보이기 직전에 호출
         private void MainWindow_Loaded(object sender, RoutedEventArgs e)
         {
-            LoadAppData(); // Json데이터 불러오기
+            appData = dataManager.LoadData();
 
-            HideFromAltTab(); // Alt+Tab에서 숨기기
-
-            // 창 이동/크기 변경시 데이터 저장
-            this.LocationChanged += (s, ev) => SaveAppData();
-            this.SizeChanged += (s, ev) => SaveAppData();
-        }
-
-        //Alt+Tab에서 숨기기
-        private void HideFromAltTab()
-        {
-            var hwnd = new WindowInteropHelper(this).Handle;
-            if (hwnd == IntPtr.Zero) return;
-
-            int exStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
-            SetWindowLong(hwnd, GWL_EXSTYLE, exStyle | WS_EX_TOOLWINDOW);
-        }
-    
-        // 트레이 아이콘
-        private void InitTrayIcon()
-        {
-            trayIcon = new NotifyIcon();                   // 트레이 아이콘 객체 생성        
-            trayIcon.Icon = SystemIcons.Application;       // 기본 아이콘 설정
-            trayIcon.Visible = true;                       // 트레이에 실제 표시되도록 설정
-            trayIcon.Text = "일정 위젯";                    // 마우스 오버 시 툴팁으로 표시될 텍스트
-
-            var menu = new ContextMenuStrip();             // 아이콘 우클릭시 뜨는 메뉴
-            menu.Items.Add("열기", null, (s, e) =>         
-            {                                              
-                this.Show();                               // 창 표시
-            });                                            
-            menu.Items.Add("종료", null, (s, e) => 
-            {                                              
-                trayIcon.Visible = false;                  // 아이콘을 트레이에서 제거
-                trayIcon.Dispose();                        // 리소스 해제
-
-                System.Windows.Application.Current.Shutdown(); // 프로그램 완전 종료
-            });
-            trayIcon.ContextMenuStrip = menu; // 메뉴를 트레이 아이콘에 연결
-
-            // 사용자가 트레이 아이콘을 더블클릭시
-            trayIcon.DoubleClick += (s, e) =>
+            // 위치 복원
+            if (appData.WindowState != null && appData.WindowState.Width > 0)
             {
-                this.Show();
-            };
-        }
-
-        // 재부팅시 자동 시작 등록
-        private void EnableStartup()
-        {
-            string exePath = System.Reflection.Assembly.GetExecutingAssembly().Location;
-            using (RegistryKey key = Registry.CurrentUser.OpenSubKey(
-                @"SOFTWARE\Microsoft\Windows\CurrentVersion\Run", true))
-            {
-                key?.SetValue(AppName, exePath);
-            }
-        }
-
-        // 재부팅시 자동 시작 등록 취소
-        private void DisableStartup()
-        {
-            using (RegistryKey key = Registry.CurrentUser.OpenSubKey(
-                @"SOFTWARE\Microsoft\Windows\CurrentVersion\Run", true))
-            {
-                if (key?.GetValue(AppName) != null)
-                {
-                    key.DeleteValue(AppName, false); // 등록된 자동시작 값 삭제
-                }
-            }
-        }
-
-        // JSON 로드 / 저장
-        private void LoadAppData()
-        {
-            if (File.Exists(jsonPath))
-            {
-                string json = File.ReadAllText(jsonPath);
-                appData = JsonConvert.DeserializeObject<AppData>(json) ?? new AppData();
+                this.Width = appData.WindowState.Width;
+                this.Height = appData.WindowState.Height;
+                this.Left = appData.WindowState.Left;
+                this.Top = appData.WindowState.Top;
             }
 
-            // 창 위치 복원
-            if (appData.WindowState != null)
-            {
-                if (appData.WindowState.Width > 0) this.Width = appData.WindowState.Width;
-                if (appData.WindowState.Height > 0) this.Height = appData.WindowState.Height;
-                if (appData.WindowState.Left >= 0 && appData.WindowState.Top >= 0)
-                {
-                    this.Left = appData.WindowState.Left;
-                    this.Top = appData.WindowState.Top;
-                }
-            }
-
+            this.LocationChanged += (s, ev) => SaveCurrentState();
+            this.SizeChanged += (s, ev) => SaveCurrentState();
             RefreshScheduleList();
         }
 
-        private void SaveAppData()
+        private void SaveCurrentState()
         {
-            // 현재 창 위치 저장
-            appData.WindowState = new WindowStateData
-            {
-                Left = this.Left,
-                Top = this.Top,
-                Width = this.Width,
-                Height = this.Height
-            };
-
-            string json = JsonConvert.SerializeObject(appData, Formatting.Indented);
-            File.WriteAllText(jsonPath, json);
+            appData.WindowState.Left = this.Left;
+            appData.WindowState.Top = this.Top;
+            appData.WindowState.Width = this.Width;
+            appData.WindowState.Height = this.Height;
+            dataManager.SaveData(appData);
         }
 
-        // 일정 추가 관련
-        private void AddButton_Click(object sender, RoutedEventArgs e)
-        {
-            if (string.IsNullOrWhiteSpace(TitleInput.Text))
-                return;
-
-            int year = (int)YearCombo.SelectedItem;
-            int month = (int)MonthCombo.SelectedItem;
-            int day = (int)DayCombo.SelectedItem;
-            string dateStr = $"{year}-{month:D2}-{day:D2}";
-
-            var newItem = new ScheduleItem
-            {
-                Title = TitleInput.Text.Trim(),
-                Period = dateStr
-            };
-
-            appData.Schedules.Add(newItem);
-            SaveAppData();
-            RefreshScheduleList();
-
-            TitleInput.Text = "";
-        }
-
-        // D-day기준으로 일정 정렬하기
         private void RefreshScheduleList()
         {
             var sorted = new List<ScheduleItem>(appData.Schedules);
-
             sorted.Sort((a, b) =>
             {
                 bool aPast = a.RemainingDays < 0;
                 bool bPast = b.RemainingDays < 0;
-
                 if (aPast && !bPast) return -1;
                 if (!aPast && bPast) return 1;
-
-                if (aPast && bPast)
-                    return a.RemainingDays.CompareTo(b.RemainingDays);
-
                 return a.RemainingDays.CompareTo(b.RemainingDays);
             });
 
             ScheduleList.ItemsSource = null;
             ScheduleList.ItemsSource = sorted;
         }
-        
-        // 일정 제거 관련
+
+        // 엔터키를 눌렀을 때 일정 추가 함수
+        private void TitleInput_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+        {
+            if (e.Key == System.Windows.Input.Key.Enter)
+                AddButton_Click(this, new RoutedEventArgs());
+        }
+
+        private void AddButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (string.IsNullOrWhiteSpace(TitleInput.Text)) return;
+
+            string dateStr = $"{(int)YearCombo.SelectedItem}-{(int)MonthCombo.SelectedItem:D2}-{(int)DayCombo.SelectedItem:D2}";
+            appData.Schedules.Add(new ScheduleItem { Title = TitleInput.Text.Trim(), Period = dateStr });
+
+            dataManager.SaveData(appData);
+            RefreshScheduleList();
+
+            TitleInput.Text = "";
+            ResetDateToToday();
+
+            TitleInput.Focus();
+        }
+
+        private void CalendarPicker_SelectedDateChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
+        {
+            if (CalendarPicker.SelectedDate.HasValue)
+            {
+                DateTime selected = CalendarPicker.SelectedDate.Value;
+
+                if (YearCombo.Items.Contains(selected.Year))
+                    YearCombo.SelectedItem = selected.Year;
+
+                MonthCombo.SelectedItem = selected.Month;
+
+                UpdateDays(selected.Year, selected.Month);
+                DayCombo.SelectedItem = selected.Day;
+            }
+        }
+
+        private void ResetDateToToday()
+        {
+            DateTime today = DateTime.Now;
+
+            YearCombo.SelectedItem = today.Year;
+            MonthCombo.SelectedItem = today.Month;
+
+            // 월이 바뀌면 일수도 달라지므로 UpdateDays 호출 후 일 설정
+            UpdateDays(today.Year, today.Month);
+            DayCombo.SelectedItem = today.Day;
+
+            CalendarPicker.SelectedDate = today;
+        }
+
         private void RemoveSchedule_Click(object sender, RoutedEventArgs e)
         {
-            if (sender is System.Windows.Controls.MenuItem menuItem &&
-                menuItem.DataContext is ScheduleItem item)
+            if (sender is System.Windows.Controls.MenuItem mi && mi.DataContext is ScheduleItem item)
             {
                 appData.Schedules.Remove(item);
-                SaveAppData();
+                dataManager.SaveData(appData);
                 RefreshScheduleList();
             }
         }
 
-        // 창 드래그
         private void TopBar_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
         {
-            if (ModeToggle.IsChecked == true && e.LeftButton == MouseButtonState.Pressed)
-                this.DragMove();
+            if (ModeToggle.IsChecked == true && e.LeftButton == MouseButtonState.Pressed) this.DragMove();
         }
 
-        // 창 크기 조절 기능 켜기
-        private void ModeToggle_Checked(object sender, RoutedEventArgs e)
-        {
-            this.ResizeMode = ResizeMode.CanResizeWithGrip;
-        }
+        private void ModeToggle_Checked(object sender, RoutedEventArgs e) => this.ResizeMode = ResizeMode.CanResizeWithGrip;
+        private void ModeToggle_Unchecked(object sender, RoutedEventArgs e) => this.ResizeMode = ResizeMode.NoResize;
 
-        // 창 크기 조절 기능 끄기
-        private void ModeToggle_Unchecked(object sender, RoutedEventArgs e)
-        {
-            this.ResizeMode = ResizeMode.NoResize;
-        }
-
-        // 날짜 선택 초기화
         private void InitDateSelectors()
         {
             DateTime today = DateTime.Now;
+            for (int y = today.Year - 5; y <= today.Year + 5; y++) YearCombo.Items.Add(y);
+            for (int m = 1; m <= 12; m++) MonthCombo.Items.Add(m);
 
-            for (int y = today.Year - 5; y <= today.Year + 5; y++)
-                YearCombo.Items.Add(y);
             YearCombo.SelectedItem = today.Year;
-
-            for (int m = 1; m <= 12; m++)
-                MonthCombo.Items.Add(m);
             MonthCombo.SelectedItem = today.Month;
-
             UpdateDays(today.Year, today.Month);
             DayCombo.SelectedItem = today.Day;
 
-            YearCombo.SelectionChanged += (s, e) =>
-            {
-                if (YearCombo.SelectedItem != null && MonthCombo.SelectedItem != null)
-                    UpdateDays((int)YearCombo.SelectedItem, (int)MonthCombo.SelectedItem);
-            };
-
-            MonthCombo.SelectionChanged += (s, e) =>
-            {
-                if (YearCombo.SelectedItem != null && MonthCombo.SelectedItem != null)
-                    UpdateDays((int)YearCombo.SelectedItem, (int)MonthCombo.SelectedItem);
-            };
+            YearCombo.SelectionChanged += (s, e) => UpdateDays((int)YearCombo.SelectedItem, (int)MonthCombo.SelectedItem);
+            MonthCombo.SelectionChanged += (s, e) => UpdateDays((int)YearCombo.SelectedItem, (int)MonthCombo.SelectedItem);
         }
 
-        //날짜 업데이트
         private void UpdateDays(int year, int month)
         {
             DayCombo.Items.Clear();
             int days = DateTime.DaysInMonth(year, month);
-            for (int d = 1; d <= days; d++)
-                DayCombo.Items.Add(d);
+            for (int d = 1; d <= days; d++) DayCombo.Items.Add(d);
             DayCombo.SelectedIndex = 0;
+        }
+
+
+        // 자정까지 남은 시간 계산 후 갱신해주는 함수
+        private void SetTimerForMidnight()
+        {
+            dayChangeTimer = new DispatcherTimer();
+
+            DateTime now = DateTime.Now;
+            DateTime tomorrow = now.Date.AddDays(1);
+            TimeSpan timeUntilMidnight = tomorrow - now;
+
+            // 1. 첫 번째 인터벌: 현재부터 자정까지 남은 시간
+            dayChangeTimer.Interval = timeUntilMidnight;
+
+            dayChangeTimer.Tick += (s, e) =>
+            {
+                // 자정이 되면 리스트 갱신
+                RefreshScheduleList();
+
+                // 2. 이후 인터벌: 자정부터는 24시간마다 한 번씩 실행
+                if (dayChangeTimer.Interval != TimeSpan.FromHours(24))
+                {
+                    dayChangeTimer.Interval = TimeSpan.FromHours(24);
+                }
+            };
+
+            dayChangeTimer.Start();
         }
     }
 }

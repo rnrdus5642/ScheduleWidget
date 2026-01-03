@@ -180,7 +180,7 @@
                             <ColumnDefinition Width="60"/>
                         </Grid.ColumnDefinitions>
 
-                        <TextBox x:Name="TitleInput" Grid.Column="0" Height="25" Margin="0,0,5,0"/>
+                        <TextBox x:Name="TitleInput" KeyDown="TitleInput_KeyDown" Grid.Column="0" Height="25" Margin="0,0,5,0"/>
                         <Button x:Name="AddButton" Grid.Column="1" Content="추가" Width="60" Height="25" Click="AddButton_Click"/>
                     </Grid>
 
@@ -190,6 +190,19 @@
                         <ComboBox x:Name="YearCombo" Width="70" Height="25" Margin="0,0,5,0"/>
                         <ComboBox x:Name="MonthCombo" Width="50" Height="25" Margin="0,0,5,0"/>
                         <ComboBox x:Name="DayCombo" Width="50" Height="25" Margin="0,0,5,0"/>
+
+                        <DatePicker x:Name="CalendarPicker" 
+                            Width="30" Height="25" 
+                            SelectedDateChanged="CalendarPicker_SelectedDateChanged"
+                            BorderThickness="0"
+                            Background="Transparent"
+                            VerticalAlignment="Center">
+                            <DatePicker.Resources>
+                                <Style TargetType="DatePickerTextBox">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                </Style>
+                            </DatePicker.Resources>
+                        </DatePicker>
                     </StackPanel>
                 </Grid>
             </Border>
