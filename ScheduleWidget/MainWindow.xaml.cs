@@ -1,10 +1,11 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Forms;
-using System.Windows.Threading; 
+using System.Windows.Media;
+using System.Windows.Threading;
 
 namespace ScheduleWidget
 {
@@ -40,10 +41,8 @@ namespace ScheduleWidget
             var hwnd = new WindowInteropHelper(this).Handle;
             if (hwnd == IntPtr.Zero) return;
 
-            // 바탕화면 고정
             NativeMethods.SetToDesktop(hwnd);
 
-            // Alt+Tab 숨기기
             int exStyle = NativeMethods.GetWindowLong(hwnd, NativeMethods.GWL_EXSTYLE);
             NativeMethods.SetWindowLong(hwnd, NativeMethods.GWL_EXSTYLE, exStyle | NativeMethods.WS_EX_TOOLWINDOW);
         }
@@ -52,7 +51,6 @@ namespace ScheduleWidget
         {
             appData = dataManager.LoadData();
 
-            // 위치 복원
             if (appData.WindowState != null && appData.WindowState.Width > 0)
             {
                 this.Width = appData.WindowState.Width;
@@ -63,6 +61,8 @@ namespace ScheduleWidget
 
             this.LocationChanged += (s, ev) => SaveCurrentState();
             this.SizeChanged += (s, ev) => SaveCurrentState();
+
+            ApplyAppearance(appData.Appearance);
             RefreshScheduleList();
         }
 
@@ -91,7 +91,6 @@ namespace ScheduleWidget
             ScheduleList.ItemsSource = sorted;
         }
 
-        // 엔터키를 눌렀을 때 일정 추가 함수
         private void TitleInput_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
         {
             if (e.Key == System.Windows.Input.Key.Enter)
@@ -137,7 +136,6 @@ namespace ScheduleWidget
             YearCombo.SelectedItem = today.Year;
             MonthCombo.SelectedItem = today.Month;
 
-            // 월이 바뀌면 일수도 달라지므로 UpdateDays 호출 후 일 설정
             UpdateDays(today.Year, today.Month);
             DayCombo.SelectedItem = today.Day;
 
@@ -185,8 +183,6 @@ namespace ScheduleWidget
             DayCombo.SelectedIndex = 0;
         }
 
-
-        // 자정까지 남은 시간 계산 후 갱신해주는 함수
         private void SetTimerForMidnight()
         {
             dayChangeTimer = new DispatcherTimer();
@@ -195,15 +191,12 @@ namespace ScheduleWidget
             DateTime tomorrow = now.Date.AddDays(1);
             TimeSpan timeUntilMidnight = tomorrow - now;
 
-            // 1. 첫 번째 인터벌: 현재부터 자정까지 남은 시간
             dayChangeTimer.Interval = timeUntilMidnight;
 
             dayChangeTimer.Tick += (s, e) =>
             {
-                // 자정이 되면 리스트 갱신
                 RefreshScheduleList();
 
-                // 2. 이후 인터벌: 자정부터는 24시간마다 한 번씩 실행
                 if (dayChangeTimer.Interval != TimeSpan.FromHours(24))
                 {
                     dayChangeTimer.Interval = TimeSpan.FromHours(24);
@@ -211,6 +204,48 @@ namespace ScheduleWidget
             };
 
             dayChangeTimer.Start();
+        }
+
+        // ── 설정 ──
+
+        private void SettingsButton_Click(object sender, RoutedEventArgs e)
+        {
+            var win = new SettingsWindow(appData.Appearance, ApplyAppearance);
+            win.Owner = System.Windows.Application.Current.MainWindow;
+
+            if (win.ShowDialog() == true)
+            {
+                appData.Appearance = win.Result;
+                dataManager.SaveData(appData);
+            }
+        }
+
+        private void ApplyAppearance(AppearanceSettings settings)
+        {
+            var res = System.Windows.Application.Current.Resources;
+
+            SetBrush(res, "TopBarBrush", settings.TopBarColor);
+            SetBrush(res, "BackgroundBrush", settings.BackgroundColor);
+            SetBrush(res, "CardBrush", settings.CardColor);
+            SetBrush(res, "CardBorderBrush", settings.CardBorderColor);
+            SetBrush(res, "BottomBarBrush", settings.BottomBarColor);
+            SetBrush(res, "TextBrush", settings.TextColor);
+            SetBrush(res, "SubTextBrush", settings.SubTextColor);
+            SetBrush(res, "BorderBrush", settings.BorderColor);
+
+            res["TitleFontSize"] = settings.TitleFontSize;
+            res["DDayFontSize"] = settings.DDayFontSize;
+
+            MainBorder.Opacity = settings.Opacity;
+        }
+
+        private void SetBrush(ResourceDictionary res, string key, string color)
+        {
+            try
+            {
+                res[key] = new SolidColorBrush((Color)ColorConverter.ConvertFromString(color));
+            }
+            catch { }
         }
     }
 }

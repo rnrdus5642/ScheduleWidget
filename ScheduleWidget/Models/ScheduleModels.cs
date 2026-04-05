@@ -17,6 +17,7 @@ namespace ScheduleWidget
     {
         public WindowStateData WindowState { get; set; } = new WindowStateData();
         public List<ScheduleItem> Schedules { get; set; } = new List<ScheduleItem>();
+        public AppearanceSettings Appearance { get; set; } = new AppearanceSettings();
     }
 
     public class ScheduleItem

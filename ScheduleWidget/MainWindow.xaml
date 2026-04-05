@@ -1,4 +1,4 @@
-﻿<Window x:Class="ScheduleWidget.MainWindow"
+<Window x:Class="ScheduleWidget.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Height="400" Width="300"
@@ -9,38 +9,24 @@
         WindowStartupLocation="CenterScreen"
         ShowInTaskbar="False">
 
-    <!-- 창 전체를 감싸는 Border -->
-    <Border CornerRadius="15" Background="White" BorderBrush="Gray" BorderThickness="1">
+    <Border x:Name="MainBorder" CornerRadius="15"
+            Background="{DynamicResource BackgroundBrush}"
+            BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
         <Grid>
             <Grid.RowDefinitions>
                 <RowDefinition Height="40"/>
-                <!-- 상단 -->
                 <RowDefinition Height="*"/>
-                <!-- 중간 -->
                 <RowDefinition Height="70"/>
-                <!-- 하단 -->
             </Grid.RowDefinitions>
 
             <!-- 상단 영역 -->
-            <Border Grid.Row="0" Background="#FFD9D9D9"
+            <Border Grid.Row="0" Background="{DynamicResource TopBarBrush}"
                     CornerRadius="15,15,0,0"
-                    BorderBrush="Gray" BorderThickness="0,0,0,1"
+                    BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1"
                     MouseLeftButtonDown="TopBar_MouseLeftButtonDown">
-                <!-- 이벤트 연결 -->
                 <DockPanel VerticalAlignment="Center" Margin="5,0,5,0" LastChildFill="False">
 
-                    <!-- 왼쪽 아이콘 -->
-                    <TextBlock Text="📅" FontSize="20" VerticalAlignment="Center" DockPanel.Dock="Left"/>
-
-                    <TextBlock x:Name="DebugText"
-                       DockPanel.Dock="Left"
-                       VerticalAlignment="Center"
-                       Margin="10,0,0,0"
-                       Foreground="Yellow"
-                       FontSize="14"
-                       Text="DEBUG" />
-
-
+                    <TextBlock Text="&#x1F4C5;" FontSize="20" VerticalAlignment="Center" DockPanel.Dock="Left"/>
 
                     <!-- 오른쪽 버튼 영역 -->
                     <StackPanel Orientation="Horizontal" DockPanel.Dock="Right" VerticalAlignment="Center" Margin="0,0,7,0">
@@ -53,18 +39,16 @@
                                         <Setter.Value>
                                             <ControlTemplate TargetType="ToggleButton">
                                                 <Grid Width="{TemplateBinding Width}" Height="{TemplateBinding Height}">
-                                                    <!-- 배경 -->
                                                     <Border x:Name="SwitchBackground"
-                                    Background="LightGray"
-                                    CornerRadius="12"
-                                    BorderThickness="1"
-                                    BorderBrush="Gray"/>
-                                                    <!-- 손잡이 -->
+                                                        Background="LightGray"
+                                                        CornerRadius="12"
+                                                        BorderThickness="1"
+                                                        BorderBrush="Gray"/>
                                                     <Ellipse x:Name="Knob"
-                                     Width="20" Height="20"
-                                     Fill="White"
-                                     Margin="2"
-                                     HorizontalAlignment="Left"/>
+                                                        Width="20" Height="20"
+                                                        Fill="White"
+                                                        Margin="2"
+                                                        HorizontalAlignment="Left"/>
                                                 </Grid>
                                                 <ControlTemplate.Triggers>
                                                     <Trigger Property="IsChecked" Value="True">
@@ -80,63 +64,61 @@
                         </ToggleButton>
 
                         <!-- 설정 버튼 -->
-                        <Button Content="⚙" FontSize="20" Width="30" Height="30" BorderThickness="0"/>
+                        <Button Content="&#x2699;" FontSize="20" Width="30" Height="30"
+                                BorderThickness="0" Background="Transparent"
+                                Foreground="{DynamicResource TextBrush}"
+                                Click="SettingsButton_Click"/>
                     </StackPanel>
 
                 </DockPanel>
             </Border>
 
             <!-- 중간 영역 -->
-            <Border Grid.Row="1" Background="White" BorderBrush="Gray" BorderThickness="0,1,0,1">
+            <Border Grid.Row="1" Background="{DynamicResource BackgroundBrush}"
+                    BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,1">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <ItemsControl x:Name="ScheduleList" BorderThickness="0">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate>
-                                <!-- 일정 카드 -->
-                                <Border Background="#FFF" CornerRadius="8" Margin="5"
-                            Padding="8" BorderBrush="#DDD" BorderThickness="1" SnapsToDevicePixels="True">
-                                    
+                                <Border Background="{DynamicResource CardBrush}" CornerRadius="8" Margin="5"
+                                    Padding="8" BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="1" SnapsToDevicePixels="True">
+
                                     <Border.ContextMenu>
                                         <ContextMenu>
                                             <MenuItem Header="제거" Click="RemoveSchedule_Click"/>
                                         </ContextMenu>
                                     </Border.ContextMenu>
-                                    
+
                                     <Grid>
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*"/>
                                             <ColumnDefinition Width="Auto"/>
                                         </Grid.ColumnDefinitions>
 
-                                        <!-- 일정 제목 -->
-                                        <TextBlock Text="{Binding Title}" 
-                                       FontWeight="Bold" 
-                                       FontSize="14"
-                                       TextWrapping="Wrap"
-                                       TextTrimming="CharacterEllipsis"
-                                       Grid.Column="0"
-                                       VerticalAlignment="Center"/>
+                                        <TextBlock Text="{Binding Title}"
+                                               FontWeight="Bold"
+                                               FontSize="{DynamicResource TitleFontSize}"
+                                               Foreground="{DynamicResource TextBrush}"
+                                               TextWrapping="Wrap"
+                                               TextTrimming="CharacterEllipsis"
+                                               Grid.Column="0"
+                                               VerticalAlignment="Center"/>
 
-                                        <!-- D-Day + 날짜 표시 영역 -->
                                         <StackPanel Grid.Column="1"
-                                        VerticalAlignment="Top"
-                                        HorizontalAlignment="Right"
-                                        Orientation="Vertical">
+                                            VerticalAlignment="Top"
+                                            HorizontalAlignment="Right"
+                                            Orientation="Vertical">
 
-                                            <!-- D-Day -->
-                                            <TextBlock Text="{Binding DDay}" 
-                                           FontWeight="SemiBold"
-                                           FontSize="13"
-                                           HorizontalAlignment="Right">
+                                            <TextBlock Text="{Binding DDay}"
+                                                   FontWeight="SemiBold"
+                                                   FontSize="{DynamicResource DDayFontSize}"
+                                                   HorizontalAlignment="Right">
                                                 <TextBlock.Style>
                                                     <Style TargetType="TextBlock">
-                                                        <Setter Property="Foreground" Value="Black"/>
+                                                        <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
                                                         <Style.Triggers>
                                                             <DataTrigger Binding="{Binding Status}" Value="Today">
                                                                 <Setter Property="Foreground" Value="Blue"/>
-                                                            </DataTrigger>
-                                                            <DataTrigger Binding="{Binding Status}" Value="Future">
-                                                                <Setter Property="Foreground" Value="Black"/>
                                                             </DataTrigger>
                                                             <DataTrigger Binding="{Binding Status}" Value="Past">
                                                                 <Setter Property="Foreground" Value="Red"/>
@@ -146,12 +128,11 @@
                                                 </TextBlock.Style>
                                             </TextBlock>
 
-                                            <!-- 월-일(요일) -->
-                                            <TextBlock Text="{Binding DateString}" 
-                                           FontSize="11"
-                                           Foreground="Gray"
-                                           HorizontalAlignment="Right"
-                                           Margin="0,2,0,0"/>
+                                            <TextBlock Text="{Binding DateString}"
+                                                   FontSize="11"
+                                                   Foreground="{DynamicResource SubTextBrush}"
+                                                   HorizontalAlignment="Right"
+                                                   Margin="0,2,0,0"/>
                                         </StackPanel>
                                     </Grid>
                                 </Border>
@@ -161,19 +142,16 @@
                 </ScrollViewer>
             </Border>
 
-
-
-
-
             <!-- 하단 영역 -->
-            <Border Grid.Row="2" Background="#FFE0E0E0" CornerRadius="0,0,15,15" BorderBrush="Gray" BorderThickness="0,1,0,0">
+            <Border Grid.Row="2" Background="{DynamicResource BottomBarBrush}"
+                    CornerRadius="0,0,15,15"
+                    BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0">
                 <Grid Margin="5">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
-                    
-                    <!-- 윗줄 -->
+
                     <Grid Grid.Row="0" Margin="5,0,0,5">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
@@ -184,15 +162,13 @@
                         <Button x:Name="AddButton" Grid.Column="1" Content="추가" Width="60" Height="25" Click="AddButton_Click"/>
                     </Grid>
 
-
-                    <!-- 아랫줄 -->
                     <StackPanel Grid.Row="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="5,0,0,0">
                         <ComboBox x:Name="YearCombo" Width="70" Height="25" Margin="0,0,5,0"/>
                         <ComboBox x:Name="MonthCombo" Width="50" Height="25" Margin="0,0,5,0"/>
                         <ComboBox x:Name="DayCombo" Width="50" Height="25" Margin="0,0,5,0"/>
 
-                        <DatePicker x:Name="CalendarPicker" 
-                            Width="30" Height="25" 
+                        <DatePicker x:Name="CalendarPicker"
+                            Width="30" Height="25"
                             SelectedDateChanged="CalendarPicker_SelectedDateChanged"
                             BorderThickness="0"
                             Background="Transparent"
