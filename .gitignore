@@ -1,3 +1,6 @@
+# Claude Code
+.claude/
+
 # Visual Studio
 .vs/
 *.user
@@ -5,9 +8,9 @@
 *.userosscache
 *.sln.docstates
 
-# Build results
-[Bb]in/
-[Oo]bj/
+# Build results (Debug/obj 제외, Release는 포함)
+ScheduleWidget/bin/Debug/
+ScheduleWidget/obj/
 
 # NuGet
 packages/
