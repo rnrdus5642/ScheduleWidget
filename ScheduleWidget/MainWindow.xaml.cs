@@ -142,6 +142,26 @@ namespace ScheduleWidget
             CalendarPicker.SelectedDate = today;
         }
 
+        private void EditSchedule_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is System.Windows.Controls.MenuItem mi && mi.DataContext is ScheduleItem item)
+            {
+                int index = appData.Schedules.FindIndex(s => s.Title == item.Title && s.Period == item.Period);
+                if (index < 0) return;
+
+                var win = new EditScheduleWindow(item);
+                win.Owner = System.Windows.Application.Current.MainWindow;
+
+                if (win.ShowDialog() == true)
+                {
+                    appData.Schedules[index].Title = win.ResultTitle;
+                    appData.Schedules[index].Period = win.ResultPeriod;
+                    dataManager.SaveData(appData);
+                    RefreshScheduleList();
+                }
+            }
+        }
+
         private void RemoveSchedule_Click(object sender, RoutedEventArgs e)
         {
             if (sender is System.Windows.Controls.MenuItem mi && mi.DataContext is ScheduleItem item)

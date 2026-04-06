@@ -85,6 +85,7 @@
 
                                     <Border.ContextMenu>
                                         <ContextMenu>
+                                            <MenuItem Header="수정" Click="EditSchedule_Click"/>
                                             <MenuItem Header="제거" Click="RemoveSchedule_Click"/>
                                         </ContextMenu>
                                     </Border.ContextMenu>
