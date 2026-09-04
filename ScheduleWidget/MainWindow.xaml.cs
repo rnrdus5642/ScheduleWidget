@@ -13,12 +13,15 @@ namespace ScheduleWidget
     public partial class MainWindow : Window
     {
         private AppData appData;
-        private readonly DataManager dataManager = new DataManager();
+        private readonly IAppDataStore dataStore = new DataManager();
+        private readonly StartupService startupService = new StartupService();
         private readonly TrayService trayService = new TrayService();
 
         private DispatcherTimer dayChangeTimer;
+        private DispatcherTimer stateSaveTimer;
 
         private bool _isRestoringState;
+        private bool _saveErrorShown;
 
         public MainWindow()
         {
@@ -34,10 +37,11 @@ namespace ScheduleWidget
             this.ResizeMode = ResizeMode.NoResize;
 
             InitDateSelectors();
-            dataManager.EnableStartup();
+            startupService.EnableStartup();
             trayService.Initialize(this);
 
             SetTimerForMidnight();
+            InitializeStateSaveTimer();
         }
 
         protected override void OnClosing(System.ComponentModel.CancelEventArgs e) => e.Cancel = true;
@@ -45,6 +49,16 @@ namespace ScheduleWidget
         private void MainWindow_Closed(object sender, EventArgs e)
         {
             SystemEvents.DisplaySettingsChanged -= OnDisplaySettingsChanged;
+
+            if (stateSaveTimer != null)
+            {
+                stateSaveTimer.Stop();
+                if (appData != null)
+                {
+                    UpdateWindowStateData();
+                    SaveDataSafely(false);
+                }
+            }
         }
 
         protected override void OnDpiChanged(DpiScale oldDpi, DpiScale newDpi)
@@ -130,7 +144,31 @@ namespace ScheduleWidget
 
         private void MainWindow_Loaded(object sender, RoutedEventArgs e)
         {
-            appData = dataManager.LoadData();
+            try
+            {
+                DataLoadResult loadResult = dataStore.LoadData();
+                appData = loadResult.Data;
+
+                if (!string.IsNullOrWhiteSpace(loadResult.WarningMessage))
+                {
+                    System.Windows.MessageBox.Show(
+                        this,
+                        loadResult.WarningMessage,
+                        "일정 데이터 복구",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Warning);
+                }
+            }
+            catch (DataStorageException ex)
+            {
+                appData = new AppData();
+                System.Windows.MessageBox.Show(
+                    this,
+                    ex.Message + Environment.NewLine + "이번 실행에서는 변경 사항이 저장되지 않을 수 있습니다.",
+                    "일정 데이터 오류",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error);
+            }
 
             if (appData.WindowState != null && appData.WindowState.Width > 0)
             {
@@ -156,11 +194,57 @@ namespace ScheduleWidget
 
         private void SaveCurrentState()
         {
+            if (appData == null || _isRestoringState) return;
+
+            UpdateWindowStateData();
+            stateSaveTimer.Stop();
+            stateSaveTimer.Start();
+        }
+
+        private void InitializeStateSaveTimer()
+        {
+            stateSaveTimer = new DispatcherTimer
+            {
+                Interval = TimeSpan.FromMilliseconds(500)
+            };
+            stateSaveTimer.Tick += (s, e) =>
+            {
+                stateSaveTimer.Stop();
+                SaveDataSafely();
+            };
+        }
+
+        private void UpdateWindowStateData()
+        {
             appData.WindowState.Left = this.Left;
             appData.WindowState.Top = this.Top;
             appData.WindowState.Width = this.Width;
             appData.WindowState.Height = this.Height;
-            dataManager.SaveData(appData);
+        }
+
+        private bool SaveDataSafely(bool showError = true)
+        {
+            try
+            {
+                dataStore.SaveData(appData);
+                _saveErrorShown = false;
+                return true;
+            }
+            catch (DataStorageException ex)
+            {
+                if (showError && !_saveErrorShown)
+                {
+                    _saveErrorShown = true;
+                    System.Windows.MessageBox.Show(
+                        this,
+                        ex.Message + Environment.NewLine + "변경 내용은 현재 실행 중에만 유지됩니다.",
+                        "일정 데이터 저장 오류",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Error);
+                }
+
+                return false;
+            }
         }
 
         private void RefreshScheduleList()
@@ -192,7 +276,7 @@ namespace ScheduleWidget
             string dateStr = $"{(int)YearCombo.SelectedItem}-{(int)MonthCombo.SelectedItem:D2}-{(int)DayCombo.SelectedItem:D2}";
             appData.Schedules.Add(new ScheduleItem { Title = TitleInput.Text.Trim(), Period = dateStr });
 
-            dataManager.SaveData(appData);
+            SaveDataSafely();
             RefreshScheduleList();
 
             TitleInput.Text = "";
@@ -244,7 +328,7 @@ namespace ScheduleWidget
                 {
                     appData.Schedules[index].Title = win.ResultTitle;
                     appData.Schedules[index].Period = win.ResultPeriod;
-                    dataManager.SaveData(appData);
+                    SaveDataSafely();
                     RefreshScheduleList();
                 }
             }
@@ -255,7 +339,7 @@ namespace ScheduleWidget
             if (sender is System.Windows.Controls.MenuItem mi && mi.DataContext is ScheduleItem item)
             {
                 appData.Schedules.Remove(item);
-                dataManager.SaveData(appData);
+                SaveDataSafely();
                 RefreshScheduleList();
             }
         }
@@ -324,7 +408,7 @@ namespace ScheduleWidget
             if (win.ShowDialog() == true)
             {
                 appData.Appearance = win.Result;
-                dataManager.SaveData(appData);
+                SaveDataSafely();
             }
         }
 

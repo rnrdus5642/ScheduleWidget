@@ -62,7 +62,9 @@
       <SubType>Designer</SubType>
     </ApplicationDefinition>
     <Compile Include="Services\DataManager.cs" />
+    <Compile Include="Services\IAppDataStore.cs" />
     <Compile Include="Services\NativeMethods.cs" />
+    <Compile Include="Services\StartupService.cs" />
     <Compile Include="Models\ScheduleModels.cs" />
     <Compile Include="Models\AppearanceSettings.cs" />
     <Page Include="MainWindow.xaml">

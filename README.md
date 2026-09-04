@@ -162,7 +162,11 @@ WinAPI와 WPF를 활용하여 일반 프로그램이 아닌 \*\*바탕화면 위
 
 \* 종료하려면 반드시 \*\*시스템 트레이 → 종료\*\*를 사용하세요.
 
-\* `schedules.json` 파일을 삭제하면 모든 일정과 위치 정보가 초기화됩니다.
+\* 데이터는 `%LocalAppData%\ScheduleWidget\schedules.json`에 저장됩니다.
+
+\* 저장할 때 이전 데이터는 `schedules.json.bak`으로 자동 백업됩니다.
+
+\* 이전 버전에서 실행 파일 옆에 저장된 `schedules.json`은 최초 실행 시 자동 이전되며 원본도 보존됩니다.
 
 
 
