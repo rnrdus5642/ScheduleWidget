@@ -11,6 +11,7 @@ namespace ScheduleWidget
     {
         // 앱이 실행되는 동안 유지되어야 하므로 필드로 선언합니다.
         private static Mutex _mutex = null;
+        private static bool _ownsMutex;
 
         protected override void OnStartup(StartupEventArgs e)
         {
@@ -20,6 +21,7 @@ namespace ScheduleWidget
 
             // Mutex를 사용하여 현재 이 이름으로 실행 중인 프로세스가 있는지 확인합니다.
             _mutex = new Mutex(true, mutexName, out createdNew);
+            _ownsMutex = createdNew;
 
             if (!createdNew)
             {
@@ -38,8 +40,19 @@ namespace ScheduleWidget
             // 앱이 종료될 때 Mutex 자원을 해제합니다.
             if (_mutex != null)
             {
-                _mutex.ReleaseMutex();
-                _mutex.Dispose();
+                try
+                {
+                    if (_ownsMutex)
+                    {
+                        _mutex.ReleaseMutex();
+                    }
+                }
+                finally
+                {
+                    _ownsMutex = false;
+                    _mutex.Dispose();
+                    _mutex = null;
+                }
             }
             base.OnExit(e);
         }
