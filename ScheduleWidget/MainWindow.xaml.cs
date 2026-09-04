@@ -6,6 +6,7 @@ using System.Windows.Interop;
 using System.Windows.Forms;
 using System.Windows.Media;
 using System.Windows.Threading;
+using Microsoft.Win32;
 
 namespace ScheduleWidget
 {
@@ -17,12 +18,17 @@ namespace ScheduleWidget
 
         private DispatcherTimer dayChangeTimer;
 
+        private bool _isRestoringState;
+
         public MainWindow()
         {
             InitializeComponent();
 
             SourceInitialized += MainWindow_SourceInitialized;
             Loaded += MainWindow_Loaded;
+            Closed += MainWindow_Closed;
+
+            SystemEvents.DisplaySettingsChanged += OnDisplaySettingsChanged;
 
             ModeToggle.IsChecked = false;
             this.ResizeMode = ResizeMode.NoResize;
@@ -35,6 +41,81 @@ namespace ScheduleWidget
         }
 
         protected override void OnClosing(System.ComponentModel.CancelEventArgs e) => e.Cancel = true;
+
+        private void MainWindow_Closed(object sender, EventArgs e)
+        {
+            SystemEvents.DisplaySettingsChanged -= OnDisplaySettingsChanged;
+        }
+
+        protected override void OnDpiChanged(DpiScale oldDpi, DpiScale newDpi)
+        {
+            base.OnDpiChanged(oldDpi, newDpi);
+
+            _isRestoringState = true;
+            try
+            {
+                EnsureVisibleOnScreen();
+            }
+            finally { _isRestoringState = false; }
+
+            SaveCurrentState();
+        }
+
+        private void OnDisplaySettingsChanged(object sender, EventArgs e)
+        {
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                _isRestoringState = true;
+                try
+                {
+                    EnsureVisibleOnScreen();
+
+                    var hwnd = new WindowInteropHelper(this).Handle;
+                    if (hwnd != IntPtr.Zero)
+                        NativeMethods.SetToDesktop(hwnd);
+                }
+                finally { _isRestoringState = false; }
+
+                SaveCurrentState();
+            }));
+        }
+
+        private void EnsureVisibleOnScreen()
+        {
+            var centerX = this.Left + this.Width / 2;
+            var centerY = this.Top + this.Height / 2;
+
+            bool onAnyScreen = false;
+            foreach (var s in Screen.AllScreens)
+            {
+                var b = s.WorkingArea;
+                if (centerX >= b.Left && centerX <= b.Right &&
+                    centerY >= b.Top && centerY <= b.Bottom)
+                {
+                    onAnyScreen = true;
+                    break;
+                }
+            }
+
+            if (!onAnyScreen)
+            {
+                var primary = Screen.PrimaryScreen.WorkingArea;
+                this.Left = primary.Left + (primary.Width - this.Width) / 2;
+                this.Top = primary.Top + (primary.Height - this.Height) / 2;
+            }
+            else
+            {
+                var current = Screen.FromPoint(
+                    new System.Drawing.Point((int)centerX, (int)centerY)).WorkingArea;
+
+                if (this.Left < current.Left) this.Left = current.Left;
+                if (this.Top < current.Top) this.Top = current.Top;
+                if (this.Left + this.Width > current.Right)
+                    this.Left = current.Right - this.Width;
+                if (this.Top + this.Height > current.Bottom)
+                    this.Top = current.Bottom - this.Height;
+            }
+        }
 
         private void MainWindow_SourceInitialized(object sender, EventArgs e)
         {
@@ -53,14 +134,21 @@ namespace ScheduleWidget
 
             if (appData.WindowState != null && appData.WindowState.Width > 0)
             {
-                this.Width = appData.WindowState.Width;
-                this.Height = appData.WindowState.Height;
-                this.Left = appData.WindowState.Left;
-                this.Top = appData.WindowState.Top;
+                _isRestoringState = true;
+                try
+                {
+                    this.Width = appData.WindowState.Width;
+                    this.Height = appData.WindowState.Height;
+                    this.Left = appData.WindowState.Left;
+                    this.Top = appData.WindowState.Top;
+
+                    EnsureVisibleOnScreen();
+                }
+                finally { _isRestoringState = false; }
             }
 
-            this.LocationChanged += (s, ev) => SaveCurrentState();
-            this.SizeChanged += (s, ev) => SaveCurrentState();
+            this.LocationChanged += (s, ev) => { if (!_isRestoringState) SaveCurrentState(); };
+            this.SizeChanged += (s, ev) => { if (!_isRestoringState) SaveCurrentState(); };
 
             ApplyAppearance(appData.Appearance);
             RefreshScheduleList();
