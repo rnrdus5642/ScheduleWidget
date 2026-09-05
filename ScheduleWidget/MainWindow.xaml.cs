@@ -23,6 +23,7 @@ namespace ScheduleWidget
 
         private bool _isRestoringState;
         private bool _saveErrorShown;
+        private string _startupWarningMessage;
 
         public MainWindow()
         {
@@ -38,7 +39,10 @@ namespace ScheduleWidget
             this.ResizeMode = ResizeMode.NoResize;
 
             InitDateSelectors();
-            startupService.EnableStartup();
+            string startupError;
+            if (!startupService.TryEnableStartup(out startupError))
+                _startupWarningMessage = startupError;
+
             trayService.Initialize(this);
 
             SetTimerForMidnight();
@@ -199,6 +203,18 @@ namespace ScheduleWidget
                     "일정 데이터 오류",
                     MessageBoxButton.OK,
                     MessageBoxImage.Error);
+            }
+
+            if (!string.IsNullOrWhiteSpace(_startupWarningMessage))
+            {
+                string warningMessage = _startupWarningMessage;
+                _startupWarningMessage = null;
+                System.Windows.MessageBox.Show(
+                    this,
+                    warningMessage + Environment.NewLine + "앱은 계속 실행되지만 Windows 로그인 시 자동으로 시작되지 않을 수 있습니다.",
+                    "자동 시작 설정",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
             }
 
             if (appData.WindowState != null && appData.WindowState.Width > 0)
