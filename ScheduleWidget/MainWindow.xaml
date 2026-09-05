@@ -84,7 +84,7 @@
                                     Padding="8" BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="1" SnapsToDevicePixels="True">
 
                                     <Border.ContextMenu>
-                                        <ContextMenu>
+                                        <ContextMenu DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}">
                                             <MenuItem Header="수정" Click="EditSchedule_Click"/>
                                             <MenuItem Header="제거" Click="RemoveSchedule_Click"/>
                                         </ContextMenu>
@@ -164,7 +164,7 @@
                     </Grid>
 
                     <StackPanel Grid.Row="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="5,0,0,0">
-                        <ComboBox x:Name="YearCombo" Width="70" Height="25" Margin="0,0,5,0"/>
+                        <ComboBox x:Name="YearCombo" Width="70" Height="25" Margin="0,0,5,0" IsEditable="True"/>
                         <ComboBox x:Name="MonthCombo" Width="50" Height="25" Margin="0,0,5,0"/>
                         <ComboBox x:Name="DayCombo" Width="50" Height="25" Margin="0,0,5,0"/>
 

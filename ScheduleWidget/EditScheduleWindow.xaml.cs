@@ -1,4 +1,5 @@
 using System;
+using System.Globalization;
 using System.Windows;
 
 namespace ScheduleWidget
@@ -22,8 +23,7 @@ namespace ScheduleWidget
 
             if (DateTime.TryParse(item.Period, out DateTime date))
             {
-                if (YearCombo.Items.Contains(date.Year))
-                    YearCombo.SelectedItem = date.Year;
+                SetYearSelection(date.Year);
                 MonthCombo.SelectedItem = date.Month;
                 UpdateDays(date.Year, date.Month);
                 DayCombo.SelectedItem = date.Day;
@@ -44,8 +44,9 @@ namespace ScheduleWidget
             UpdateDays(today.Year, today.Month);
             DayCombo.SelectedItem = today.Day;
 
-            YearCombo.SelectionChanged += (s, e) => UpdateDays((int)YearCombo.SelectedItem, (int)MonthCombo.SelectedItem);
-            MonthCombo.SelectionChanged += (s, e) => UpdateDays((int)YearCombo.SelectedItem, (int)MonthCombo.SelectedItem);
+            YearCombo.SelectionChanged += (s, e) => UpdateDaysForCurrentSelection();
+            YearCombo.LostFocus += (s, e) => NormalizeYearInput();
+            MonthCombo.SelectionChanged += (s, e) => UpdateDaysForCurrentSelection();
         }
 
         private void UpdateDays(int year, int month)
@@ -57,12 +58,85 @@ namespace ScheduleWidget
             DayCombo.SelectedItem = Math.Min(prevDay, days);
         }
 
+        private void SetYearSelection(int year)
+        {
+            if (!YearCombo.Items.Contains(year))
+                YearCombo.Items.Add(year);
+
+            YearCombo.SelectedItem = year;
+            YearCombo.Text = year.ToString(CultureInfo.InvariantCulture);
+        }
+
+        private void NormalizeYearInput()
+        {
+            int year;
+            if (TryGetSelectedYear(out year))
+                SetYearSelection(year);
+
+            UpdateDaysForCurrentSelection();
+        }
+
+        private void UpdateDaysForCurrentSelection()
+        {
+            int year;
+            if (TryGetSelectedYear(out year) && MonthCombo.SelectedItem is int month)
+                UpdateDays(year, month);
+        }
+
+        private bool TryGetSelectedYear(out int year)
+        {
+            string yearText = YearCombo.Text;
+            if (string.IsNullOrWhiteSpace(yearText) && YearCombo.SelectedItem != null)
+                yearText = YearCombo.SelectedItem.ToString();
+
+            return int.TryParse(
+                       yearText,
+                       NumberStyles.Integer,
+                       CultureInfo.InvariantCulture,
+                       out year)
+                   && year >= DateTime.MinValue.Year
+                   && year <= DateTime.MaxValue.Year;
+        }
+
+        private bool TryGetSelectedDate(out DateTime selectedDate)
+        {
+            selectedDate = default(DateTime);
+
+            int year;
+            if (!TryGetSelectedYear(out year) ||
+                !(MonthCombo.SelectedItem is int month) ||
+                !(DayCombo.SelectedItem is int day))
+                return false;
+
+            try
+            {
+                selectedDate = new DateTime(year, month, day);
+                return true;
+            }
+            catch (ArgumentOutOfRangeException)
+            {
+                return false;
+            }
+        }
+
         private void OkButton_Click(object sender, RoutedEventArgs e)
         {
             if (string.IsNullOrWhiteSpace(TitleInput.Text)) return;
 
+            DateTime selectedDate;
+            if (!TryGetSelectedDate(out selectedDate))
+            {
+                MessageBox.Show(
+                    this,
+                    "유효한 날짜를 입력해 주세요.",
+                    "날짜 확인",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+                return;
+            }
+
             ResultTitle = TitleInput.Text.Trim();
-            ResultPeriod = $"{(int)YearCombo.SelectedItem}-{(int)MonthCombo.SelectedItem:D2}-{(int)DayCombo.SelectedItem:D2}";
+            ResultPeriod = selectedDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
             DialogResult = true;
             Close();
         }

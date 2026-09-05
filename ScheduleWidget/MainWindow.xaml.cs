@@ -1,9 +1,9 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Interop;
-using System.Windows.Forms;
 using System.Windows.Media;
 using System.Windows.Threading;
 using Microsoft.Win32;
@@ -19,6 +19,7 @@ namespace ScheduleWidget
 
         private DispatcherTimer dayChangeTimer;
         private DispatcherTimer stateSaveTimer;
+        private DispatcherTimer displayRefreshTimer;
 
         private bool _isRestoringState;
         private bool _saveErrorShown;
@@ -50,6 +51,9 @@ namespace ScheduleWidget
         {
             SystemEvents.DisplaySettingsChanged -= OnDisplaySettingsChanged;
 
+            if (displayRefreshTimer != null)
+                displayRefreshTimer.Stop();
+
             if (stateSaveTimer != null)
             {
                 stateSaveTimer.Stop();
@@ -64,10 +68,48 @@ namespace ScheduleWidget
         protected override void OnDpiChanged(DpiScale oldDpi, DpiScale newDpi)
         {
             base.OnDpiChanged(oldDpi, newDpi);
+            QueueDisplayRefresh();
+        }
+
+        private void OnDisplaySettingsChanged(object sender, EventArgs e)
+        {
+            Dispatcher.BeginInvoke(new Action(QueueDisplayRefresh));
+        }
+
+        private void QueueDisplayRefresh()
+        {
+            if (Dispatcher.HasShutdownStarted || Dispatcher.HasShutdownFinished)
+                return;
+
+            if (displayRefreshTimer == null)
+            {
+                displayRefreshTimer = new DispatcherTimer
+                {
+                    // 모니터 구성과 DPI 변경 이벤트가 모두 끝난 뒤 한 번만 보정합니다.
+                    Interval = TimeSpan.FromMilliseconds(350)
+                };
+                displayRefreshTimer.Tick += (s, e) =>
+                {
+                    displayRefreshTimer.Stop();
+                    RefreshDesktopPlacement();
+                };
+            }
+
+            displayRefreshTimer.Stop();
+            displayRefreshTimer.Start();
+        }
+
+        private void RefreshDesktopPlacement()
+        {
+            if (!IsLoaded) return;
 
             _isRestoringState = true;
             try
             {
+                var hwnd = new WindowInteropHelper(this).Handle;
+                if (hwnd != IntPtr.Zero)
+                    NativeMethods.SetToDesktop(hwnd);
+
                 EnsureVisibleOnScreen();
             }
             finally { _isRestoringState = false; }
@@ -75,60 +117,49 @@ namespace ScheduleWidget
             SaveCurrentState();
         }
 
-        private void OnDisplaySettingsChanged(object sender, EventArgs e)
-        {
-            Dispatcher.BeginInvoke(new Action(() =>
-            {
-                _isRestoringState = true;
-                try
-                {
-                    EnsureVisibleOnScreen();
-
-                    var hwnd = new WindowInteropHelper(this).Handle;
-                    if (hwnd != IntPtr.Zero)
-                        NativeMethods.SetToDesktop(hwnd);
-                }
-                finally { _isRestoringState = false; }
-
-                SaveCurrentState();
-            }));
-        }
-
         private void EnsureVisibleOnScreen()
         {
-            var centerX = this.Left + this.Width / 2;
-            var centerY = this.Top + this.Height / 2;
-
-            bool onAnyScreen = false;
-            foreach (var s in Screen.AllScreens)
+            var hwnd = new WindowInteropHelper(this).Handle;
+            NativeMethods.Rect nativeWorkArea;
+            System.Windows.Rect workArea;
+            if (hwnd != IntPtr.Zero && NativeMethods.TryGetWorkArea(hwnd, out nativeWorkArea))
             {
-                var b = s.WorkingArea;
-                if (centerX >= b.Left && centerX <= b.Right &&
-                    centerY >= b.Top && centerY <= b.Bottom)
-                {
-                    onAnyScreen = true;
-                    break;
-                }
-            }
-
-            if (!onAnyScreen)
-            {
-                var primary = Screen.PrimaryScreen.WorkingArea;
-                this.Left = primary.Left + (primary.Width - this.Width) / 2;
-                this.Top = primary.Top + (primary.Height - this.Height) / 2;
+                DpiScale dpi = VisualTreeHelper.GetDpi(this);
+                double scaleX = dpi.DpiScaleX > 0 ? dpi.DpiScaleX : 1.0;
+                double scaleY = dpi.DpiScaleY > 0 ? dpi.DpiScaleY : 1.0;
+                workArea = new System.Windows.Rect(
+                    nativeWorkArea.Left / scaleX,
+                    nativeWorkArea.Top / scaleY,
+                    (nativeWorkArea.Right - nativeWorkArea.Left) / scaleX,
+                    (nativeWorkArea.Bottom - nativeWorkArea.Top) / scaleY);
             }
             else
             {
-                var current = Screen.FromPoint(
-                    new System.Drawing.Point((int)centerX, (int)centerY)).WorkingArea;
-
-                if (this.Left < current.Left) this.Left = current.Left;
-                if (this.Top < current.Top) this.Top = current.Top;
-                if (this.Left + this.Width > current.Right)
-                    this.Left = current.Right - this.Width;
-                if (this.Top + this.Height > current.Bottom)
-                    this.Top = current.Bottom - this.Height;
+                // 화면 전환 중 Win32 모니터 정보가 잠시 unavailable하면 WPF 기본 영역을 사용합니다.
+                workArea = SystemParameters.WorkArea;
             }
+
+            if (workArea.Width <= 0 || workArea.Height <= 0)
+                return;
+
+            // 모니터보다 큰 저장 크기는 그대로 복원하지 않고 작업 영역에 맞춥니다.
+            if (double.IsNaN(Width) || double.IsInfinity(Width) || Width <= 0)
+                Width = Math.Min(300, workArea.Width);
+            if (double.IsNaN(Height) || double.IsInfinity(Height) || Height <= 0)
+                Height = Math.Min(400, workArea.Height);
+
+            Width = Math.Min(Width, workArea.Width);
+            Height = Math.Min(Height, workArea.Height);
+
+            if (double.IsNaN(Left) || double.IsInfinity(Left))
+                Left = workArea.Left + (workArea.Width - Width) / 2;
+            if (double.IsNaN(Top) || double.IsInfinity(Top))
+                Top = workArea.Top + (workArea.Height - Height) / 2;
+
+            double maxLeft = workArea.Right - Width;
+            double maxTop = workArea.Bottom - Height;
+            Left = Math.Max(workArea.Left, Math.Min(Left, maxLeft));
+            Top = Math.Max(workArea.Top, Math.Min(Top, maxTop));
         }
 
         private void MainWindow_SourceInitialized(object sender, EventArgs e)
@@ -273,7 +304,19 @@ namespace ScheduleWidget
         {
             if (string.IsNullOrWhiteSpace(TitleInput.Text)) return;
 
-            string dateStr = $"{(int)YearCombo.SelectedItem}-{(int)MonthCombo.SelectedItem:D2}-{(int)DayCombo.SelectedItem:D2}";
+            DateTime selectedDate;
+            if (!TryGetSelectedDate(out selectedDate))
+            {
+                System.Windows.MessageBox.Show(
+                    this,
+                    "유효한 날짜를 입력해 주세요.",
+                    "날짜 확인",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+                return;
+            }
+
+            string dateStr = selectedDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
             appData.Schedules.Add(new ScheduleItem { Title = TitleInput.Text.Trim(), Period = dateStr });
 
             SaveDataSafely();
@@ -291,8 +334,7 @@ namespace ScheduleWidget
             {
                 DateTime selected = CalendarPicker.SelectedDate.Value;
 
-                if (YearCombo.Items.Contains(selected.Year))
-                    YearCombo.SelectedItem = selected.Year;
+                SetYearSelection(selected.Year);
 
                 MonthCombo.SelectedItem = selected.Month;
 
@@ -305,7 +347,7 @@ namespace ScheduleWidget
         {
             DateTime today = DateTime.Now;
 
-            YearCombo.SelectedItem = today.Year;
+            SetYearSelection(today.Year);
             MonthCombo.SelectedItem = today.Month;
 
             UpdateDays(today.Year, today.Month);
@@ -316,7 +358,8 @@ namespace ScheduleWidget
 
         private void EditSchedule_Click(object sender, RoutedEventArgs e)
         {
-            if (sender is System.Windows.Controls.MenuItem mi && mi.DataContext is ScheduleItem item)
+            ScheduleItem item = GetScheduleItemFromContextMenu(sender);
+            if (item != null)
             {
                 int index = appData.Schedules.FindIndex(s => s.Title == item.Title && s.Period == item.Period);
                 if (index < 0) return;
@@ -336,12 +379,26 @@ namespace ScheduleWidget
 
         private void RemoveSchedule_Click(object sender, RoutedEventArgs e)
         {
-            if (sender is System.Windows.Controls.MenuItem mi && mi.DataContext is ScheduleItem item)
+            ScheduleItem item = GetScheduleItemFromContextMenu(sender);
+            if (item != null)
             {
                 appData.Schedules.Remove(item);
                 SaveDataSafely();
                 RefreshScheduleList();
             }
+        }
+
+        private static ScheduleItem GetScheduleItemFromContextMenu(object sender)
+        {
+            var menuItem = sender as System.Windows.Controls.MenuItem;
+            var contextMenu = menuItem?.Parent as System.Windows.Controls.ContextMenu;
+            var placementTarget = contextMenu?.PlacementTarget as FrameworkElement;
+
+            if (placementTarget?.DataContext is ScheduleItem item)
+                return item;
+
+            // 명시적인 ContextMenu 바인딩이 적용되지 않는 상황에서도 기존 동작을 유지합니다.
+            return menuItem?.DataContext as ScheduleItem;
         }
 
         private void TopBar_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
@@ -363,8 +420,9 @@ namespace ScheduleWidget
             UpdateDays(today.Year, today.Month);
             DayCombo.SelectedItem = today.Day;
 
-            YearCombo.SelectionChanged += (s, e) => UpdateDays((int)YearCombo.SelectedItem, (int)MonthCombo.SelectedItem);
-            MonthCombo.SelectionChanged += (s, e) => UpdateDays((int)YearCombo.SelectedItem, (int)MonthCombo.SelectedItem);
+            YearCombo.SelectionChanged += (s, e) => UpdateDaysForCurrentSelection();
+            YearCombo.LostFocus += (s, e) => NormalizeYearInput();
+            MonthCombo.SelectionChanged += (s, e) => UpdateDaysForCurrentSelection();
         }
 
         private void UpdateDays(int year, int month)
@@ -373,6 +431,67 @@ namespace ScheduleWidget
             int days = DateTime.DaysInMonth(year, month);
             for (int d = 1; d <= days; d++) DayCombo.Items.Add(d);
             DayCombo.SelectedIndex = 0;
+        }
+
+        private void SetYearSelection(int year)
+        {
+            if (!YearCombo.Items.Contains(year))
+                YearCombo.Items.Add(year);
+
+            YearCombo.SelectedItem = year;
+            YearCombo.Text = year.ToString(CultureInfo.InvariantCulture);
+        }
+
+        private void NormalizeYearInput()
+        {
+            int year;
+            if (TryGetSelectedYear(out year))
+                SetYearSelection(year);
+
+            UpdateDaysForCurrentSelection();
+        }
+
+        private void UpdateDaysForCurrentSelection()
+        {
+            int year;
+            if (TryGetSelectedYear(out year) && MonthCombo.SelectedItem is int month)
+                UpdateDays(year, month);
+        }
+
+        private bool TryGetSelectedYear(out int year)
+        {
+            string yearText = YearCombo.Text;
+            if (string.IsNullOrWhiteSpace(yearText) && YearCombo.SelectedItem != null)
+                yearText = YearCombo.SelectedItem.ToString();
+
+            return int.TryParse(
+                       yearText,
+                       NumberStyles.Integer,
+                       CultureInfo.InvariantCulture,
+                       out year)
+                   && year >= DateTime.MinValue.Year
+                   && year <= DateTime.MaxValue.Year;
+        }
+
+        private bool TryGetSelectedDate(out DateTime selectedDate)
+        {
+            selectedDate = default(DateTime);
+
+            int year;
+            if (!TryGetSelectedYear(out year) ||
+                !(MonthCombo.SelectedItem is int month) ||
+                !(DayCombo.SelectedItem is int day))
+                return false;
+
+            try
+            {
+                selectedDate = new DateTime(year, month, day);
+                return true;
+            }
+            catch (ArgumentOutOfRangeException)
+            {
+                return false;
+            }
         }
 
         private void SetTimerForMidnight()

@@ -121,6 +121,7 @@ namespace ScheduleWidget
             if (string.IsNullOrEmpty(legacyJsonPath) ||
                 PathsEqual(legacyJsonPath, jsonPath) ||
                 File.Exists(jsonPath) ||
+                File.Exists(backupPath) ||
                 !File.Exists(legacyJsonPath))
                 return null;
 
@@ -133,7 +134,43 @@ namespace ScheduleWidget
             }
 
             WriteDataAtomically(NormalizeData(legacyData));
+
+            // 이전 작업이 실제로 읽을 수 있는 파일을 만들었는지 확인한 뒤에만
+            // 구버전 파일을 삭제합니다. 검증에 실패하면 원본을 보존합니다.
+            if (!TryReadData(jsonPath, out _, out _))
+            {
+                string quarantinedPrimary = TryQuarantine(jsonPath);
+                string warning = "구버전 일정 파일을 새 위치에 저장했지만 저장 결과를 확인하지 못했습니다."
+                    + Environment.NewLine + "구버전 파일은 보존됩니다: " + legacyJsonPath;
+
+                if (!string.IsNullOrEmpty(quarantinedPrimary))
+                    warning += Environment.NewLine + "검증에 실패한 새 파일: " + quarantinedPrimary;
+
+                return warning;
+            }
+
+            if (!TryDeleteLegacyFile())
+            {
+                return "일정 데이터는 새 위치로 이전했지만 구버전 파일을 삭제하지 못했습니다."
+                    + Environment.NewLine + "구버전 파일: " + legacyJsonPath;
+            }
+
             return null;
+        }
+
+        private bool TryDeleteLegacyFile()
+        {
+            if (!File.Exists(legacyJsonPath)) return true;
+
+            try
+            {
+                File.Delete(legacyJsonPath);
+                return !File.Exists(legacyJsonPath);
+            }
+            catch (Exception ex) when (IsStorageException(ex))
+            {
+                return false;
+            }
         }
 
         private DataLoadResult RecoverFromBackup(string warning)
