@@ -7,6 +7,7 @@ using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Threading;
 using Microsoft.Win32;
+using FormsScreen = System.Windows.Forms.Screen;
 
 namespace ScheduleWidget
 {
@@ -25,6 +26,18 @@ namespace ScheduleWidget
         private bool _saveErrorShown;
         private string _startupWarningMessage;
 
+        private AppearanceSettings _inlineSettingsOriginal;
+        private AppearanceSettings _inlineSettingsDraft;
+        private bool _inlineSettingsLoading;
+        private bool _inlineStartupDraft;
+
+        private Guid? _inlineEditId;
+        private Guid? _pendingRemovalId;
+        private bool _inlineEditDateSelectorsInitialized;
+        private bool _inlineEditLoading;
+
+        private string _pendingMonitorRestoreId;
+
         public MainWindow()
         {
             InitializeComponent();
@@ -39,14 +52,25 @@ namespace ScheduleWidget
             this.ResizeMode = ResizeMode.NoResize;
 
             InitDateSelectors();
-            string startupError;
-            if (!startupService.TryEnableStartup(out startupError))
-                _startupWarningMessage = startupError;
 
             trayService.Initialize(this);
 
             SetTimerForMidnight();
             InitializeStateSaveTimer();
+        }
+
+        private void WidgetContent_SizeChanged(object sender, SizeChangedEventArgs e)
+        {
+            if (WidgetContent.ActualWidth <= 0 || WidgetContent.ActualHeight <= 0)
+                return;
+
+            // Border의 CornerRadius는 자식 컨트롤을 자동으로 자르지 않으므로
+            // 실제 둥근 사각형 클립을 적용해 모서리의 배경 누수를 막습니다.
+            const double radius = 19.0;
+            WidgetContent.Clip = new RectangleGeometry(
+                new Rect(0, 0, WidgetContent.ActualWidth, WidgetContent.ActualHeight),
+                radius,
+                radius);
         }
 
         protected override void OnClosing(System.ComponentModel.CancelEventArgs e) => e.Cancel = true;
@@ -182,16 +206,14 @@ namespace ScheduleWidget
                 return;
             }
 
-            System.Windows.Rect primaryWorkArea = SystemParameters.WorkArea;
-            if (primaryWorkArea.Width <= 0 || primaryWorkArea.Height <= 0)
+            FormsScreen primaryScreen = FormsScreen.PrimaryScreen;
+            if (primaryScreen == null)
                 return;
 
             _isRestoringState = true;
             try
             {
-                EnsureWindowSizeWithin(primaryWorkArea);
-                Left = primaryWorkArea.Left + (primaryWorkArea.Width - Width) / 2;
-                Top = primaryWorkArea.Top + (primaryWorkArea.Height - Height) / 2;
+                ApplyWindowPositionForMonitor(primaryScreen, null, false);
 
                 if (!IsVisible)
                     Show();
@@ -208,8 +230,6 @@ namespace ScheduleWidget
         {
             var hwnd = new WindowInteropHelper(this).Handle;
             if (hwnd == IntPtr.Zero) return;
-
-            NativeMethods.SetToDesktop(hwnd);
 
             int exStyle = NativeMethods.GetWindowLong(hwnd, NativeMethods.GWL_EXSTYLE);
             NativeMethods.SetWindowLong(hwnd, NativeMethods.GWL_EXSTYLE, exStyle | NativeMethods.WS_EX_TOOLWINDOW);
@@ -243,6 +263,8 @@ namespace ScheduleWidget
                     MessageBoxImage.Error);
             }
 
+            ApplyStartupPreferenceOnLoad();
+
             if (!string.IsNullOrWhiteSpace(_startupWarningMessage))
             {
                 string warningMessage = _startupWarningMessage;
@@ -255,26 +277,217 @@ namespace ScheduleWidget
                     MessageBoxImage.Warning);
             }
 
-            if (appData.WindowState != null && appData.WindowState.Width > 0)
-            {
-                _isRestoringState = true;
-                try
-                {
-                    this.Width = appData.WindowState.Width;
-                    this.Height = appData.WindowState.Height;
-                    this.Left = appData.WindowState.Left;
-                    this.Top = appData.WindowState.Top;
-
-                    EnsureVisibleOnScreen();
-                }
-                finally { _isRestoringState = false; }
-            }
+            RestoreWindowPlacementOnStartup();
 
             this.LocationChanged += (s, ev) => { if (!_isRestoringState) SaveCurrentState(); };
             this.SizeChanged += (s, ev) => { if (!_isRestoringState) SaveCurrentState(); };
 
             ApplyAppearance(appData.Appearance);
             RefreshScheduleList();
+
+            // WPF가 먼저 표면을 렌더링한 다음 바탕화면 호스트에 연결합니다.
+            // SourceInitialized 단계에서 바로 연결하면 layered window가
+            // 셸 합성 화면에 그려지지 않는 경우가 있습니다.
+            var hwnd = new WindowInteropHelper(this).Handle;
+            if (hwnd != IntPtr.Zero)
+                NativeMethods.SetToDesktop(hwnd);
+            EnsureVisibleOnScreen();
+
+            SaveCurrentState();
+        }
+
+        private void ApplyStartupPreferenceOnLoad()
+        {
+            if (appData == null)
+                return;
+
+            string startupError;
+            bool applied = appData.StartupEnabled
+                ? startupService.TryEnableStartup(out startupError)
+                : startupService.TryDisableStartup(out startupError);
+
+            if (!applied)
+                _startupWarningMessage = startupError;
+        }
+
+        private void RestoreWindowPlacementOnStartup()
+        {
+            if (appData == null || appData.WindowState == null)
+                return;
+
+            string savedMonitorId = appData.WindowState.MonitorId;
+            if (!string.IsNullOrWhiteSpace(savedMonitorId))
+            {
+                FormsScreen targetScreen = FindScreenById(savedMonitorId);
+                if (targetScreen == null)
+                    targetScreen = FormsScreen.PrimaryScreen;
+
+                if (targetScreen != null)
+                {
+                    MonitorStateData savedState = null;
+                    bool hasSavedState =
+                        string.Equals(targetScreen.DeviceName, savedMonitorId, StringComparison.OrdinalIgnoreCase) &&
+                        TryGetMonitorState(savedMonitorId, out savedState);
+
+                    _isRestoringState = true;
+                    try
+                    {
+                        ApplyWindowPositionForMonitor(targetScreen, savedState, hasSavedState);
+                        appData.WindowState.MonitorId = targetScreen.DeviceName;
+                    }
+                    finally { _isRestoringState = false; }
+                }
+
+                return;
+            }
+
+            // 모니터별 위치가 없는 구버전 데이터는 기존 전역 위치를 한 번만 복원합니다.
+            if (appData.WindowState.Width > 0)
+            {
+                _isRestoringState = true;
+                try
+                {
+                    Width = appData.WindowState.Width;
+                    Height = appData.WindowState.Height;
+                    Left = appData.WindowState.Left;
+                    Top = appData.WindowState.Top;
+                    EnsureVisibleOnScreen();
+                }
+                finally { _isRestoringState = false; }
+            }
+            else
+            {
+                EnsureVisibleOnScreen();
+            }
+        }
+
+        private void ApplyWindowPositionForMonitor(
+            FormsScreen screen,
+            MonitorStateData savedState,
+            bool restoreSavedPosition)
+        {
+            System.Windows.Rect workArea = GetWorkAreaInDips(screen);
+            if (workArea.Width <= 0 || workArea.Height <= 0)
+                return;
+
+            if (savedState != null)
+            {
+                if (IsFinite(savedState.Width) && savedState.Width > 0)
+                    Width = savedState.Width;
+                if (IsFinite(savedState.Height) && savedState.Height > 0)
+                    Height = savedState.Height;
+            }
+            else if (appData != null && appData.WindowState != null)
+            {
+                if (IsFinite(appData.WindowState.Width) && appData.WindowState.Width > 0)
+                    Width = appData.WindowState.Width;
+                if (IsFinite(appData.WindowState.Height) && appData.WindowState.Height > 0)
+                    Height = appData.WindowState.Height;
+            }
+
+            EnsureWindowSizeWithin(workArea);
+
+            if (restoreSavedPosition && savedState != null &&
+                IsFinite(savedState.Left) && IsFinite(savedState.Top))
+            {
+                Left = savedState.Left;
+                Top = savedState.Top;
+                ClampWindowToWorkArea(workArea);
+            }
+            else
+            {
+                Left = workArea.Left + (workArea.Width - Width) / 2;
+                Top = workArea.Top + (workArea.Height - Height) / 2;
+            }
+        }
+
+        private void ClampWindowToWorkArea(System.Windows.Rect workArea)
+        {
+            double maxLeft = Math.Max(workArea.Left, workArea.Right - Width);
+            double maxTop = Math.Max(workArea.Top, workArea.Bottom - Height);
+            Left = Math.Max(workArea.Left, Math.Min(Left, maxLeft));
+            Top = Math.Max(workArea.Top, Math.Min(Top, maxTop));
+        }
+
+        private System.Windows.Rect GetWorkAreaInDips(FormsScreen screen)
+        {
+            if (screen == null)
+                return new System.Windows.Rect();
+
+            DpiScale dpi = VisualTreeHelper.GetDpi(this);
+            double scaleX = dpi.DpiScaleX > 0 ? dpi.DpiScaleX : 1.0;
+            double scaleY = dpi.DpiScaleY > 0 ? dpi.DpiScaleY : 1.0;
+            return new System.Windows.Rect(
+                screen.WorkingArea.Left / scaleX,
+                screen.WorkingArea.Top / scaleY,
+                screen.WorkingArea.Width / scaleX,
+                screen.WorkingArea.Height / scaleY);
+        }
+
+        private bool TryGetMonitorState(string monitorId, out MonitorStateData state)
+        {
+            state = null;
+            if (string.IsNullOrWhiteSpace(monitorId) ||
+                appData == null ||
+                appData.WindowState == null ||
+                appData.WindowState.MonitorStates == null)
+                return false;
+
+            if (!appData.WindowState.MonitorStates.TryGetValue(monitorId, out state) || state == null)
+                return false;
+
+            if (!IsFinite(state.Left) || !IsFinite(state.Top))
+            {
+                state = null;
+                return false;
+            }
+
+            return true;
+        }
+
+        private string GetCurrentMonitorId()
+        {
+            try
+            {
+                IntPtr hwnd = new WindowInteropHelper(this).Handle;
+                FormsScreen screen = hwnd != IntPtr.Zero ? FormsScreen.FromHandle(hwnd) : null;
+                return screen == null ? null : screen.DeviceName;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private static FormsScreen[] GetConnectedScreens()
+        {
+            FormsScreen[] screens = FormsScreen.AllScreens ?? new FormsScreen[0];
+            Array.Sort(
+                screens,
+                (left, right) => StringComparer.OrdinalIgnoreCase.Compare(
+                    left == null ? null : left.DeviceName,
+                    right == null ? null : right.DeviceName));
+            return screens;
+        }
+
+        private static FormsScreen FindScreenById(string monitorId)
+        {
+            if (string.IsNullOrWhiteSpace(monitorId))
+                return null;
+
+            foreach (FormsScreen screen in GetConnectedScreens())
+            {
+                if (screen != null &&
+                    string.Equals(screen.DeviceName, monitorId, StringComparison.OrdinalIgnoreCase))
+                    return screen;
+            }
+
+            return null;
+        }
+
+        private static bool IsFinite(double value)
+        {
+            return !double.IsNaN(value) && !double.IsInfinity(value);
         }
 
         private void SaveCurrentState()
@@ -305,6 +518,24 @@ namespace ScheduleWidget
             appData.WindowState.Top = this.Top;
             appData.WindowState.Width = this.Width;
             appData.WindowState.Height = this.Height;
+
+            string monitorId = !string.IsNullOrWhiteSpace(_pendingMonitorRestoreId)
+                ? _pendingMonitorRestoreId
+                : GetCurrentMonitorId();
+            if (string.IsNullOrWhiteSpace(monitorId))
+                return;
+
+            appData.WindowState.MonitorId = monitorId;
+            if (appData.WindowState.MonitorStates == null)
+                appData.WindowState.MonitorStates = new Dictionary<string, MonitorStateData>();
+
+            appData.WindowState.MonitorStates[monitorId] = new MonitorStateData
+            {
+                Left = this.Left,
+                Top = this.Top,
+                Width = this.Width,
+                Height = this.Height
+            };
         }
 
         private bool SaveDataSafely(bool showError = true)
@@ -418,17 +649,208 @@ namespace ScheduleWidget
                 int index = appData.Schedules.FindIndex(s => s.Id == item.Id);
                 if (index < 0) return;
 
-                var win = new EditScheduleWindow(item);
-                win.Owner = System.Windows.Application.Current.MainWindow;
-
-                if (win.ShowDialog() == true)
-                {
-                    appData.Schedules[index].Title = win.ResultTitle;
-                    appData.Schedules[index].Period = win.ResultPeriod;
-                    SaveDataSafely();
-                    RefreshScheduleList();
-                }
+                OpenInlineEdit(item);
             }
+        }
+
+        private void OpenInlineEdit(ScheduleItem item)
+        {
+            if (item == null)
+                return;
+
+            if (InlineSettingsPanel.Visibility == Visibility.Visible)
+                CloseInlineSettings(false);
+
+            if (RemoveConfirmPanel.Visibility == Visibility.Visible)
+                CloseRemoveConfirmation();
+
+            if (!_inlineEditDateSelectorsInitialized)
+                InitInlineEditDateSelectors();
+
+            DateTime date;
+            if (!DateTime.TryParseExact(
+                    item.Period,
+                    "yyyy-MM-dd",
+                    CultureInfo.InvariantCulture,
+                    DateTimeStyles.None,
+                    out date))
+            {
+                date = DateTime.Today;
+            }
+
+            _inlineEditId = item.Id;
+            _inlineEditLoading = true;
+            InlineEditTitleInput.Text = item.Title ?? string.Empty;
+            SetInlineEditYear(date.Year);
+            InlineEditMonthCombo.SelectedItem = date.Month;
+            UpdateInlineEditDays(date.Year, date.Month);
+            InlineEditDayCombo.SelectedItem = date.Day;
+            _inlineEditLoading = false;
+
+            InlineEditPanel.Visibility = Visibility.Visible;
+            InlineEditTitleInput.Focus();
+            InlineEditTitleInput.SelectAll();
+        }
+
+        private void InitInlineEditDateSelectors()
+        {
+            DateTime today = DateTime.Today;
+
+            for (int year = today.Year - 5; year <= today.Year + 5; year++)
+                InlineEditYearCombo.Items.Add(year);
+            for (int month = 1; month <= 12; month++)
+                InlineEditMonthCombo.Items.Add(month);
+
+            _inlineEditLoading = true;
+            SetInlineEditYear(today.Year);
+            InlineEditMonthCombo.SelectedItem = today.Month;
+            UpdateInlineEditDays(today.Year, today.Month);
+            InlineEditDayCombo.SelectedItem = today.Day;
+            _inlineEditLoading = false;
+
+            InlineEditYearCombo.SelectionChanged += (s, e) => UpdateInlineEditDaysForCurrentSelection();
+            InlineEditYearCombo.LostFocus += (s, e) => NormalizeInlineEditYear();
+            InlineEditMonthCombo.SelectionChanged += (s, e) => UpdateInlineEditDaysForCurrentSelection();
+
+            _inlineEditDateSelectorsInitialized = true;
+        }
+
+        private void UpdateInlineEditDays(int year, int month)
+        {
+            int previousDay = InlineEditDayCombo.SelectedItem is int selectedDay ? selectedDay : 1;
+            int daysInMonth;
+            try
+            {
+                daysInMonth = DateTime.DaysInMonth(year, month);
+            }
+            catch (ArgumentOutOfRangeException)
+            {
+                return;
+            }
+
+            InlineEditDayCombo.Items.Clear();
+            for (int dayIndex = 1; dayIndex <= daysInMonth; dayIndex++)
+                InlineEditDayCombo.Items.Add(dayIndex);
+
+            InlineEditDayCombo.SelectedItem = Math.Min(previousDay, daysInMonth);
+        }
+
+        private void SetInlineEditYear(int year)
+        {
+            if (!InlineEditYearCombo.Items.Contains(year))
+                InlineEditYearCombo.Items.Add(year);
+
+            InlineEditYearCombo.SelectedItem = year;
+            InlineEditYearCombo.Text = year.ToString(CultureInfo.InvariantCulture);
+        }
+
+        private void NormalizeInlineEditYear()
+        {
+            int year;
+            if (TryGetInlineEditYear(out year))
+                SetInlineEditYear(year);
+
+            UpdateInlineEditDaysForCurrentSelection();
+        }
+
+        private void UpdateInlineEditDaysForCurrentSelection()
+        {
+            if (_inlineEditLoading)
+                return;
+
+            int year;
+            if (TryGetInlineEditYear(out year) && InlineEditMonthCombo.SelectedItem is int month)
+                UpdateInlineEditDays(year, month);
+        }
+
+        private bool TryGetInlineEditYear(out int year)
+        {
+            string yearText = InlineEditYearCombo.Text;
+            if (string.IsNullOrWhiteSpace(yearText) && InlineEditYearCombo.SelectedItem != null)
+                yearText = InlineEditYearCombo.SelectedItem.ToString();
+
+            return int.TryParse(
+                       yearText,
+                       NumberStyles.Integer,
+                       CultureInfo.InvariantCulture,
+                       out year)
+                   && year >= DateTime.MinValue.Year
+                   && year <= DateTime.MaxValue.Year;
+        }
+
+        private bool TryGetInlineEditDate(out DateTime selectedDate)
+        {
+            selectedDate = default(DateTime);
+
+            int year;
+            if (!TryGetInlineEditYear(out year) ||
+                !(InlineEditMonthCombo.SelectedItem is int month) ||
+                !(InlineEditDayCombo.SelectedItem is int day))
+                return false;
+
+            try
+            {
+                selectedDate = new DateTime(year, month, day);
+                return true;
+            }
+            catch (ArgumentOutOfRangeException)
+            {
+                return false;
+            }
+        }
+
+        private void InlineEditSaveButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (!_inlineEditId.HasValue)
+                return;
+
+            string title = InlineEditTitleInput.Text == null
+                ? string.Empty
+                : InlineEditTitleInput.Text.Trim();
+            if (title.Length == 0)
+                return;
+
+            DateTime selectedDate;
+            if (!TryGetInlineEditDate(out selectedDate))
+            {
+                System.Windows.MessageBox.Show(
+                    this,
+                    "유효한 날짜를 입력해 주세요.",
+                    "날짜 확인",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+                return;
+            }
+
+            ScheduleItem item = appData.Schedules.Find(s => s.Id == _inlineEditId.Value);
+            if (item == null)
+            {
+                CloseInlineEdit();
+                return;
+            }
+
+            item.Title = title;
+            item.Period = selectedDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+
+            SaveDataSafely();
+            RefreshScheduleList();
+            CloseInlineEdit();
+        }
+
+        private void InlineEditCancelButton_Click(object sender, RoutedEventArgs e)
+        {
+            CloseInlineEdit();
+        }
+
+        private void InlineEditCloseButton_Click(object sender, RoutedEventArgs e)
+        {
+            CloseInlineEdit();
+        }
+
+        private void CloseInlineEdit()
+        {
+            InlineEditPanel.Visibility = Visibility.Collapsed;
+            _inlineEditId = null;
         }
 
         private void RemoveSchedule_Click(object sender, RoutedEventArgs e)
@@ -439,10 +861,40 @@ namespace ScheduleWidget
                 int index = appData.Schedules.FindIndex(s => s.Id == item.Id);
                 if (index < 0) return;
 
+                _pendingRemovalId = item.Id;
+                RemoveConfirmMessage.Text = $"'{item.Title}' 일정을 제거할까요?";
+                RemoveConfirmPanel.Visibility = Visibility.Visible;
+            }
+        }
+
+        private void RemoveConfirmApplyButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (!_pendingRemovalId.HasValue)
+            {
+                CloseRemoveConfirmation();
+                return;
+            }
+
+            int index = appData.Schedules.FindIndex(s => s.Id == _pendingRemovalId.Value);
+            if (index >= 0)
+            {
                 appData.Schedules.RemoveAt(index);
                 SaveDataSafely();
                 RefreshScheduleList();
             }
+
+            CloseRemoveConfirmation();
+        }
+
+        private void RemoveConfirmCancelButton_Click(object sender, RoutedEventArgs e)
+        {
+            CloseRemoveConfirmation();
+        }
+
+        private void CloseRemoveConfirmation()
+        {
+            RemoveConfirmPanel.Visibility = Visibility.Collapsed;
+            _pendingRemovalId = null;
         }
 
         private static ScheduleItem GetScheduleItemFromContextMenu(object sender)
@@ -476,6 +928,7 @@ namespace ScheduleWidget
             MonthCombo.SelectedItem = today.Month;
             UpdateDays(today.Year, today.Month);
             DayCombo.SelectedItem = today.Day;
+            CalendarPicker.SelectedDate = today;
 
             YearCombo.SelectionChanged += (s, e) => UpdateDaysForCurrentSelection();
             YearCombo.LostFocus += (s, e) => NormalizeYearInput();
@@ -581,18 +1034,305 @@ namespace ScheduleWidget
                 : TimeSpan.FromSeconds(1);
         }
 
+        private void MonitorButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (MonitorPanel.Visibility == Visibility.Visible)
+            {
+                CloseMonitorPanel();
+                return;
+            }
+
+            ModeToggle.IsChecked = false;
+            OpenMonitorPanel();
+        }
+
+        private void OpenMonitorPanel()
+        {
+            MonitorOptionsList.ItemsSource = null;
+            MonitorOptionsList.ItemsSource = BuildMonitorOptions();
+            MonitorPanel.Visibility = Visibility.Visible;
+        }
+
+        private List<MonitorOption> BuildMonitorOptions()
+        {
+            var options = new List<MonitorOption>();
+            string currentMonitorId = GetCurrentMonitorId();
+            int monitorNumber = 1;
+
+            foreach (FormsScreen screen in GetConnectedScreens())
+            {
+                if (screen == null || string.IsNullOrWhiteSpace(screen.DeviceName))
+                    continue;
+
+                string detail = string.Format(
+                    CultureInfo.InvariantCulture,
+                    "{0} × {1}",
+                    screen.Bounds.Width,
+                    screen.Bounds.Height);
+                if (screen.Primary)
+                    detail += " · 주 모니터";
+
+                bool isCurrent = string.Equals(
+                    screen.DeviceName,
+                    currentMonitorId,
+                    StringComparison.OrdinalIgnoreCase);
+                options.Add(new MonitorOption
+                {
+                    Id = screen.DeviceName,
+                    DisplayName = "모니터 " + monitorNumber,
+                    Detail = detail,
+                    StatusText = isCurrent ? "현재" : string.Empty
+                });
+                monitorNumber++;
+            }
+
+            return options;
+        }
+
+        private void MonitorOptionButton_Click(object sender, RoutedEventArgs e)
+        {
+            var button = sender as System.Windows.Controls.Button;
+            string monitorId = button == null ? null : button.Tag as string;
+            if (string.IsNullOrWhiteSpace(monitorId))
+                return;
+
+            if (MoveToMonitor(monitorId))
+                CloseMonitorPanel();
+            else
+                OpenMonitorPanel();
+        }
+
+        private void MonitorPanelCloseButton_Click(object sender, RoutedEventArgs e)
+        {
+            CloseMonitorPanel();
+        }
+
+        private void CloseMonitorPanel()
+        {
+            MonitorPanel.Visibility = Visibility.Collapsed;
+            MonitorOptionsList.ItemsSource = null;
+        }
+
+        private bool MoveToMonitor(string monitorId)
+        {
+            if (appData == null || appData.WindowState == null)
+                return false;
+
+            FormsScreen targetScreen = FindScreenById(monitorId);
+            if (targetScreen == null)
+                return false;
+
+            // 현재 모니터를 다시 선택한 경우에는 부모 창과 좌표를 건드리지
+            // 않습니다. 바탕화면 호스트를 다시 연결하면 셸 구성에 따라
+            // 위젯이 잠시 숨겨질 수 있으므로, 불필요한 재배치를 차단합니다.
+            string currentMonitorId = GetCurrentMonitorId();
+            if (string.Equals(currentMonitorId, targetScreen.DeviceName, StringComparison.OrdinalIgnoreCase) ||
+                (string.IsNullOrWhiteSpace(currentMonitorId) &&
+                 string.Equals(appData.WindowState.MonitorId, targetScreen.DeviceName, StringComparison.OrdinalIgnoreCase)))
+            {
+                appData.WindowState.MonitorId = targetScreen.DeviceName;
+                SaveCurrentState();
+                return true;
+            }
+
+            // 이동하기 전에 현재 모니터 위치를 먼저 별도 슬롯에 보존합니다.
+            UpdateWindowStateData();
+
+            MonitorStateData savedState;
+            bool hasSavedState = TryGetMonitorState(monitorId, out savedState);
+            _pendingMonitorRestoreId = targetScreen.DeviceName;
+
+            _isRestoringState = true;
+            try
+            {
+                ApplyWindowPositionForMonitor(targetScreen, savedState, hasSavedState);
+                appData.WindowState.MonitorId = targetScreen.DeviceName;
+            }
+            finally
+            {
+                _isRestoringState = false;
+            }
+
+            SaveCurrentState();
+
+            // 모니터별 DPI가 다르면 WPF가 위치 단위를 다시 계산하므로,
+            // 레이아웃이 안정된 뒤 한 번 더 현재 위치를 저장합니다.
+            Dispatcher.BeginInvoke(
+                new Action(() =>
+                {
+                    if (string.Equals(
+                            _pendingMonitorRestoreId,
+                            targetScreen.DeviceName,
+                            StringComparison.OrdinalIgnoreCase))
+                    {
+                        _pendingMonitorRestoreId = null;
+                        SaveCurrentState();
+                    }
+                }),
+                DispatcherPriority.ApplicationIdle);
+
+            return true;
+        }
+
         // ── 설정 ──
 
         private void SettingsButton_Click(object sender, RoutedEventArgs e)
         {
-            var win = new SettingsWindow(appData.Appearance, ApplyAppearance);
-            win.Owner = System.Windows.Application.Current.MainWindow;
+            if (appData == null)
+                return;
 
-            if (win.ShowDialog() == true)
+            if (InlineSettingsPanel.Visibility == Visibility.Visible)
             {
-                appData.Appearance = win.Result;
-                SaveDataSafely();
+                CloseInlineSettings(false);
+                return;
             }
+
+            // 설정을 여는 동안에는 위젯 이동 모드를 잠시 끕니다.
+            ModeToggle.IsChecked = false;
+
+            _inlineSettingsOriginal = CloneAppearance(appData.Appearance);
+            _inlineSettingsDraft = CloneAppearance(appData.Appearance);
+            _inlineStartupDraft = appData.StartupEnabled;
+
+            _inlineSettingsLoading = true;
+            InlineOpacitySlider.Value = _inlineSettingsDraft.Opacity * 100;
+            InlineTitleFontSizeSlider.Value = _inlineSettingsDraft.TitleFontSize;
+            InlineDDayFontSizeSlider.Value = _inlineSettingsDraft.DDayFontSize;
+            InlinePresetCombo.SelectedIndex = FindPresetIndex(_inlineSettingsDraft.ThemePreset);
+            InlineStartupToggle.IsChecked = _inlineStartupDraft;
+            UpdateInlineSettingsLabels();
+            _inlineSettingsLoading = false;
+
+            InlineSettingsPanel.Visibility = Visibility.Visible;
+        }
+
+        private static int FindPresetIndex(string preset)
+        {
+            switch (preset)
+            {
+                case "Dark": return 1;
+                case "Blue": return 2;
+                case "Pink": return 3;
+                default: return 0;
+            }
+        }
+
+        private static AppearanceSettings CloneAppearance(AppearanceSettings source)
+        {
+            var copy = new AppearanceSettings
+            {
+                Opacity = source.Opacity,
+                ThemePreset = source.ThemePreset,
+                TitleFontSize = source.TitleFontSize,
+                DDayFontSize = source.DDayFontSize
+            };
+            copy.CopyColorsFrom(source);
+            return copy;
+        }
+
+        private void InlinePresetCombo_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
+        {
+            if (_inlineSettingsLoading || _inlineSettingsDraft == null || InlinePresetCombo.SelectedItem == null)
+                return;
+
+            string preset = (InlinePresetCombo.SelectedItem as System.Windows.Controls.ComboBoxItem)?.Content.ToString();
+            if (preset != null && AppearanceSettings.Presets.ContainsKey(preset))
+            {
+                _inlineSettingsDraft.ThemePreset = preset;
+                _inlineSettingsDraft.CopyColorsFrom(AppearanceSettings.Presets[preset]);
+                ApplyAppearance(_inlineSettingsDraft);
+            }
+        }
+
+        private void InlineOpacitySlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+        {
+            if (_inlineSettingsLoading || _inlineSettingsDraft == null)
+                return;
+
+            _inlineSettingsDraft.Opacity = InlineOpacitySlider.Value / 100.0;
+            UpdateInlineSettingsLabels();
+            ApplyAppearance(_inlineSettingsDraft);
+        }
+
+        private void InlineFontSizeSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+        {
+            if (_inlineSettingsLoading || _inlineSettingsDraft == null)
+                return;
+
+            _inlineSettingsDraft.TitleFontSize = InlineTitleFontSizeSlider.Value;
+            _inlineSettingsDraft.DDayFontSize = InlineDDayFontSizeSlider.Value;
+            UpdateInlineSettingsLabels();
+            ApplyAppearance(_inlineSettingsDraft);
+        }
+
+        private void InlineStartupToggle_Checked(object sender, RoutedEventArgs e)
+        {
+            if (!_inlineSettingsLoading)
+                _inlineStartupDraft = true;
+        }
+
+        private void InlineStartupToggle_Unchecked(object sender, RoutedEventArgs e)
+        {
+            if (!_inlineSettingsLoading)
+                _inlineStartupDraft = false;
+        }
+
+        private void UpdateInlineSettingsLabels()
+        {
+            if (InlineOpacityValueText != null)
+                InlineOpacityValueText.Text = $"{(int)InlineOpacitySlider.Value}%";
+            if (InlineTitleFontSizeText != null)
+                InlineTitleFontSizeText.Text = $"{(int)InlineTitleFontSizeSlider.Value}";
+            if (InlineDDayFontSizeText != null)
+                InlineDDayFontSizeText.Text = $"{(int)InlineDDayFontSizeSlider.Value}";
+        }
+
+        private void InlineSettingsApplyButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (_inlineSettingsDraft == null)
+                return;
+
+            string startupError;
+            bool startupApplied = _inlineStartupDraft
+                ? startupService.TryEnableStartup(out startupError)
+                : startupService.TryDisableStartup(out startupError);
+            if (!startupApplied)
+            {
+                System.Windows.MessageBox.Show(
+                    this,
+                    startupError,
+                    "자동 시작 설정",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+                return;
+            }
+
+            appData.Appearance = CloneAppearance(_inlineSettingsDraft);
+            appData.StartupEnabled = _inlineStartupDraft;
+            ApplyAppearance(appData.Appearance);
+            SaveDataSafely();
+            CloseInlineSettings(true);
+        }
+
+        private void InlineSettingsCancelButton_Click(object sender, RoutedEventArgs e)
+        {
+            CloseInlineSettings(false);
+        }
+
+        private void InlineSettingsCloseButton_Click(object sender, RoutedEventArgs e)
+        {
+            CloseInlineSettings(false);
+        }
+
+        private void CloseInlineSettings(bool commit)
+        {
+            if (!commit && _inlineSettingsOriginal != null)
+                ApplyAppearance(_inlineSettingsOriginal);
+
+            InlineSettingsPanel.Visibility = Visibility.Collapsed;
+            _inlineSettingsOriginal = null;
+            _inlineSettingsDraft = null;
+            _inlineStartupDraft = false;
         }
 
         private void ApplyAppearance(AppearanceSettings settings)

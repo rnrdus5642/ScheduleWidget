@@ -11,11 +11,15 @@ namespace ScheduleWidget
 
         [DllImport("user32.dll", SetLastError = true)] public static extern IntPtr FindWindow(string lpClassName, string lpWindowName);
         [DllImport("user32.dll", SetLastError = true)] public static extern IntPtr FindWindowEx(IntPtr hWndParent, IntPtr hWndChildAfter, string lpszClass, string lpszWindow);
-        [DllImport("user32.dll", SetLastError = true)] public static extern IntPtr SetParent(IntPtr hWndChild, IntPtr hWndNewParent);
-        [DllImport("user32.dll", SetLastError = true)] public static extern IntPtr GetParent(IntPtr hWnd);
         [DllImport("user32.dll", SetLastError = true)] public static extern bool IsWindow(IntPtr hWnd);
+        [DllImport("user32.dll", SetLastError = true)] private static extern bool IsWindowVisible(IntPtr hWnd);
+        [DllImport("user32.dll", SetLastError = true)] private static extern bool GetWindowRect(IntPtr hWnd, out Rect rect);
         [DllImport("user32.dll", SetLastError = true)] public static extern int SetWindowLong(IntPtr hWnd, int nIndex, int dwNewLong);
         [DllImport("user32.dll", SetLastError = true)] public static extern int GetWindowLong(IntPtr hWnd, int nIndex);
+        [DllImport("user32.dll", EntryPoint = "SetWindowLongPtrW", SetLastError = true)]
+        private static extern IntPtr SetWindowLongPtr64(IntPtr hWnd, int nIndex, IntPtr value);
+        [DllImport("user32.dll", EntryPoint = "SetWindowLongW", SetLastError = true)]
+        private static extern IntPtr SetWindowLongPtr32(IntPtr hWnd, int nIndex, IntPtr value);
         [DllImport("user32.dll", SetLastError = true)]
         public static extern bool SetWindowPos(
             IntPtr hWnd,
@@ -49,6 +53,7 @@ namespace ScheduleWidget
         private static extern bool GetMonitorInfo(IntPtr hMonitor, ref MonitorInfo monitorInfo);
 
         public const int GWL_EXSTYLE = -20;
+        private const int GWL_HWNDPARENT = -8;
         public const int WS_EX_TOOLWINDOW = 0x00000080;
         public const uint SWP_NOSIZE = 0x0001;
         public const uint SWP_NOMOVE = 0x0002;
@@ -74,9 +79,22 @@ namespace ScheduleWidget
                 1000,
                 out result);
 
-            IntPtr desktopHost = IntPtr.Zero;
+            // Windows 구성에 따라 실제 바탕화면 WorkerW가 Progman의 자식으로
+            // 만들어지는 경우가 있습니다. 먼저 이 호스트를 확인해야 숨겨진
+            // 작은 WorkerW(IME/셸 보조 창)를 잘못 선택하지 않습니다.
+            IntPtr desktopHost = FindWindowEx(
+                hProgman,
+                IntPtr.Zero,
+                "WorkerW",
+                null);
+            if (!IsUsableDesktopHost(desktopHost))
+                desktopHost = IntPtr.Zero;
+
             EnumWindows((topLevelWindow, lParam) =>
             {
+                if (desktopHost != IntPtr.Zero)
+                    return false;
+
                 IntPtr shellView = FindWindowEx(
                     topLevelWindow,
                     IntPtr.Zero,
@@ -85,12 +103,27 @@ namespace ScheduleWidget
 
                 if (shellView != IntPtr.Zero)
                 {
-                    desktopHost = FindWindowEx(
+                    IntPtr childWorker = FindWindowEx(
+                        topLevelWindow,
+                        IntPtr.Zero,
+                        "WorkerW",
+                        null);
+                    if (IsUsableDesktopHost(childWorker))
+                    {
+                        desktopHost = childWorker;
+                        return false;
+                    }
+
+                    IntPtr siblingWorker = FindWindowEx(
                         IntPtr.Zero,
                         topLevelWindow,
                         "WorkerW",
                         null);
-                    return false;
+                    if (IsUsableDesktopHost(siblingWorker))
+                    {
+                        desktopHost = siblingWorker;
+                        return false;
+                    }
                 }
 
                 return true;
@@ -112,7 +145,11 @@ namespace ScheduleWidget
 
             if (!IsWindow(desktopHost)) return false;
 
-            SetParent(hwnd, desktopHost);
+            // WPF의 layered window를 WorkerW의 자식(WS_CHILD)으로 만들면
+            // DWM 합성에서 투명 표면이 그려지지 않을 수 있습니다. 창은
+            // popup 상태로 유지하고 바탕화면 호스트를 owner로 지정합니다.
+            // 그러면 일반 프로그램 위로 올라가지 않으면서 Win+D에도 남습니다.
+            SetWindowOwner(hwnd, desktopHost);
             SetWindowPos(
                 hwnd,
                 IntPtr.Zero,
@@ -123,6 +160,27 @@ namespace ScheduleWidget
                 SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW);
             ShowWindow(hwnd, SW_SHOWNOACTIVATE);
             return IsWindow(desktopHost);
+        }
+
+        private static IntPtr SetWindowOwner(IntPtr hwnd, IntPtr owner)
+        {
+            return IntPtr.Size == 8
+                ? SetWindowLongPtr64(hwnd, GWL_HWNDPARENT, owner)
+                : SetWindowLongPtr32(hwnd, GWL_HWNDPARENT, owner);
+        }
+
+        private static bool IsUsableDesktopHost(IntPtr hwnd)
+        {
+            if (hwnd == IntPtr.Zero || !IsWindow(hwnd))
+                return false;
+
+            Rect rect;
+            if (!GetWindowRect(hwnd, out rect))
+                return false;
+
+            // 셸이 만드는 10~100px 크기의 보조 WorkerW는 바탕화면 호스트가
+            // 아니므로 제외합니다. 숨김 상태인 정상 WorkerW도 허용합니다.
+            return rect.Right - rect.Left >= 200 && rect.Bottom - rect.Top >= 200;
         }
 
         public static bool TryGetWorkArea(IntPtr hwnd, out Rect workArea)

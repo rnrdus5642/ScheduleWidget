@@ -306,8 +306,12 @@ namespace ScheduleWidget
         {
             if (data == null) data = new AppData();
             if (data.WindowState == null) data.WindowState = new WindowStateData();
+            if (data.WindowState.MonitorStates == null)
+                data.WindowState.MonitorStates = new Dictionary<string, MonitorStateData>();
             if (data.Schedules == null) data.Schedules = new List<ScheduleItem>();
             if (data.Appearance == null) data.Appearance = new AppearanceSettings();
+
+            MigrateLegacyLightAppearance(data.Appearance);
 
             data.Schedules.RemoveAll(item => item == null);
 
@@ -332,6 +336,30 @@ namespace ScheduleWidget
                 data.WindowState.Width = 0;
             if (!IsFinite(data.WindowState.Height) || data.WindowState.Height < 0)
                 data.WindowState.Height = 0;
+
+            var invalidMonitorIds = new List<string>();
+            foreach (KeyValuePair<string, MonitorStateData> pair in data.WindowState.MonitorStates)
+            {
+                if (string.IsNullOrWhiteSpace(pair.Key) || pair.Value == null)
+                {
+                    invalidMonitorIds.Add(pair.Key);
+                    continue;
+                }
+
+                MonitorStateData monitorState = pair.Value;
+                if (!IsFinite(monitorState.Left)) monitorState.Left = 0;
+                if (!IsFinite(monitorState.Top)) monitorState.Top = 0;
+                if (!IsFinite(monitorState.Width) || monitorState.Width < 0)
+                    monitorState.Width = 0;
+                if (!IsFinite(monitorState.Height) || monitorState.Height < 0)
+                    monitorState.Height = 0;
+            }
+
+            foreach (string monitorId in invalidMonitorIds)
+            {
+                if (monitorId != null)
+                    data.WindowState.MonitorStates.Remove(monitorId);
+            }
 
             var defaults = new AppearanceSettings();
             data.Appearance.Opacity = ClampFinite(data.Appearance.Opacity, 0.3, 1.0, defaults.Opacity);
@@ -360,6 +388,26 @@ namespace ScheduleWidget
                 data.Appearance.BorderColor = defaults.BorderColor;
 
             return data;
+        }
+
+        private static void MigrateLegacyLightAppearance(AppearanceSettings appearance)
+        {
+            if (!string.Equals(appearance.ThemePreset, "Light", StringComparison.OrdinalIgnoreCase))
+                return;
+
+            // 저장된 값이 앱의 이전 기본값과 완전히 같을 때만 새 디자인으로 갱신합니다.
+            // 사용자가 직접 바꾼 색상은 그대로 유지합니다.
+            if (!string.Equals(appearance.TopBarColor, "#FFD9D9D9", StringComparison.OrdinalIgnoreCase) ||
+                !string.Equals(appearance.BackgroundColor, "#FFFFFF", StringComparison.OrdinalIgnoreCase) ||
+                !string.Equals(appearance.CardColor, "#FFFFFF", StringComparison.OrdinalIgnoreCase) ||
+                !string.Equals(appearance.CardBorderColor, "#DDDDDD", StringComparison.OrdinalIgnoreCase) ||
+                !string.Equals(appearance.BottomBarColor, "#FFE0E0E0", StringComparison.OrdinalIgnoreCase) ||
+                !string.Equals(appearance.TextColor, "#000000", StringComparison.OrdinalIgnoreCase) ||
+                !string.Equals(appearance.SubTextColor, "#808080", StringComparison.OrdinalIgnoreCase) ||
+                !string.Equals(appearance.BorderColor, "#808080", StringComparison.OrdinalIgnoreCase))
+                return;
+
+            appearance.CopyColorsFrom(AppearanceSettings.Presets["Light"]);
         }
 
         private static double ClampFinite(double value, double minimum, double maximum, double defaultValue)

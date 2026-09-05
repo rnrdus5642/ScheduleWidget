@@ -11,6 +11,17 @@ namespace ScheduleWidget
         public double Top { get; set; }
         public double Width { get; set; }
         public double Height { get; set; }
+        public string MonitorId { get; set; }
+        public Dictionary<string, MonitorStateData> MonitorStates { get; set; } =
+            new Dictionary<string, MonitorStateData>();
+    }
+
+    public class MonitorStateData
+    {
+        public double Left { get; set; }
+        public double Top { get; set; }
+        public double Width { get; set; }
+        public double Height { get; set; }
     }
 
     public class AppData
@@ -18,6 +29,16 @@ namespace ScheduleWidget
         public WindowStateData WindowState { get; set; } = new WindowStateData();
         public List<ScheduleItem> Schedules { get; set; } = new List<ScheduleItem>();
         public AppearanceSettings Appearance { get; set; } = new AppearanceSettings();
+        public bool StartupEnabled { get; set; } = true;
+    }
+
+    // 모니터 선택 UI에서 사용하는 런타임 표시 모델입니다. 저장 파일에는 포함되지 않습니다.
+    public sealed class MonitorOption
+    {
+        public string Id { get; set; }
+        public string DisplayName { get; set; }
+        public string Detail { get; set; }
+        public string StatusText { get; set; }
     }
 
     public class ScheduleItem

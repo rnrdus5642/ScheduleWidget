@@ -7,14 +7,14 @@ namespace ScheduleWidget
         public double Opacity { get; set; } = 1.0;
         public string ThemePreset { get; set; } = "Light";
 
-        public string TopBarColor { get; set; } = "#FFD9D9D9";
-        public string BackgroundColor { get; set; } = "#FFFFFF";
-        public string CardColor { get; set; } = "#FFFFFF";
-        public string CardBorderColor { get; set; } = "#DDDDDD";
-        public string BottomBarColor { get; set; } = "#FFE0E0E0";
-        public string TextColor { get; set; } = "#000000";
-        public string SubTextColor { get; set; } = "#808080";
-        public string BorderColor { get; set; } = "#808080";
+        public string TopBarColor { get; set; } = "#FFE8EBFF";
+        public string BackgroundColor { get; set; } = "#FFF7F8FC";
+        public string CardColor { get; set; } = "#FFFFFFFF";
+        public string CardBorderColor { get; set; } = "#FFE4E8F0";
+        public string BottomBarColor { get; set; } = "#FFF0F3F8";
+        public string TextColor { get; set; } = "#FF172033";
+        public string SubTextColor { get; set; } = "#FF667085";
+        public string BorderColor { get; set; } = "#FFD1D8E5";
 
         public double TitleFontSize { get; set; } = 14;
         public double DDayFontSize { get; set; } = 13;
@@ -24,50 +24,50 @@ namespace ScheduleWidget
             ["Light"] = new AppearanceSettings
             {
                 ThemePreset = "Light",
-                TopBarColor = "#FFD9D9D9",
-                BackgroundColor = "#FFFFFF",
-                CardColor = "#FFFFFF",
-                CardBorderColor = "#DDDDDD",
-                BottomBarColor = "#FFE0E0E0",
-                TextColor = "#000000",
-                SubTextColor = "#808080",
-                BorderColor = "#808080"
+                TopBarColor = "#FFE8EBFF",
+                BackgroundColor = "#FFF7F8FC",
+                CardColor = "#FFFFFFFF",
+                CardBorderColor = "#FFE4E8F0",
+                BottomBarColor = "#FFF0F3F8",
+                TextColor = "#FF172033",
+                SubTextColor = "#FF667085",
+                BorderColor = "#FFD1D8E5"
             },
             ["Dark"] = new AppearanceSettings
             {
                 ThemePreset = "Dark",
-                TopBarColor = "#FF2D2D30",
-                BackgroundColor = "#FF1E1E1E",
-                CardColor = "#FF2D2D30",
-                CardBorderColor = "#FF3F3F46",
-                BottomBarColor = "#FF2D2D30",
-                TextColor = "#FFFFFF",
-                SubTextColor = "#FF9E9E9E",
-                BorderColor = "#FF3F3F46"
+                TopBarColor = "#FF252A3A",
+                BackgroundColor = "#FF151927",
+                CardColor = "#FF202538",
+                CardBorderColor = "#FF343B55",
+                BottomBarColor = "#FF1D2232",
+                TextColor = "#FFF7F8FF",
+                SubTextColor = "#FFAAB2C5",
+                BorderColor = "#FF3B4563"
             },
             ["Blue"] = new AppearanceSettings
             {
                 ThemePreset = "Blue",
-                TopBarColor = "#FF4A90D9",
-                BackgroundColor = "#FFF0F6FF",
-                CardColor = "#FFFFFF",
-                CardBorderColor = "#FFB0CBE8",
-                BottomBarColor = "#FFD6E6F7",
-                TextColor = "#FF1A1A2E",
-                SubTextColor = "#FF5A7A9E",
-                BorderColor = "#FF4A90D9"
+                TopBarColor = "#FFDCEBFF",
+                BackgroundColor = "#FFF3F8FF",
+                CardColor = "#FFFFFFFF",
+                CardBorderColor = "#FFC6DBF5",
+                BottomBarColor = "#FFE7F1FF",
+                TextColor = "#FF172B4D",
+                SubTextColor = "#FF5B7396",
+                BorderColor = "#FFAEC9EA"
             },
             ["Pink"] = new AppearanceSettings
             {
                 ThemePreset = "Pink",
-                TopBarColor = "#FFE891B2",
-                BackgroundColor = "#FFFFF0F5",
-                CardColor = "#FFFFFF",
-                CardBorderColor = "#FFF0C0D0",
-                BottomBarColor = "#FFFCE4EC",
-                TextColor = "#FF4A1A2E",
-                SubTextColor = "#FFA0607A",
-                BorderColor = "#FFE891B2"
+                TopBarColor = "#FFFDE4EF",
+                BackgroundColor = "#FFFFF7FA",
+                CardColor = "#FFFFFFFF",
+                CardBorderColor = "#FFF4CBDC",
+                BottomBarColor = "#FFFFEDF4",
+                TextColor = "#FF4A2035",
+                SubTextColor = "#FFA56A82",
+                BorderColor = "#FFE9B1C8"
             }
         };
 
