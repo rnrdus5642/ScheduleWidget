@@ -55,6 +55,9 @@ namespace ScheduleWidget
         {
             SystemEvents.DisplaySettingsChanged -= OnDisplaySettingsChanged;
 
+            if (dayChangeTimer != null)
+                dayChangeTimer.Stop();
+
             if (displayRefreshTimer != null)
                 displayRefreshTimer.Stop();
 
@@ -146,14 +149,7 @@ namespace ScheduleWidget
             if (workArea.Width <= 0 || workArea.Height <= 0)
                 return;
 
-            // 모니터보다 큰 저장 크기는 그대로 복원하지 않고 작업 영역에 맞춥니다.
-            if (double.IsNaN(Width) || double.IsInfinity(Width) || Width <= 0)
-                Width = Math.Min(300, workArea.Width);
-            if (double.IsNaN(Height) || double.IsInfinity(Height) || Height <= 0)
-                Height = Math.Min(400, workArea.Height);
-
-            Width = Math.Min(Width, workArea.Width);
-            Height = Math.Min(Height, workArea.Height);
+            EnsureWindowSizeWithin(workArea);
 
             if (double.IsNaN(Left) || double.IsInfinity(Left))
                 Left = workArea.Left + (workArea.Width - Width) / 2;
@@ -164,6 +160,48 @@ namespace ScheduleWidget
             double maxTop = workArea.Bottom - Height;
             Left = Math.Max(workArea.Left, Math.Min(Left, maxLeft));
             Top = Math.Max(workArea.Top, Math.Min(Top, maxTop));
+        }
+
+        private void EnsureWindowSizeWithin(System.Windows.Rect workArea)
+        {
+            // 모니터보다 큰 저장 크기는 그대로 복원하지 않고 작업 영역에 맞춥니다.
+            if (double.IsNaN(Width) || double.IsInfinity(Width) || Width <= 0)
+                Width = Math.Min(300, workArea.Width);
+            if (double.IsNaN(Height) || double.IsInfinity(Height) || Height <= 0)
+                Height = Math.Min(400, workArea.Height);
+
+            Width = Math.Min(Width, workArea.Width);
+            Height = Math.Min(Height, workArea.Height);
+        }
+
+        public void ResetPositionToPrimaryMonitorCenter()
+        {
+            if (!Dispatcher.CheckAccess())
+            {
+                Dispatcher.BeginInvoke(new Action(ResetPositionToPrimaryMonitorCenter));
+                return;
+            }
+
+            System.Windows.Rect primaryWorkArea = SystemParameters.WorkArea;
+            if (primaryWorkArea.Width <= 0 || primaryWorkArea.Height <= 0)
+                return;
+
+            _isRestoringState = true;
+            try
+            {
+                EnsureWindowSizeWithin(primaryWorkArea);
+                Left = primaryWorkArea.Left + (primaryWorkArea.Width - Width) / 2;
+                Top = primaryWorkArea.Top + (primaryWorkArea.Height - Height) / 2;
+
+                if (!IsVisible)
+                    Show();
+            }
+            finally
+            {
+                _isRestoringState = false;
+            }
+
+            SaveCurrentState();
         }
 
         private void MainWindow_SourceInitialized(object sender, EventArgs e)
@@ -377,7 +415,7 @@ namespace ScheduleWidget
             ScheduleItem item = GetScheduleItemFromContextMenu(sender);
             if (item != null)
             {
-                int index = appData.Schedules.FindIndex(s => s.Title == item.Title && s.Period == item.Period);
+                int index = appData.Schedules.FindIndex(s => s.Id == item.Id);
                 if (index < 0) return;
 
                 var win = new EditScheduleWindow(item);
@@ -398,7 +436,10 @@ namespace ScheduleWidget
             ScheduleItem item = GetScheduleItemFromContextMenu(sender);
             if (item != null)
             {
-                appData.Schedules.Remove(item);
+                int index = appData.Schedules.FindIndex(s => s.Id == item.Id);
+                if (index < 0) return;
+
+                appData.Schedules.RemoveAt(index);
                 SaveDataSafely();
                 RefreshScheduleList();
             }
@@ -514,23 +555,30 @@ namespace ScheduleWidget
         {
             dayChangeTimer = new DispatcherTimer();
 
-            DateTime now = DateTime.Now;
-            DateTime tomorrow = now.Date.AddDays(1);
-            TimeSpan timeUntilMidnight = tomorrow - now;
-
-            dayChangeTimer.Interval = timeUntilMidnight;
-
             dayChangeTimer.Tick += (s, e) =>
             {
-                RefreshScheduleList();
+                if (appData != null)
+                    RefreshScheduleList();
 
-                if (dayChangeTimer.Interval != TimeSpan.FromHours(24))
-                {
-                    dayChangeTimer.Interval = TimeSpan.FromHours(24);
-                }
+                SetNextMidnightInterval();
             };
 
+            SetNextMidnightInterval();
             dayChangeTimer.Start();
+        }
+
+        private void SetNextMidnightInterval()
+        {
+            DateTime localMidnight = DateTime.SpecifyKind(
+                DateTime.Now.Date.AddDays(1),
+                DateTimeKind.Unspecified);
+            TimeSpan localOffset = TimeZoneInfo.Local.GetUtcOffset(localMidnight);
+            DateTimeOffset nextMidnight = new DateTimeOffset(localMidnight, localOffset);
+            TimeSpan timeUntilMidnight = nextMidnight - DateTimeOffset.Now;
+
+            dayChangeTimer.Interval = timeUntilMidnight > TimeSpan.Zero
+                ? timeUntilMidnight
+                : TimeSpan.FromSeconds(1);
         }
 
         // ── 설정 ──

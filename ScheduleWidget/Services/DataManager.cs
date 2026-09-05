@@ -311,6 +311,21 @@ namespace ScheduleWidget
 
             data.Schedules.RemoveAll(item => item == null);
 
+            // 구버전 파일에는 ID가 없고, 손상된 파일에는 중복 ID가 있을 수 있습니다.
+            // 로드·저장 시점에 모두 보정해 이후 수정/삭제 대상을 안정적으로 식별합니다.
+            var usedScheduleIds = new HashSet<Guid>();
+            foreach (ScheduleItem item in data.Schedules)
+            {
+                if (item.Id != Guid.Empty && usedScheduleIds.Add(item.Id))
+                    continue;
+
+                do
+                {
+                    item.Id = Guid.NewGuid();
+                }
+                while (!usedScheduleIds.Add(item.Id));
+            }
+
             if (!IsFinite(data.WindowState.Left)) data.WindowState.Left = 0;
             if (!IsFinite(data.WindowState.Top)) data.WindowState.Top = 0;
             if (!IsFinite(data.WindowState.Width) || data.WindowState.Width < 0)

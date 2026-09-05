@@ -22,6 +22,8 @@ namespace ScheduleWidget
 
     public class ScheduleItem
     {
+        // 일정의 제목·날짜가 같아도 서로 다른 항목으로 식별할 수 있도록 사용합니다.
+        public Guid Id { get; set; } = Guid.NewGuid();
         public string Title { get; set; }
         public string Period { get; set; }
 

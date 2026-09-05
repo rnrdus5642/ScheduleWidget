@@ -28,9 +28,7 @@ namespace ScheduleWidget
 
             menu.Items.Add("위치 초기화", null, (s, e) =>
             {
-                window.Left = 0;
-                window.Top = 0;
-                window.Show();
+                window.ResetPositionToPrimaryMonitorCenter();
             });
 
             menu.Items.Add(new ToolStripSeparator());
