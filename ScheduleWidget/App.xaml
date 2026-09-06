@@ -307,6 +307,102 @@
             </Setter>
         </Style>
 
+        <!-- 테마 선택용 공용 미리보기 -->
+        <DataTemplate x:Key="ThemePresetTemplate">
+            <Grid Height="30" VerticalAlignment="Center">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="42"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
+                <Border Width="36"
+                        Height="24"
+                        CornerRadius="7"
+                        BorderBrush="{DynamicResource CardBorderBrush}"
+                        BorderThickness="1"
+                        VerticalAlignment="Center">
+                    <Grid>
+                        <Border x:Name="ThemeSwatchBody"
+                                Margin="1,7,1,1"
+                                Background="#FFFFFFFF"
+                                CornerRadius="5"/>
+                        <Border x:Name="ThemeSwatchTop"
+                                Height="8"
+                                Margin="1"
+                                Background="#FFE8EBFF"
+                                CornerRadius="5,5,0,0"
+                                VerticalAlignment="Top"/>
+                        <Ellipse x:Name="ThemeSwatchDot"
+                                 Width="5"
+                                 Height="5"
+                                 Fill="#FF5664E9"
+                                 HorizontalAlignment="Right"
+                                 VerticalAlignment="Bottom"
+                                 Margin="0,0,5,4"/>
+                    </Grid>
+                </Border>
+
+                <TextBlock Grid.Column="1"
+                           Text="{Binding}"
+                           Foreground="{DynamicResource TextBrush}"
+                           FontSize="12"
+                           VerticalAlignment="Center"
+                           Margin="10,0,0,0"/>
+            </Grid>
+            <DataTemplate.Triggers>
+                <DataTrigger Binding="{Binding}" Value="Dark">
+                    <Setter TargetName="ThemeSwatchTop" Property="Background" Value="#FF252A3A"/>
+                    <Setter TargetName="ThemeSwatchBody" Property="Background" Value="#FF202538"/>
+                    <Setter TargetName="ThemeSwatchDot" Property="Fill" Value="#FF8D9AFF"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding}" Value="Blue">
+                    <Setter TargetName="ThemeSwatchTop" Property="Background" Value="#FFDCEBFF"/>
+                    <Setter TargetName="ThemeSwatchBody" Property="Background" Value="#FFFFFFFF"/>
+                    <Setter TargetName="ThemeSwatchDot" Property="Fill" Value="#FF4D8DF7"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding}" Value="Pink">
+                    <Setter TargetName="ThemeSwatchTop" Property="Background" Value="#FFFDE4EF"/>
+                    <Setter TargetName="ThemeSwatchBody" Property="Background" Value="#FFFFF7FA"/>
+                    <Setter TargetName="ThemeSwatchDot" Property="Fill" Value="#FFE17DA5"/>
+                </DataTrigger>
+            </DataTemplate.Triggers>
+        </DataTemplate>
+
+        <Style x:Key="ThemePresetItemStyle" TargetType="{x:Type ComboBoxItem}">
+            <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="10,7"/>
+            <Setter Property="Margin" Value="1"/>
+            <Setter Property="MinHeight" Value="44"/>
+            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type ComboBoxItem}">
+                        <Border x:Name="ThemeItemBorder"
+                                Background="{TemplateBinding Background}"
+                                CornerRadius="8"
+                                Padding="{TemplateBinding Padding}"
+                                SnapsToDevicePixels="True">
+                            <ContentPresenter Content="{TemplateBinding Content}"
+                                              ContentTemplate="{TemplateBinding ContentTemplate}"
+                                              HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                              VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsHighlighted" Value="True">
+                                <Setter TargetName="ThemeItemBorder" Property="Background" Value="{DynamicResource ControlHoverBrush}"/>
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="ThemeItemBorder" Property="Background" Value="{DynamicResource ControlHoverBrush}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
         <Style x:Key="WidgetModeButton" TargetType="{x:Type ToggleButton}">
             <Setter Property="Width" Value="32"/>
             <Setter Property="Height" Value="32"/>

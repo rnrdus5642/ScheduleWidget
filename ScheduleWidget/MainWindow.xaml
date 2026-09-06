@@ -655,26 +655,31 @@
                                     CornerRadius="12"
                                     Padding="12,10"
                                     Margin="0,0,0,10">
-                                <Grid>
-                                    <Grid.RowDefinitions>
-                                        <RowDefinition Height="Auto"/>
-                                        <RowDefinition Height="34"/>
-                                    </Grid.RowDefinitions>
-                                    <TextBlock Text="테마"
-                                               Foreground="{DynamicResource TextBrush}"
-                                               FontWeight="SemiBold"
-                                               Margin="0,0,0,7"/>
+                                <StackPanel>
+                                    <StackPanel Margin="0,0,0,8">
+                                        <StackPanel>
+                                            <TextBlock Text="테마"
+                                                       Foreground="{DynamicResource TextBrush}"
+                                                       FontWeight="SemiBold"/>
+                                            <TextBlock Text="위젯의 분위기를 선택하세요."
+                                                       Foreground="{DynamicResource SubTextBrush}"
+                                                       FontSize="10"
+                                                       Margin="0,3,0,0"/>
+                                        </StackPanel>
+                                    </StackPanel>
                                     <ComboBox x:Name="InlinePresetCombo"
-                                              Grid.Row="1"
-                                              Height="34"
+                                              Height="48"
                                               Style="{StaticResource WidgetComboBox}"
+                                              ItemTemplate="{StaticResource ThemePresetTemplate}"
+                                              ItemContainerStyle="{StaticResource ThemePresetItemStyle}"
+                                              MaxDropDownHeight="240"
                                               SelectionChanged="InlinePresetCombo_SelectionChanged">
-                                        <ComboBoxItem Content="Light"/>
-                                        <ComboBoxItem Content="Dark"/>
-                                        <ComboBoxItem Content="Blue"/>
-                                        <ComboBoxItem Content="Pink"/>
+                                        <ComboBoxItem Content="Light" ContentTemplate="{StaticResource ThemePresetTemplate}"/>
+                                        <ComboBoxItem Content="Dark" ContentTemplate="{StaticResource ThemePresetTemplate}"/>
+                                        <ComboBoxItem Content="Blue" ContentTemplate="{StaticResource ThemePresetTemplate}"/>
+                                        <ComboBoxItem Content="Pink" ContentTemplate="{StaticResource ThemePresetTemplate}"/>
                                     </ComboBox>
-                                </Grid>
+                                </StackPanel>
                             </Border>
 
                             <Border Background="{DynamicResource CardBrush}"
@@ -687,6 +692,43 @@
                                                Foreground="{DynamicResource TextBrush}"
                                                FontWeight="SemiBold"
                                                Margin="0,0,0,10"/>
+                                    <Border Background="{DynamicResource BackgroundBrush}"
+                                            BorderBrush="{DynamicResource CardBorderBrush}"
+                                            BorderThickness="1"
+                                            CornerRadius="10"
+                                            Padding="10,8"
+                                            Margin="0,0,0,10">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel VerticalAlignment="Center">
+                                                <TextBlock Text="청년 희망 뭐시기 알아보기"
+                                                           FontSize="{Binding Value, ElementName=InlineTitleFontSizeSlider}"
+                                                           FontWeight="SemiBold"
+                                                           Foreground="{DynamicResource TextBrush}"
+                                                           TextTrimming="CharacterEllipsis"
+                                                           TextWrapping="NoWrap"/>
+                                                <TextBlock Text="09.06 (일)"
+                                                           FontSize="10"
+                                                           Foreground="{DynamicResource SubTextBrush}"
+                                                           Margin="0,3,0,0"/>
+                                            </StackPanel>
+                                            <Border Grid.Column="1"
+                                                    Background="{DynamicResource ControlHoverBrush}"
+                                                    CornerRadius="8"
+                                                    Padding="8,5"
+                                                    Margin="8,0,0,0"
+                                                    VerticalAlignment="Center">
+                                                <TextBlock Text="D-12"
+                                                           FontSize="{Binding Value, ElementName=InlineDDayFontSizeSlider}"
+                                                           FontWeight="Bold"
+                                                           Foreground="{DynamicResource AccentBrush}"
+                                                           HorizontalAlignment="Center"/>
+                                            </Border>
+                                        </Grid>
+                                    </Border>
                                     <Grid Margin="0,0,0,9">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="52"/>

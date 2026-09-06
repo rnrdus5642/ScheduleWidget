@@ -64,25 +64,81 @@
                         Foreground="{DynamicResource AccentBrush}"
                         ValueChanged="OpacitySlider_ValueChanged"/>
 
-                <TextBlock Text="테마 프리셋"
-                           FontWeight="SemiBold"
-                           Foreground="{DynamicResource TextBrush}"
-                           Margin="0,22,0,7"/>
-                <ComboBox x:Name="PresetCombo"
-                          Height="34"
-                          HorizontalAlignment="Stretch"
-                          Style="{StaticResource WidgetComboBox}"
-                          SelectionChanged="PresetCombo_SelectionChanged">
-                    <ComboBoxItem Content="Light"/>
-                    <ComboBoxItem Content="Dark"/>
-                    <ComboBoxItem Content="Blue"/>
-                    <ComboBoxItem Content="Pink"/>
-                </ComboBox>
+                <Border Background="{DynamicResource CardBrush}"
+                        BorderBrush="{DynamicResource CardBorderBrush}"
+                        BorderThickness="1"
+                        CornerRadius="12"
+                        Padding="14,12"
+                        Margin="0,22,0,0">
+                    <StackPanel>
+                        <StackPanel Margin="0,0,0,9">
+                            <StackPanel>
+                                <TextBlock Text="테마"
+                                           FontWeight="SemiBold"
+                                           Foreground="{DynamicResource TextBrush}"/>
+                                <TextBlock Text="위젯의 분위기를 선택하세요."
+                                           FontSize="10"
+                                           Foreground="{DynamicResource SubTextBrush}"
+                                           Margin="0,3,0,0"/>
+                            </StackPanel>
+                        </StackPanel>
+                        <ComboBox x:Name="PresetCombo"
+                                  Height="48"
+                                  HorizontalAlignment="Stretch"
+                                  Style="{StaticResource WidgetComboBox}"
+                                  ItemTemplate="{StaticResource ThemePresetTemplate}"
+                                  ItemContainerStyle="{StaticResource ThemePresetItemStyle}"
+                                  MaxDropDownHeight="240"
+                                  SelectionChanged="PresetCombo_SelectionChanged">
+                            <ComboBoxItem Content="Light" ContentTemplate="{StaticResource ThemePresetTemplate}"/>
+                            <ComboBoxItem Content="Dark" ContentTemplate="{StaticResource ThemePresetTemplate}"/>
+                            <ComboBoxItem Content="Blue" ContentTemplate="{StaticResource ThemePresetTemplate}"/>
+                            <ComboBoxItem Content="Pink" ContentTemplate="{StaticResource ThemePresetTemplate}"/>
+                        </ComboBox>
+                    </StackPanel>
+                </Border>
 
                 <TextBlock Text="폰트 크기"
                            FontWeight="SemiBold"
                            Foreground="{DynamicResource TextBrush}"
                            Margin="0,22,0,10"/>
+                <Border Background="{DynamicResource BackgroundBrush}"
+                        BorderBrush="{DynamicResource CardBorderBrush}"
+                        BorderThickness="1"
+                        CornerRadius="10"
+                        Padding="10,8"
+                        Margin="0,0,0,10">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock Text="청년 희망 뭐시기 알아보기"
+                                       FontSize="{Binding Value, ElementName=TitleFontSizeSlider}"
+                                       FontWeight="SemiBold"
+                                       Foreground="{DynamicResource TextBrush}"
+                                       TextTrimming="CharacterEllipsis"
+                                       TextWrapping="NoWrap"/>
+                            <TextBlock Text="09.06 (일)"
+                                       FontSize="10"
+                                       Foreground="{DynamicResource SubTextBrush}"
+                                       Margin="0,3,0,0"/>
+                        </StackPanel>
+                        <Border Grid.Column="1"
+                                Background="{DynamicResource ControlHoverBrush}"
+                                CornerRadius="8"
+                                Padding="8,5"
+                                Margin="8,0,0,0"
+                                VerticalAlignment="Center">
+                            <TextBlock Text="D-12"
+                                       FontSize="{Binding Value, ElementName=DDayFontSizeSlider}"
+                                       FontWeight="Bold"
+                                       Foreground="{DynamicResource AccentBrush}"
+                                       HorizontalAlignment="Center"/>
+                        </Border>
+                    </Grid>
+                </Border>
                 <Grid Margin="0,0,0,8">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="55"/>
