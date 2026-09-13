@@ -6,19 +6,19 @@
              StartupUri="MainWindow.xaml">
     <Application.Resources>
         <!-- 기본 테마 브러시 -->
-        <SolidColorBrush x:Key="TopBarBrush" Color="#FFE8EBFF"/>
-        <SolidColorBrush x:Key="BackgroundBrush" Color="#FFF7F8FC"/>
+        <SolidColorBrush x:Key="TopBarBrush" Color="#FFF7F6FF"/>
+        <SolidColorBrush x:Key="BackgroundBrush" Color="#FFFCFBFF"/>
         <SolidColorBrush x:Key="CardBrush" Color="#FFFFFFFF"/>
-        <SolidColorBrush x:Key="CardBorderBrush" Color="#FFE4E8F0"/>
-        <SolidColorBrush x:Key="BottomBarBrush" Color="#FFF0F3F8"/>
-        <SolidColorBrush x:Key="TextBrush" Color="#FF172033"/>
-        <SolidColorBrush x:Key="SubTextBrush" Color="#FF667085"/>
-        <SolidColorBrush x:Key="BorderBrush" Color="#FFD1D8E5"/>
+        <SolidColorBrush x:Key="CardBorderBrush" Color="#FFE8E5F2"/>
+        <SolidColorBrush x:Key="BottomBarBrush" Color="#FFF7F6FC"/>
+        <SolidColorBrush x:Key="TextBrush" Color="#FF24243A"/>
+        <SolidColorBrush x:Key="SubTextBrush" Color="#FF6E6D84"/>
+        <SolidColorBrush x:Key="BorderBrush" Color="#FFD9D8E8"/>
 
         <!-- 공용 강조색 및 컨트롤 색상 -->
-        <SolidColorBrush x:Key="AccentBrush" Color="#FF5664E9"/>
+        <SolidColorBrush x:Key="AccentBrush" Color="#FF5B61D6"/>
         <SolidColorBrush x:Key="AccentForegroundBrush" Color="#FFFFFFFF"/>
-        <SolidColorBrush x:Key="ControlHoverBrush" Color="#FFE8EBFF"/>
+        <SolidColorBrush x:Key="ControlHoverBrush" Color="#FFEFEEFF"/>
 
         <!-- 폰트 크기 -->
         <sys:Double x:Key="TitleFontSize">14</sys:Double>
@@ -329,13 +329,13 @@
                         <Border x:Name="ThemeSwatchTop"
                                 Height="8"
                                 Margin="1"
-                                Background="#FFE8EBFF"
+                                Background="#FFF0EFFF"
                                 CornerRadius="5,5,0,0"
                                 VerticalAlignment="Top"/>
                         <Ellipse x:Name="ThemeSwatchDot"
                                  Width="5"
                                  Height="5"
-                                 Fill="#FF5664E9"
+                                 Fill="#FF5B61D6"
                                  HorizontalAlignment="Right"
                                  VerticalAlignment="Bottom"
                                  Margin="0,0,5,4"/>
@@ -351,19 +351,19 @@
             </Grid>
             <DataTemplate.Triggers>
                 <DataTrigger Binding="{Binding}" Value="Dark">
-                    <Setter TargetName="ThemeSwatchTop" Property="Background" Value="#FF252A3A"/>
-                    <Setter TargetName="ThemeSwatchBody" Property="Background" Value="#FF202538"/>
-                    <Setter TargetName="ThemeSwatchDot" Property="Fill" Value="#FF8D9AFF"/>
+                    <Setter TargetName="ThemeSwatchTop" Property="Background" Value="#FF111827"/>
+                    <Setter TargetName="ThemeSwatchBody" Property="Background" Value="#FF151D2C"/>
+                    <Setter TargetName="ThemeSwatchDot" Property="Fill" Value="#FF8295FF"/>
                 </DataTrigger>
                 <DataTrigger Binding="{Binding}" Value="Blue">
                     <Setter TargetName="ThemeSwatchTop" Property="Background" Value="#FFDCEBFF"/>
-                    <Setter TargetName="ThemeSwatchBody" Property="Background" Value="#FFFFFFFF"/>
-                    <Setter TargetName="ThemeSwatchDot" Property="Fill" Value="#FF4D8DF7"/>
+                    <Setter TargetName="ThemeSwatchBody" Property="Background" Value="#FFF8FCFF"/>
+                    <Setter TargetName="ThemeSwatchDot" Property="Fill" Value="#FF2477E6"/>
                 </DataTrigger>
                 <DataTrigger Binding="{Binding}" Value="Pink">
                     <Setter TargetName="ThemeSwatchTop" Property="Background" Value="#FFFDE4EF"/>
                     <Setter TargetName="ThemeSwatchBody" Property="Background" Value="#FFFFF7FA"/>
-                    <Setter TargetName="ThemeSwatchDot" Property="Fill" Value="#FFE17DA5"/>
+                    <Setter TargetName="ThemeSwatchDot" Property="Fill" Value="#FFD05A8A"/>
                 </DataTrigger>
             </DataTemplate.Triggers>
         </DataTemplate>

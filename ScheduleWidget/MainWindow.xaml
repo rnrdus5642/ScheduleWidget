@@ -226,19 +226,13 @@
 
                                         <Grid>
                                             <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="4"/>
                                                 <ColumnDefinition Width="*"/>
                                                 <ColumnDefinition Width="Auto"/>
                                             </Grid.ColumnDefinitions>
 
-                                            <Border Grid.Column="0"
-                                                    Background="{DynamicResource AccentBrush}"
-                                                    CornerRadius="12,0,0,12"
-                                                    Margin="0,1,0,1"/>
-
-                                            <StackPanel Grid.Column="1"
+                                            <StackPanel Grid.Column="0"
                                                         VerticalAlignment="Center"
-                                                        Margin="12,11,8,11">
+                                                        Margin="14,11,8,11">
                                                 <TextBlock Text="{Binding Title}"
                                                            Foreground="{DynamicResource TextBrush}"
                                                            FontSize="{DynamicResource TitleFontSize}"
@@ -251,7 +245,7 @@
                                                            Margin="0,5,0,0"/>
                                             </StackPanel>
 
-                                            <Border Grid.Column="2"
+                                            <Border Grid.Column="1"
                                                     Background="{DynamicResource ControlHoverBrush}"
                                                     CornerRadius="9"
                                                     Padding="8,5"

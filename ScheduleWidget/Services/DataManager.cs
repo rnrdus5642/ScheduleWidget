@@ -370,6 +370,9 @@ namespace ScheduleWidget
 
             if (string.IsNullOrWhiteSpace(data.Appearance.ThemePreset))
                 data.Appearance.ThemePreset = defaults.ThemePreset;
+            AppearanceSettings presetDefaults = defaults;
+            if (AppearanceSettings.Presets.ContainsKey(data.Appearance.ThemePreset))
+                presetDefaults = AppearanceSettings.Presets[data.Appearance.ThemePreset];
             if (string.IsNullOrWhiteSpace(data.Appearance.TopBarColor))
                 data.Appearance.TopBarColor = defaults.TopBarColor;
             if (string.IsNullOrWhiteSpace(data.Appearance.BackgroundColor))
@@ -386,6 +389,20 @@ namespace ScheduleWidget
                 data.Appearance.SubTextColor = defaults.SubTextColor;
             if (string.IsNullOrWhiteSpace(data.Appearance.BorderColor))
                 data.Appearance.BorderColor = defaults.BorderColor;
+            if (string.IsNullOrWhiteSpace(data.Appearance.AccentColor))
+                data.Appearance.AccentColor = presetDefaults.AccentColor;
+            if (string.IsNullOrWhiteSpace(data.Appearance.ControlHoverColor))
+                data.Appearance.ControlHoverColor = presetDefaults.ControlHoverColor;
+
+            // 새 테마별 강조색이 없던 버전에서 저장된 데이터는
+            // 기본 Light 색상이 들어올 수 있으므로 선택된 프리셋에 맞춰 보완합니다.
+            if (!string.Equals(data.Appearance.ThemePreset, "Light", StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(data.Appearance.AccentColor, defaults.AccentColor, StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(data.Appearance.ControlHoverColor, defaults.ControlHoverColor, StringComparison.OrdinalIgnoreCase))
+            {
+                data.Appearance.AccentColor = presetDefaults.AccentColor;
+                data.Appearance.ControlHoverColor = presetDefaults.ControlHoverColor;
+            }
 
             return data;
         }
@@ -397,14 +414,37 @@ namespace ScheduleWidget
 
             // 저장된 값이 앱의 이전 기본값과 완전히 같을 때만 새 디자인으로 갱신합니다.
             // 사용자가 직접 바꾼 색상은 그대로 유지합니다.
-            if (!string.Equals(appearance.TopBarColor, "#FFD9D9D9", StringComparison.OrdinalIgnoreCase) ||
-                !string.Equals(appearance.BackgroundColor, "#FFFFFF", StringComparison.OrdinalIgnoreCase) ||
-                !string.Equals(appearance.CardColor, "#FFFFFF", StringComparison.OrdinalIgnoreCase) ||
-                !string.Equals(appearance.CardBorderColor, "#DDDDDD", StringComparison.OrdinalIgnoreCase) ||
-                !string.Equals(appearance.BottomBarColor, "#FFE0E0E0", StringComparison.OrdinalIgnoreCase) ||
-                !string.Equals(appearance.TextColor, "#000000", StringComparison.OrdinalIgnoreCase) ||
-                !string.Equals(appearance.SubTextColor, "#808080", StringComparison.OrdinalIgnoreCase) ||
-                !string.Equals(appearance.BorderColor, "#808080", StringComparison.OrdinalIgnoreCase))
+            bool isLegacyPalette =
+                string.Equals(appearance.TopBarColor, "#FFD9D9D9", StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(appearance.BackgroundColor, "#FFFFFF", StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(appearance.CardColor, "#FFFFFF", StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(appearance.CardBorderColor, "#DDDDDD", StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(appearance.BottomBarColor, "#FFE0E0E0", StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(appearance.TextColor, "#000000", StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(appearance.SubTextColor, "#808080", StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(appearance.BorderColor, "#808080", StringComparison.OrdinalIgnoreCase);
+
+            bool isPreviousLightPalette =
+                string.Equals(appearance.TopBarColor, "#FFE8EBFF", StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(appearance.BackgroundColor, "#FFF7F8FC", StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(appearance.CardColor, "#FFFFFFFF", StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(appearance.CardBorderColor, "#FFE4E8F0", StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(appearance.BottomBarColor, "#FFF0F3F8", StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(appearance.TextColor, "#FF172033", StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(appearance.SubTextColor, "#FF667085", StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(appearance.BorderColor, "#FFD1D8E5", StringComparison.OrdinalIgnoreCase);
+
+            bool isPreviousNeutralLightPalette =
+                string.Equals(appearance.TopBarColor, "#FFF8FAFC", StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(appearance.BackgroundColor, "#FFF4F6F8", StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(appearance.CardColor, "#FFFFFFFF", StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(appearance.CardBorderColor, "#FFE2E8F0", StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(appearance.BottomBarColor, "#FFF1F4F7", StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(appearance.TextColor, "#FF1F2937", StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(appearance.SubTextColor, "#FF64748B", StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(appearance.BorderColor, "#FFCBD5E1", StringComparison.OrdinalIgnoreCase);
+
+            if (!isLegacyPalette && !isPreviousLightPalette && !isPreviousNeutralLightPalette)
                 return;
 
             appearance.CopyColorsFrom(AppearanceSettings.Presets["Light"]);

@@ -1347,6 +1347,8 @@ namespace ScheduleWidget
             SetBrush(res, "TextBrush", settings.TextColor);
             SetBrush(res, "SubTextBrush", settings.SubTextColor);
             SetBrush(res, "BorderBrush", settings.BorderColor);
+            SetBrush(res, "AccentBrush", settings.AccentColor);
+            SetBrush(res, "ControlHoverBrush", settings.ControlHoverColor);
 
             res["TitleFontSize"] = settings.TitleFontSize;
             res["DDayFontSize"] = settings.DDayFontSize;
