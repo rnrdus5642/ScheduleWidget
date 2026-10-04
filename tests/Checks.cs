@@ -284,6 +284,7 @@ namespace ScheduleWidget.Checks
                 Run("Character double-click selects its settings without opening the picker", () => PetClickRouting(clickMini, clickData));
                 Run("Compact calendar shows multiple schedules and scrolls every day independently", CalendarDayLists);
                 Run("Embedded agenda lists distant schedules, resizes and reuses schedule editing", AllSchedulesPanel);
+                Run("Music bar keeps one row across playback states and narrow widths", FixedMusicBar);
                 Run("Unified settings navigation, save, cancel and content lifecycle", () => UnifiedSettingsFlow(main, mini, data));
                 SettingsAudit();
             }

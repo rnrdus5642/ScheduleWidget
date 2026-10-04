@@ -108,6 +108,32 @@
         <Style x:Key="BubbleDoneButton" TargetType="Button" BasedOn="{StaticResource AuxPrimaryButton}">
             <Setter Property="MinHeight" Value="26"/><Setter Property="FontSize" Value="11"/><Setter Property="Padding" Value="2,0"/>
         </Style>
+        <Style x:Key="InlineSeekPage" TargetType="RepeatButton">
+            <Setter Property="Focusable" Value="False"/>
+            <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="RepeatButton">
+                <Grid Background="Transparent"><Border Height="2" VerticalAlignment="Center" CornerRadius="1" Background="{TemplateBinding Background}"/></Grid>
+            </ControlTemplate></Setter.Value></Setter>
+        </Style>
+        <Style x:Key="InlineSeekSlider" TargetType="Slider">
+            <Setter Property="Height" Value="8"/>
+            <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Slider">
+                <Grid x:Name="SeekFace" Background="Transparent">
+                    <Track x:Name="PART_Track" Orientation="Horizontal" Minimum="{TemplateBinding Minimum}" Maximum="{TemplateBinding Maximum}"
+                           Value="{TemplateBinding Value}" IsDirectionReversed="{TemplateBinding IsDirectionReversed}">
+                        <Track.DecreaseRepeatButton><RepeatButton Command="{x:Static Slider.DecreaseLarge}" Style="{StaticResource InlineSeekPage}" Background="{DynamicResource MiniFrameBrush}"/></Track.DecreaseRepeatButton>
+                        <Track.IncreaseRepeatButton><RepeatButton Command="{x:Static Slider.IncreaseLarge}" Style="{StaticResource InlineSeekPage}" Background="{DynamicResource MiniHoverBrush}"/></Track.IncreaseRepeatButton>
+                        <Track.Thumb><Thumb x:Name="SeekThumb" Width="7" Height="7" Opacity="0">
+                            <Thumb.Template><ControlTemplate TargetType="Thumb"><Ellipse Fill="{DynamicResource MiniFrameBrush}"/></ControlTemplate></Thumb.Template>
+                        </Thumb></Track.Thumb>
+                    </Track>
+                </Grid>
+                <ControlTemplate.Triggers>
+                    <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="SeekThumb" Property="Opacity" Value="1"/></Trigger>
+                    <Trigger Property="IsKeyboardFocusWithin" Value="True"><Setter TargetName="SeekThumb" Property="Opacity" Value="1"/></Trigger>
+                    <Trigger Property="IsEnabled" Value="False"><Setter TargetName="SeekFace" Property="Opacity" Value="0.3"/></Trigger>
+                </ControlTemplate.Triggers>
+            </ControlTemplate></Setter.Value></Setter>
+        </Style>
         <Style x:Key="BubbleDeleteButton" TargetType="Button" BasedOn="{StaticResource AuxPrimaryButton}">
             <Setter Property="MinHeight" Value="26"/><Setter Property="FontSize" Value="11"/><Setter Property="Padding" Value="4,0"/>
             <Setter Property="Background" Value="#D93F4C"/><Setter Property="BorderBrush" Value="#D93F4C"/><Setter Property="Foreground" Value="White"/>
@@ -125,21 +151,21 @@
     <Grid x:Name="OuterRoot">
     <!-- The board: calendar + music bar. Its margin leaves room for pets placed outside it. -->
     <Grid x:Name="MiniRoot" Margin="4" SizeChanged="MiniRoot_SizeChanged">
-        <!-- MP3-style player bar under the calendar: playlist button | ⏮ ▶/⏸ ⏭ (centered) | play mode; current song below. -->
-        <Border x:Name="PlayerBar" Grid.Column="2" VerticalAlignment="Bottom" MinHeight="40" Margin="0,0,2,6"
-                Background="{DynamicResource MiniPaperBrush}" BorderBrush="{DynamicResource MiniFrameBrush}" BorderThickness="2.5" CornerRadius="8" SizeChanged="PlayerBar_SizeChanged"
-                MouseEnter="PlayerBar_HoverChanged" MouseLeave="PlayerBar_HoverChanged">
-            <Grid Margin="6,2,6,2">
-                <Grid.RowDefinitions><RowDefinition Height="32"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                <!-- Left column: playlist-settings button at the far left; playlist dropdown right next to ⏮. -->
-                <DockPanel LastChildFill="True">
-                    <Button x:Name="PlayerOpen" DockPanel.Dock="Left" Style="{StaticResource PlayerButton}" Click="PlayerOpen_Click"
+        <!-- One fixed-height strip; the thin seek track occupies its bottom edge. -->
+        <Border x:Name="PlayerBar" Grid.Column="2" VerticalAlignment="Bottom" Height="{x:Static local:MiniWindow.PlayerBarHeight}" Margin="0,0,2,6"
+                Background="{DynamicResource MiniPaperBrush}" BorderBrush="{DynamicResource MiniFrameBrush}" BorderThickness="2.5" CornerRadius="8" SizeChanged="PlayerBar_SizeChanged">
+            <Grid x:Name="PlayerBarContent" Margin="6,0">
+                <Grid.RowDefinitions><RowDefinition Height="28"/><RowDefinition Height="8"/></Grid.RowDefinitions>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                    <Button x:Name="PlayerOpen" Grid.Column="0" Width="24" Style="{StaticResource PlayerButton}" Click="PlayerOpen_Click"
                             ToolTip="플레이리스트 설정 열기" AutomationProperties.Name="플레이리스트 설정 열기">
                         <Path Data="M1,2 L9,2 M1,6 L9,6 M1,10 L6,10 M12,11 L12,2 L15,3.5" Stroke="{DynamicResource MiniInkBrush}" StrokeThickness="1.7"
                               StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"/>
                     </Button>
-                    <Button x:Name="PlayerPlaylist" HorizontalAlignment="Right" MaxWidth="150" Margin="6,0,8,0" Style="{StaticResource DropdownPill}"
+                    <Button x:Name="PlayerPlaylist" Grid.Column="1" Width="126" Margin="4,0" Padding="8,0" FontSize="11" Style="{StaticResource DropdownPill}"
                             Click="PlayerPlaylist_Click" AutomationProperties.Name="재생목록 선택">
                         <Grid>
                             <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
@@ -148,12 +174,11 @@
                                   StrokeEndLineCap="Round" StrokeLineJoin="Round" Margin="6,1,0,0" VerticalAlignment="Center"/>
                         </Grid>
                     </Button>
-                </DockPanel>
-                <StackPanel Grid.Column="1" Orientation="Horizontal">
+                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
                     <Button x:Name="PlayerPrevious" Style="{StaticResource PlayerButton}" Click="PlayerPrevious_Click" ToolTip="이전 곡" AutomationProperties.Name="이전 곡">
                         <Path Data="M2,1 L2,11 M10,1 L4,6 L10,11 Z" Stroke="{DynamicResource MiniInkBrush}" Fill="{DynamicResource MiniInkBrush}" StrokeThickness="1.6" StrokeLineJoin="Round"/>
                     </Button>
-                    <Button x:Name="PlayerPlay" Style="{StaticResource PlayerButton}" Margin="4,0" Click="PlayerPlay_Click" ToolTip="재생" AutomationProperties.Name="재생 / 일시정지">
+                    <Button x:Name="PlayerPlay" Style="{StaticResource PlayerButton}" Background="{DynamicResource MiniHoverBrush}" Margin="4,0" Click="PlayerPlay_Click" ToolTip="재생" AutomationProperties.Name="재생 / 일시정지">
                         <Grid>
                             <Path x:Name="PlayIcon" Data="M3,1 L11,6.5 L3,12 Z" Fill="{DynamicResource MiniInkBrush}" Stroke="{DynamicResource MiniInkBrush}" StrokeThickness="1" StrokeLineJoin="Round"/>
                             <Path x:Name="PauseIcon" Data="M3,1 L3,12 M9,1 L9,12" Stroke="{DynamicResource MiniInkBrush}" StrokeThickness="2.6" Visibility="Collapsed"/>
@@ -163,8 +188,23 @@
                         <Path Data="M10,1 L10,11 M2,1 L8,6 L2,11 Z" Stroke="{DynamicResource MiniInkBrush}" Fill="{DynamicResource MiniInkBrush}" StrokeThickness="1.6" StrokeLineJoin="Round"/>
                     </Button>
                 </StackPanel>
-                <StackPanel Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Right">
-                <Button x:Name="PlayerVolume" Margin="0,0,4,0" Style="{StaticResource PlayerButton}"
+                <Grid x:Name="PlayerTrackInfo" Grid.Column="3" Margin="8,0" ClipToBounds="True">
+                    <TextBlock x:Name="PlayerIdleText" Text="재생할 곡을 선택하세요" FontSize="11" Foreground="{DynamicResource MiniMutedBrush}"
+                               TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                    <Canvas x:Name="PlayerTitleHost" Height="16" VerticalAlignment="Center" ClipToBounds="True"
+                            Background="Transparent" Visibility="Hidden" Cursor="Hand" MouseLeftButtonUp="PlayerTitle_Click"
+                            Focusable="True" KeyDown="PlayerTitle_KeyDown" SizeChanged="PlayerTitleHost_SizeChanged">
+                        <TextBlock x:Name="PlayerTitle" FontSize="11" Foreground="{DynamicResource MiniInkBrush}">
+                            <TextBlock.RenderTransform><TranslateTransform x:Name="PlayerTitleShift"/></TextBlock.RenderTransform>
+                        </TextBlock>
+                    </Canvas>
+                </Grid>
+                <StackPanel x:Name="PlayerTimes" Grid.Column="4" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,8,0">
+                    <TextBlock x:Name="SeekCurrent" Text="0:00" FontSize="10" Foreground="{DynamicResource MiniInkBrush}" MinWidth="25" TextAlignment="Right"/>
+                    <TextBlock Text="/" FontSize="10" Foreground="{DynamicResource MiniMutedBrush}" Margin="4,0"/>
+                    <TextBlock x:Name="SeekTotal" Text="--:--" FontSize="10" Foreground="{DynamicResource MiniMutedBrush}" MinWidth="28"/>
+                </StackPanel>
+                <Button x:Name="PlayerVolume" Grid.Column="5" Width="26" Margin="0,0,4,0" Style="{StaticResource PlayerButton}"
                         Click="PlayerVolume_Click" MouseWheel="PlayerVolume_MouseWheel" AutomationProperties.Name="음량"
                         MouseEnter="PlayerVolume_HoverChanged" MouseLeave="PlayerVolume_HoverChanged"
                         GotKeyboardFocus="PlayerVolume_HoverChanged" LostKeyboardFocus="PlayerVolume_HoverChanged"
@@ -177,7 +217,7 @@
                     </Grid>
                 </Button>
                 <!-- One button cycles 순차 → 랜덤 → 1곡 (한 곡 반복). -->
-                <Button x:Name="PlayerMode" Style="{StaticResource PlayerTextButton}"
+                <Button x:Name="PlayerMode" Grid.Column="6" Style="{StaticResource PlayerTextButton}"
                         Click="PlayerMode_Click" AutomationProperties.Name="재생 순서">
                     <StackPanel Orientation="Horizontal">
                         <Grid Width="14" Height="14" Margin="0,0,5,0" VerticalAlignment="Center">
@@ -194,28 +234,12 @@
                         <TextBlock x:Name="PlayerModeText" Text="순차" VerticalAlignment="Center"/>
                     </StackPanel>
                 </Button>
-                </StackPanel>
-                <!-- Third line under the scrolling title while a song is loaded: current time ━━●━━ length. Drag or click to move;
-                     the wheel moves 5 seconds. The title stays above it (click → now-playing list). -->
-                <Grid x:Name="SeekRow" Grid.Row="2" Grid.ColumnSpan="3" Height="16" Margin="2,0,2,3" Visibility="Collapsed">
-                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                    <TextBlock x:Name="SeekCurrent" Text="0:00" FontSize="10" Foreground="{DynamicResource MiniInkBrush}" VerticalAlignment="Center" MinWidth="30"/>
-                    <Slider x:Name="SeekSlider" Grid.Column="1" Minimum="0" Maximum="1" IsMoveToPointEnabled="True" SmallChange="5" LargeChange="10"
-                            VerticalAlignment="Center" Margin="6,0" ValueChanged="SeekSlider_ValueChanged"
+                <Grid x:Name="SeekRow" Grid.Row="1" Grid.ColumnSpan="7" Height="8" Margin="2,0">
+                    <Slider x:Name="SeekSlider" Style="{StaticResource InlineSeekSlider}" Minimum="0" Maximum="1" IsMoveToPointEnabled="True" SmallChange="5" LargeChange="10"
+                            ValueChanged="SeekSlider_ValueChanged"
                             Thumb.DragStarted="SeekSlider_DragStarted" Thumb.DragCompleted="SeekSlider_DragCompleted"
                             AutomationProperties.Name="재생 위치"/>
-                    <TextBlock x:Name="SeekTotal" Grid.Column="2" Text="--:--" FontSize="10" Foreground="{DynamicResource MiniInkBrush}" VerticalAlignment="Center"
-                               MinWidth="30" TextAlignment="Right"/>
                 </Grid>
-                <!-- Song title scrolls right → left like an MP3 player display. -->
-                <!-- Also reachable with Tab: Enter / Space open what a click opens. -->
-                <Canvas x:Name="PlayerTitleHost" Grid.Row="1" Grid.ColumnSpan="3" Height="16" Margin="4,0,4,3" ClipToBounds="True"
-                        Background="Transparent" Visibility="Collapsed" Cursor="Hand" MouseLeftButtonUp="PlayerTitle_Click"
-                        Focusable="True" KeyDown="PlayerTitle_KeyDown" SizeChanged="PlayerTitleHost_SizeChanged">
-                    <TextBlock x:Name="PlayerTitle" FontSize="11" Foreground="{DynamicResource MiniInkBrush}">
-                        <TextBlock.RenderTransform><TranslateTransform x:Name="PlayerTitleShift"/></TextBlock.RenderTransform>
-                    </TextBlock>
-                </Canvas>
             </Grid>
         </Border>
         <!-- Illustrated paper, with no rectangular window surface behind it. -->

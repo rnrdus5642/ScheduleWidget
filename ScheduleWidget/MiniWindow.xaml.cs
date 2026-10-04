@@ -2193,13 +2193,12 @@ namespace ScheduleWidget
             CheckExternalSource();
             bool hasTracks = player.HasTracks, playing = player.IsPlaying, external = player.SelectedExternal != null;
             string title = player.NowPlaying;
-            // The line under the controls shows the current song (YouTube video title or the file name) while one is loaded.
+            // The song stays in the same strip as the controls; playback never adds another row.
             PlayerTitleHost.ToolTip = title;
-            PlayerTitleHost.Visibility = string.IsNullOrEmpty(title) ? Visibility.Collapsed : Visibility.Visible;
             // Reachable with Tab too: Enter / Space do what a click does.
             System.Windows.Automation.AutomationProperties.SetName(PlayerTitleHost, title ?? string.Empty);
             System.Windows.Automation.AutomationProperties.SetHelpText(PlayerTitleHost, external ? "재생 중인 창으로 이동" : "지금 재생 목록 열기");
-            ApplySeekHover();
+            UpdatePlayerDetails();
             if (PlayerTitle.Text != (title ?? string.Empty)) { PlayerTitle.Text = title ?? string.Empty; StartTitleMarquee(); }
             else ApplyMarqueePlaying();
             UpdateVolumeIcon();
@@ -2210,6 +2209,7 @@ namespace ScheduleWidget
             PlayIcon.Visibility = playing ? Visibility.Collapsed : Visibility.Visible;
             PauseIcon.Visibility = playing ? Visibility.Visible : Visibility.Collapsed;
             PlayerPlay.ToolTip = playing ? "일시정지" : hasTracks ? "재생" : "플레이리스트가 비어 있어요";
+            if (!string.IsNullOrEmpty(title)) PlayerPlay.ToolTip = title + " · " + PlayerPlay.ToolTip;
             PlayerPlay.IsEnabled = PlayerPrevious.IsEnabled = PlayerNext.IsEnabled = hasTracks;
             // 순차 / 랜덤 / 1곡 is the widget's own playlist order: another app keeps its own, so the button goes away meanwhile.
             PlayerMode.Visibility = external ? Visibility.Collapsed : Visibility.Visible;
@@ -2220,17 +2220,41 @@ namespace ScheduleWidget
             ModeRepeatOneIcon.Visibility = mode == PlayMode.RepeatOne ? Visibility.Visible : Visibility.Collapsed;
             PlayerMode.ToolTip = (mode == PlayMode.Shuffle ? "랜덤 재생" : mode == PlayMode.RepeatOne ? "한 곡 반복" : "순차 재생") +
                 " · 누르면 " + (mode == PlayMode.Sequential ? "랜덤" : mode == PlayMode.Shuffle ? "한 곡 반복" : "순차") + "으로";
+            UpdatePlayerBarLayout();
         }
 
-        // The calendar ends just above the bar, whose height changes when the song line appears.
+        public const double PlayerBarHeight = 41;
+
+        // Reserve the same amount before the first layout and throughout every playback state.
         private void UpdateCalendarBottom()
         {
             bool shown = PlayerBar.Visibility == Visibility.Visible;
-            double bar = shown ? (PlayerBar.ActualHeight > 0 ? PlayerBar.ActualHeight : 40) + 6 + 6 : 8;
+            double bar = shown ? PlayerBarHeight + 12 : 8;
             if (Math.Abs(WeekCalendar.Margin.Bottom - bar) > 0.5) WeekCalendar.Margin = new Thickness(0, 4, 2, bar);
         }
 
-        private void PlayerBar_SizeChanged(object sender, SizeChangedEventArgs e) => UpdateCalendarBottom();
+        private void PlayerBar_SizeChanged(object sender, SizeChangedEventArgs e)
+        {
+            UpdateCalendarBottom();
+            UpdatePlayerBarLayout();
+        }
+
+        private void UpdatePlayerBarLayout()
+        {
+            if (PlayerModeText == null || PlayerTimes == null) return;
+            double width = PlayerBar.ActualWidth > 0 ? PlayerBar.ActualWidth : Width - 2 * Edge - 2;
+            bool compact = width < 420;
+            PlayerOpen.Visibility = width < 300 ? Visibility.Collapsed : Visibility.Visible;
+            PlayerPlaylist.Width = width >= 640 ? 126 : width >= 520 ? 108 : compact ? 28 : 78;
+            PlayerPlaylist.Padding = new Thickness(compact ? 6 : 8, 0, compact ? 6 : 8, 0);
+            PlayerPlaylistText.Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
+            PlayerPrevious.Width = PlayerPlay.Width = PlayerNext.Width = compact ? 24 : 28;
+            PlayerVolume.Width = compact ? 24 : 26;
+            PlayerModeText.Visibility = width < 520 ? Visibility.Collapsed : Visibility.Visible;
+            PlayerMode.Padding = new Thickness(width < 520 ? 4 : 9, 0, width < 520 ? 4 : 9, 0);
+            PlayerTimes.Visibility = width >= 640 ? Visibility.Visible : Visibility.Collapsed;
+            PlayerTrackInfo.Margin = new Thickness(compact ? 4 : 8, 0, compact ? 4 : 8, 0);
+        }
 
         private void PlayerPlay_Click(object sender, RoutedEventArgs e) { if (!RecentlyDragged) player?.TogglePlay(); }
         private void PlayerNext_Click(object sender, RoutedEventArgs e) { if (!RecentlyDragged) player?.Next(); }
@@ -2312,7 +2336,7 @@ namespace ScheduleWidget
                 EndPetPlacement();
                 return;
             }
-            ApplySeekHover();
+            UpdatePlayerDetails();
             CheckExternalSource();
             // The TODO window's pets were only hidden meanwhile: actions changed in the mini window (or its 초기화) reach their
             // page now (sizes, 보이기 and spots come with the next layout).
@@ -2723,14 +2747,14 @@ namespace ScheduleWidget
             if (TogglePopup(QueuePopup)) ScrollQueueToCurrent();
         }
 
-        // ---- Seek bar: the line under the scrolling title while a song is loaded ----
+        // ---- Seek bar: a thin track inside the fixed strip's bottom edge ----
         private System.Windows.Threading.DispatcherTimer seekTimer;
         private bool seekDragging, updatingSeek;
 
         // The position only moves while music plays and can be seen: the timer runs only then (a pause, the tray or a hidden
         // bar stop it; playing again or showing the window starts it).
         private bool SeekTicks => player != null && !closed && IsVisible && PlayerBar.Visibility == Visibility.Visible &&
-            SeekRow.Visibility == Visibility.Visible && player.IsPlaying;
+            SeekRow.Visibility == Visibility.Visible && !string.IsNullOrEmpty(player.NowPlaying) && player.IsPlaying;
 
         private void StartSeekTimer()
         {
@@ -2748,17 +2772,14 @@ namespace ScheduleWidget
 
         internal bool SeekTimerRunning => seekTimer?.IsEnabled == true;
 
-        private void PlayerBar_HoverChanged(object sender, MouseEventArgs e) => ApplySeekHover();
-
-        // With a song loaded the bar always shows the scrolling title and, under it, the seek row — both at once, so the title
-        // (click → now-playing list) is always reachable and the bar keeps one height (nothing moves on hover).
-        private void ApplySeekHover()
+        // Empty, playing and paused states all keep the same layout and a reserved progress track.
+        private void UpdatePlayerDetails()
         {
             if (player == null || SeekRow == null) return;
             bool songLoaded = !string.IsNullOrEmpty(player.NowPlaying);
-            SeekRow.Visibility = songLoaded ? Visibility.Visible : Visibility.Collapsed;
-            PlayerTitleHost.Visibility = songLoaded ? Visibility.Visible : Visibility.Collapsed;
-            if (songLoaded) UpdateSeek(); // once now (a pause, a seek, a new song); then every 500 ms while it plays
+            PlayerTitleHost.Visibility = songLoaded ? Visibility.Visible : Visibility.Hidden;
+            PlayerIdleText.Visibility = songLoaded ? Visibility.Collapsed : Visibility.Visible;
+            UpdateSeek();
             if (SeekTicks) { if (seekTimer == null || !seekTimer.IsEnabled) StartSeekTimer(); }
             else seekTimer?.Stop();
         }
@@ -2772,7 +2793,7 @@ namespace ScheduleWidget
         {
             if (player == null || SeekSlider == null) return;
             TimeSpan? duration = player.Duration, position = player.Position;
-            bool known = duration.HasValue && duration.Value > TimeSpan.Zero;
+            bool known = !string.IsNullOrEmpty(player.NowPlaying) && duration.HasValue && duration.Value > TimeSpan.Zero;
             SeekSlider.IsEnabled = known;
             SeekTotal.Text = known ? Clock(duration.Value) : "--:--";
             if (seekDragging) return;
@@ -2785,6 +2806,7 @@ namespace ScheduleWidget
             }
             finally { updatingSeek = false; }
             SeekCurrent.Text = Clock(TimeSpan.FromSeconds(seconds));
+            SeekSlider.ToolTip = SeekCurrent.Text + " / " + SeekTotal.Text;
         }
 
         private void SeekSlider_DragStarted(object sender, System.Windows.Controls.Primitives.DragStartedEventArgs e) => seekDragging = true;
@@ -2793,7 +2815,7 @@ namespace ScheduleWidget
         {
             seekDragging = false;
             player?.Seek(TimeSpan.FromSeconds(SeekSlider.Value));
-            ApplySeekHover();
+            UpdatePlayerDetails();
         }
 
         // A click on the track (IsMoveToPointEnabled) or the mouse wheel moves the value without a drag: seek right away.
@@ -3020,9 +3042,8 @@ namespace ScheduleWidget
             UpdateCharacterSize();
         }
 
-        // The music bar at rest (buttons only) and the calendar's other margins: the pets' size basis leaves this much of
-        // the board for the bar, so the bar growing (song title / seek line appearing between tracks) never resizes pets.
-        private const double RestingBarRoom = 41 + 12, CalendarTopMargin = 4, CalendarBottomGapNoBar = 8;
+        // The fixed player strip and its gaps reserve the same space in every playback state.
+        private const double RestingBarRoom = PlayerBarHeight + 12, CalendarTopMargin = 4, CalendarBottomGapNoBar = 8;
 
         /// <summary>Calendar height the pets are sized from: the board minus a resting music bar. Changes only when the
         /// board is resized or the bar is shown / hidden — not when the bar's title or seek rows come and go.</summary>
