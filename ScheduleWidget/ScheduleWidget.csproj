@@ -106,6 +106,7 @@
     <Compile Include="Models\FeatureSettings.cs" />
     <Page Include="Styles\AuxiliaryStyles.xaml"><Generator>MSBuild:Compile</Generator></Page>
     <Compile Include="MainWindow.Features.cs" />
+    <Compile Include="MainWindow.MediaSource.cs" />
     <Compile Include="MainWindow.Settings.cs" />
     <Page Include="SettingsWindow.xaml"><Generator>MSBuild:Compile</Generator></Page>
     <Compile Include="SettingsWindow.xaml.cs"><DependentUpon>SettingsWindow.xaml</DependentUpon></Compile>
@@ -124,6 +125,7 @@
     <Compile Include="Services\YouTubePlaylistService.cs" />
     <Compile Include="Services\KoreanHolidays.cs" />
     <Compile Include="Services\SystemMediaService.cs" />
+    <Compile Include="Services\AutomaticMediaSource.cs" />
     <Compile Include="Services\AppVolumeService.cs" />
     <Page Include="MiniWindow.xaml"><Generator>MSBuild:Compile</Generator></Page>
     <Compile Include="MiniWindow.xaml.cs"><DependentUpon>MiniWindow.xaml</DependentUpon></Compile>

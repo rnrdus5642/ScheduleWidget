@@ -20,6 +20,7 @@ namespace ScheduleWidget
             public string Title { get; set; }
             public string Artist { get; set; }
             public bool IsPlaying { get; set; }
+            public bool IsCurrent { get; set; } // Windows' current media app breaks ties at startup
             // Timeline for the seek bar (null when the app does not report one). Position is as of UpdatedAt.
             public TimeSpan? Position { get; set; }
             public TimeSpan? Duration { get; set; }
@@ -45,7 +46,9 @@ namespace ScheduleWidget
             var result = new List<NowPlaying>();
             try
             {
-                var sessions = (await ManagerAsync().ConfigureAwait(false)).GetSessions().Where(s => !IsOwn(s)).ToList();
+                var sessionManager = await ManagerAsync().ConfigureAwait(false);
+                string currentApp = sessionManager.GetCurrentSession()?.SourceAppUserModelId;
+                var sessions = sessionManager.GetSessions().Where(s => !IsOwn(s)).ToList();
                 var titles = sessions.Count > 0 ? WindowTitles() : new List<string>(); // window scan only when something plays
                 foreach (var session in sessions)
                 {
@@ -58,7 +61,8 @@ namespace ScheduleWidget
                     {
                         AppId = session.SourceAppUserModelId, Title = title, Artist = props.Artist?.Trim(),
                         SourceName = site != null ? app + " (" + site + ")" : app,
-                        IsPlaying = session.GetPlaybackInfo()?.PlaybackStatus == GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing
+                        IsPlaying = session.GetPlaybackInfo()?.PlaybackStatus == GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing,
+                        IsCurrent = string.Equals(session.SourceAppUserModelId, currentApp, StringComparison.OrdinalIgnoreCase)
                     });
                     var timeline = session.GetTimelineProperties();
                     if (timeline != null && timeline.EndTime > timeline.StartTime)
@@ -80,7 +84,7 @@ namespace ScheduleWidget
                 if (lastGood != null && DateTime.UtcNow - lastGoodAt < TransientGrace) return lastGood.ToList();
                 return result;
             }
-            var ordered = result.OrderByDescending(n => n.IsPlaying).ToList();
+            var ordered = result.OrderByDescending(n => n.IsPlaying).ThenByDescending(n => n.IsCurrent).ToList();
             lastGood = ordered;
             lastGoodAt = DateTime.UtcNow;
             return ordered;

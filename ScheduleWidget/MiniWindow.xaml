@@ -585,7 +585,9 @@
             <Border Background="{DynamicResource AuxSurfaceBrush}" BorderBrush="{DynamicResource AuxHairlineBrush}" BorderThickness="1" CornerRadius="12" Padding="6" MinWidth="220">
                 <ScrollViewer MaxHeight="320" VerticalScrollBarVisibility="Auto">
                     <StackPanel>
-                        <TextBlock Text="재생목록" FontFamily="Segoe UI" FontSize="11" Foreground="{DynamicResource AuxMutedBrush}" Margin="10,4,0,4"/>
+                        <TextBlock Text="재생 소스" FontFamily="Segoe UI" FontSize="11" Foreground="{DynamicResource AuxMutedBrush}" Margin="10,4,0,4"/>
+                        <ContentControl x:Name="AutomaticSourceChoice" ContentTemplate="{StaticResource SourceRow}"/>
+                        <Border Height="1" Background="{DynamicResource AuxHairlineBrush}" Margin="8,6"/>
                         <ItemsControl x:Name="PlaylistChoices" ItemTemplate="{StaticResource SourceRow}"/>
                         <StackPanel x:Name="AppChoicesSection">
                             <Border Height="1" Background="{DynamicResource AuxHairlineBrush}" Margin="8,6"/>

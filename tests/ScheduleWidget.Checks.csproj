@@ -35,6 +35,7 @@
     <Compile Include="Checks.cs" />
     <Compile Include="SettingsChecks.cs" />
     <Compile Include="MusicBarChecks.cs" />
+    <Compile Include="MediaSourceChecks.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>

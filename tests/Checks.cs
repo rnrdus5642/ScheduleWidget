@@ -49,6 +49,7 @@ namespace ScheduleWidget.Checks
             Run("Default pet manifests and packaged assets load", PackagedAssets);
             Run("Updates reject a modified signed manifest", SignedUpdates);
             Run("Global shortcuts reject unmodified typing keys", Shortcuts);
+            Run("Automatic media policy follows active apps and preserves manual choices", AutomaticMediaSelection);
             Run("WPF resources and six window layouts construct", WindowResources);
 
             Console.WriteLine("{0} passed, {1} failed.", passed, failed);
@@ -285,6 +286,7 @@ namespace ScheduleWidget.Checks
                 Run("Compact calendar shows multiple schedules and scrolls every day independently", CalendarDayLists);
                 Run("Embedded agenda lists distant schedules, resizes and reuses schedule editing", AllSchedulesPanel);
                 Run("Music bar keeps one row across playback states and narrow widths", FixedMusicBar);
+                Run("External media automatically updates the bar without controlling other apps", AutomaticMediaRouting);
                 Run("Unified settings navigation, save, cancel and content lifecycle", () => UnifiedSettingsFlow(main, mini, data));
                 SettingsAudit();
             }

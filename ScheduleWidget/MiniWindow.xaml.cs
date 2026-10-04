@@ -2204,7 +2204,7 @@ namespace ScheduleWidget
             UpdateVolumeIcon();
             string source = player.SourceName ?? "목록 없음";
             PlayerPlaylistText.Text = source;
-            PlayerPlaylist.ToolTip = "지금 조작하는 곳: " + source + " · 눌러서 재생목록이나 다른 앱 선택";
+            PlayerPlaylist.ToolTip = (player.AutomaticSource ? "자동 감지 · " : "") + "지금 조작하는 곳: " + source + " · 눌러서 소스 선택";
             if (PlaylistPopup.IsOpen) BuildSourceChoices();
             PlayIcon.Visibility = playing ? Visibility.Collapsed : Visibility.Visible;
             PauseIcon.Visibility = playing ? Visibility.Visible : Visibility.Collapsed;
@@ -2638,16 +2638,20 @@ namespace ScheduleWidget
             if (player == null) return;
             bool external = player.SelectedExternal != null;
             var current = player.CurrentPlaylist;
+            AutomaticSourceChoice.Content = new
+            {
+                Automatic = true, Name = "자동 감지", Sub = "새로 재생되는 앱을 자동으로 표시", IsCurrent = player.AutomaticSource, CountLabel = ""
+            };
             PlaylistChoices.ItemsSource = player.Playlists.Select(p => new
             {
-                List = p, AppId = (string)null, p.Name, Sub = "", IsCurrent = !external && p == current, CountLabel = p.Tracks.Count + "곡"
+                List = p, AppId = (string)null, p.Name, Sub = "", IsCurrent = !player.AutomaticSource && !external && p == current, CountLabel = p.Tracks.Count + "곡"
             }).ToList();
             var apps = player.ExternalSources;
             AppChoicesSection.Visibility = apps.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
             AppChoices.ItemsSource = apps.Select(a => new
             {
                 List = (MusicPlaylist)null, a.AppId, Name = a.SourceName, Sub = a.Display ?? "",
-                IsCurrent = external && string.Equals(a.AppId, player.SelectedExternal, StringComparison.OrdinalIgnoreCase),
+                IsCurrent = !player.AutomaticSource && external && string.Equals(a.AppId, player.SelectedExternal, StringComparison.OrdinalIgnoreCase),
                 CountLabel = a.IsPlaying ? "재생 중" : "일시정지"
             }).ToList();
         }
@@ -2659,8 +2663,9 @@ namespace ScheduleWidget
             var appId = context?.GetType().GetProperty("AppId")?.GetValue(context) as string;
             PlaylistPopup.IsOpen = false;
             if (player == null) return;
-            if (appId != null) player.SelectExternal(appId);
-            else if (list != null && (list != player.CurrentPlaylist || player.SelectedExternal != null)) player.SelectPlaylist(list);
+            if (context?.GetType().GetProperty("Automatic")?.GetValue(context) is bool automatic && automatic) player.SelectAutomaticSource();
+            else if (appId != null) player.SelectExternal(appId);
+            else if (list != null) player.SelectPlaylist(list);
             else return;
             UpdatePlayerBar();
             if (QueuePopup.IsOpen) RefreshQueue();
@@ -2696,6 +2701,12 @@ namespace ScheduleWidget
         private void FallBackFromLostSource()
         {
             if (player == null || closed || !IsVisible || !SelectedSourceMissing()) return;
+            if (player.AutomaticSource)
+            {
+                player.SelectAutomaticSource();
+                UpdatePlayerBar();
+                return;
+            }
             var list = player.CurrentPlaylist ?? player.Playlists?.FirstOrDefault();
             if (list == null) return; // no playlist of ours to go back to
             player.SelectPlaylist(list);
@@ -5693,6 +5704,8 @@ namespace ScheduleWidget
         // Other apps playing media (browser YouTube / YouTube Music, Spotify, …); choosing one makes the bar control it.
         System.Collections.Generic.IReadOnlyList<SystemMediaService.NowPlaying> ExternalSources { get; }
         string SelectedExternal { get; }   // null while a playlist is the source
+        bool AutomaticSource { get; }
+        void SelectAutomaticSource();
         string SourceName { get; }         // what the dropdown shows
         void SelectExternal(string appId);
         // Current playlist in play order, the track playing now, and edits from the mini queue popup.

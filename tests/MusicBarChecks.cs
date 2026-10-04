@@ -90,6 +90,8 @@ namespace ScheduleWidget.Checks
             public MusicPlaylist CurrentPlaylist { get; } = new MusicPlaylist { Name = "내 플레이리스트" };
             public IReadOnlyList<MusicPlaylist> Playlists => new[] { CurrentPlaylist };
             public string SelectedExternal { get; set; }
+            public bool AutomaticSource { get; private set; } = true;
+            public void SelectAutomaticSource() { AutomaticSource = true; }
             public string SourceName => SelectedExternal == null ? CurrentPlaylist.Name : "테스트 앱";
             public IReadOnlyList<SystemMediaService.NowPlaying> ExternalSources => new[] {
                 new SystemMediaService.NowPlaying { AppId = "checks.music", Title = NowPlaying, SourceName = "테스트 앱", IsPlaying = IsPlaying } };
@@ -102,8 +104,8 @@ namespace ScheduleWidget.Checks
             public void ToggleSettings() { }
             public void Seek(TimeSpan position) { LastSeek = Position = position; }
             public void SetVolume(double value) { Volume = value; }
-            public void SelectPlaylist(MusicPlaylist list) { SelectedExternal = null; }
-            public void SelectExternal(string appId) { SelectedExternal = appId; }
+            public void SelectPlaylist(MusicPlaylist list) { AutomaticSource = false; SelectedExternal = null; }
+            public void SelectExternal(string appId) { AutomaticSource = false; SelectedExternal = appId; }
             public void Play(MusicTrack track) { }
             public void Move(MusicTrack track, int index) { }
         }
