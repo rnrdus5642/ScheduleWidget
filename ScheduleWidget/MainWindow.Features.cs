@@ -15,7 +15,8 @@ namespace ScheduleWidget
         private ContactWindow contactWindow;
         private DispatcherTimer reminderTimer;
         private bool checkingReminders;
-        private string reminderErrorChannel; // the channel whose failure the 연락 · 알림 button's tooltip shows
+        private string reminderErrorChannel;
+        private string reminderErrorMessage; // shown on the primary calendar's settings button
         private bool closingApp;
         private readonly Dictionary<string, DateTime> reminderRetries = new Dictionary<string, DateTime>();
         private readonly CommunicationService communicationService = new CommunicationService();
@@ -40,25 +41,14 @@ namespace ScheduleWidget
             if (picker.PlacementRequested) miniWindow?.StartPetPlacement();
         }
 
-        // ---- 👤: the pets beside the TODO window ----
-        // A pets-only MiniWindow (companion mode) owned by this window: same pets, settings, left click = 캐릭터 선택,
-        // right click = 캐릭터 설정; it follows this window and is shown only while this window is.
+        // Existing data may keep pets beside the schedule list. Their settings remain available on the pets themselves.
         private MiniWindow petCompanion;
-
-        private void MainPetsButton_Click(object sender, RoutedEventArgs e)
-        {
-            if (appData == null) return;
-            appData.MainPetsVisible = !appData.MainPetsVisible;
-            SaveDataSafely(false);
-            UpdatePetCompanion();
-        }
 
         private void UpdatePetCompanion()
         {
             if (appData == null) return;
-            MainPetsButton.Opacity = appData.MainPetsVisible ? 1 : 0.45; // off = dimmed
-            // 👤 on: the pets are only hidden while this window is (mini mode, tray, Esc) and shown again with it — not rebuilt
-            // (a new window, browser view and page) every time. 👤 off or 종료 closes them.
+            // Retain enabled companions while the list is hidden so reopening it reuses their window and browser.
+            // Disabling companions in their settings or exiting the app closes them.
             bool wanted = appData.MainPetsVisible && !closingApp;
             if (!wanted)
             {
@@ -104,7 +94,6 @@ namespace ScheduleWidget
             e.Handled = true;
             if (RemoveConfirmPanel.Visibility == Visibility.Visible) CloseRemoveConfirmation();
             else if (InlineEditPanel.Visibility == Visibility.Visible) CloseInlineEdit();
-            else if (MonitorPanel.Visibility == Visibility.Visible) CloseMonitorPanel();
             else if (InlineSettingsPanel.Visibility == Visibility.Visible && settingsHost == null) CloseInlineSettings(false);
             else HideScheduleList();
         }
@@ -197,6 +186,7 @@ namespace ScheduleWidget
                     return saved;
                 }, ShowMusic, ShowContacts, ShowMusicMenu, ExitApplication, this, OpenSettingsFromMini);
                 miniWindow.ScheduleListRequested += ToggleScheduleList;
+                miniWindow.SetReminderWarning(reminderErrorMessage);
                 miniWindow.CharacterSettingsRequested += index => OpenCharacterSettings(miniWindow, index);
                 if (_themeApplied && _themedPreset != appData.Appearance?.ThemePreset) miniWindow.ApplyTheme(_themedPreset, refresh: false);
                 miniWindow.SlotsChanged += () => petCompanion?.ReloadCharacter(); // the same pets beside the TODO window
@@ -964,15 +954,20 @@ namespace ScheduleWidget
                             else await communicationService.SendKakaoAsync(appData.Communication, message, true);
                             item.ReminderReceipts[channel] = key;
                             reminderRetries.Remove(retryKey);
-                            // That channel works again: the 연락 · 알림 button stops showing its last error.
-                            if (reminderErrorChannel == channel) { OpenSettingsButton.ToolTip = "설정"; reminderErrorChannel = null; }
+                            // That channel works again: clear its warning from the calendar's settings button.
+                            if (reminderErrorChannel == channel)
+                            {
+                                reminderErrorChannel = reminderErrorMessage = null;
+                                miniWindow?.SetReminderWarning(null);
+                            }
                             SaveDataSafely();
                         }
                         catch (Exception ex) when (ex is InvalidOperationException || ex is UnauthorizedAccessException || ex is System.Security.Cryptography.CryptographicException)
                         {
                             if (!reminderRetries.ContainsKey(retryKey)) trayService.Notify("마감 알림 전송 실패", ex.Message);
                             reminderRetries[retryKey] = DateTime.Now.AddMinutes(5);
-                            OpenSettingsButton.ToolTip = ex.Message;
+                            reminderErrorMessage = ex.Message;
+                            miniWindow?.SetReminderWarning(reminderErrorMessage);
                             reminderErrorChannel = channel;
                             contactWindow?.ReportStatus(ex.Message);
                             SaveDataSafely(); // Preserve a refreshed token even if the following send failed.

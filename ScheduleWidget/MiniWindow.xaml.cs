@@ -3155,6 +3155,8 @@ namespace ScheduleWidget
         private void Exit_Click(object sender, RoutedEventArgs e) { CloseDayPopup(); ActionsPopup.IsOpen = false; exit?.Invoke(); }
         private void Settings_Click(object sender, RoutedEventArgs e) { if (RecentlyDragged) return; CloseDayPopup(); ActionsPopup.IsOpen = false; settings?.Invoke(); }
 
+        public void SetReminderWarning(string message) => HeaderSettingsButton.ToolTip = string.IsNullOrWhiteSpace(message) ? "설정" : message;
+
         /// <summary>
         /// Pet clicks the pets' hit boxes never got: (a) another element still held the mouse (a press then goes to it, not to
         /// the pet — the pets stayed dead until a drag of the window released it), or (b) the press landed on the pet's drawn

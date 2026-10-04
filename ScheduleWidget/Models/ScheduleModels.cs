@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Globalization;
 using Newtonsoft.Json;
@@ -117,15 +117,6 @@ namespace ScheduleWidget
         public bool Hidden { get; set; }
         // 이 캐릭터를 좌우 반전해서 그림(캐릭터 설정의 좌우 반전).
         public bool Flipped { get; set; }
-    }
-
-    // 모니터 선택 UI에서 사용하는 런타임 표시 모델입니다. 저장 파일에는 포함되지 않습니다.
-    public sealed class MonitorOption
-    {
-        public string Id { get; set; }
-        public string DisplayName { get; set; }
-        public string Detail { get; set; }
-        public string StatusText { get; set; }
     }
 
     public class ScheduleItem

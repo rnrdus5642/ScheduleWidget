@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -41,8 +41,6 @@ namespace ScheduleWidget
         private Guid? _pendingRemovalId;
         private bool _inlineEditDateSelectorsInitialized;
         private bool _inlineEditLoading;
-
-        private string _pendingMonitorRestoreId;
 
         // The card list is built only while this window can be seen: a change made while it is hidden (mini mode, tray)
         // marks it dirty and it is rebuilt when the window shows again. The signature skips rebuilding identical cards.
@@ -90,7 +88,6 @@ namespace ScheduleWidget
             SystemEvents.DisplaySettingsChanged += OnDisplaySettingsChanged;
             SystemEvents.TimeChanged += OnSystemTimeChanged; // clock or time zone changed: "today" may be another day
 
-            ModeToggle.IsChecked = false;
             this.ResizeMode = ResizeMode.NoResize;
 
             InitDateSelectors();
@@ -743,9 +740,7 @@ namespace ScheduleWidget
             appData.WindowState.Width = this.Width;
             appData.WindowState.Height = this.Height;
 
-            string monitorId = !string.IsNullOrWhiteSpace(_pendingMonitorRestoreId)
-                ? _pendingMonitorRestoreId
-                : GetCurrentMonitorId();
+            string monitorId = GetCurrentMonitorId();
             if (string.IsNullOrWhiteSpace(monitorId))
                 return;
 
@@ -1320,11 +1315,15 @@ namespace ScheduleWidget
 
         private void TopBar_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
         {
-            if (ModeToggle.IsChecked == true && e.LeftButton == MouseButtonState.Pressed) this.DragMove();
+            if (e.LeftButton != MouseButtonState.Pressed) return;
+            // Buttons keep their own clicks; every other part of the header moves this secondary window.
+            for (var source = e.OriginalSource as DependencyObject; source != null && source != sender;
+                source = source is Visual ? VisualTreeHelper.GetParent(source) : LogicalTreeHelper.GetParent(source))
+                if (source is System.Windows.Controls.Primitives.ButtonBase) return;
+            e.Handled = true;
+            try { DragMove(); }
+            catch (InvalidOperationException) { } // the button may have been released before the native move loop starts
         }
-
-        private void ModeToggle_Checked(object sender, RoutedEventArgs e) => this.ResizeMode = ResizeMode.CanResizeWithGrip;
-        private void ModeToggle_Unchecked(object sender, RoutedEventArgs e) => this.ResizeMode = ResizeMode.NoResize;
 
         private void InitDateSelectors()
         {
@@ -1469,157 +1468,12 @@ namespace ScheduleWidget
                 : TimeSpan.FromSeconds(1);
         }
 
-        private void MonitorButton_Click(object sender, RoutedEventArgs e)
-        {
-            if (MonitorPanel.Visibility == Visibility.Visible)
-            {
-                CloseMonitorPanel();
-                return;
-            }
-
-            ModeToggle.IsChecked = false;
-            OpenMonitorPanel();
-        }
-
-        private void OpenMonitorPanel()
-        {
-            MonitorOptionsList.ItemsSource = null;
-            MonitorOptionsList.ItemsSource = BuildMonitorOptions();
-            MonitorPanel.Visibility = Visibility.Visible;
-        }
-
-        private List<MonitorOption> BuildMonitorOptions()
-        {
-            var options = new List<MonitorOption>();
-            string currentMonitorId = GetCurrentMonitorId();
-            int monitorNumber = 1;
-
-            foreach (FormsScreen screen in GetConnectedScreens())
-            {
-                if (screen == null || string.IsNullOrWhiteSpace(screen.DeviceName))
-                    continue;
-
-                string detail = string.Format(
-                    CultureInfo.InvariantCulture,
-                    "{0} × {1}",
-                    screen.Bounds.Width,
-                    screen.Bounds.Height);
-                if (screen.Primary)
-                    detail += " · 주 모니터";
-
-                bool isCurrent = string.Equals(
-                    screen.DeviceName,
-                    currentMonitorId,
-                    StringComparison.OrdinalIgnoreCase);
-                options.Add(new MonitorOption
-                {
-                    Id = screen.DeviceName,
-                    DisplayName = "모니터 " + monitorNumber,
-                    Detail = detail,
-                    StatusText = isCurrent ? "현재" : string.Empty
-                });
-                monitorNumber++;
-            }
-
-            return options;
-        }
-
-        private void MonitorOptionButton_Click(object sender, RoutedEventArgs e)
-        {
-            var button = sender as System.Windows.Controls.Button;
-            string monitorId = button == null ? null : button.Tag as string;
-            if (string.IsNullOrWhiteSpace(monitorId))
-                return;
-
-            if (MoveToMonitor(monitorId))
-                CloseMonitorPanel();
-            else
-                OpenMonitorPanel();
-        }
-
-        private void MonitorPanelCloseButton_Click(object sender, RoutedEventArgs e)
-        {
-            CloseMonitorPanel();
-        }
-
-        private void CloseMonitorPanel()
-        {
-            MonitorPanel.Visibility = Visibility.Collapsed;
-            MonitorOptionsList.ItemsSource = null;
-        }
-
-        private bool MoveToMonitor(string monitorId)
-        {
-            if (appData == null || appData.WindowState == null)
-                return false;
-
-            FormsScreen targetScreen = FindScreenById(monitorId);
-            if (targetScreen == null)
-                return false;
-
-            // 현재 모니터를 다시 선택한 경우에는 부모 창과 좌표를 건드리지
-            // 않습니다. 바탕화면 호스트를 다시 연결하면 셸 구성에 따라
-            // 위젯이 잠시 숨겨질 수 있으므로, 불필요한 재배치를 차단합니다.
-            string currentMonitorId = GetCurrentMonitorId();
-            if (string.Equals(currentMonitorId, targetScreen.DeviceName, StringComparison.OrdinalIgnoreCase) ||
-                (string.IsNullOrWhiteSpace(currentMonitorId) &&
-                 string.Equals(appData.WindowState.MonitorId, targetScreen.DeviceName, StringComparison.OrdinalIgnoreCase)))
-            {
-                appData.WindowState.MonitorId = targetScreen.DeviceName;
-                SaveCurrentState();
-                return true;
-            }
-
-            // 이동하기 전에 현재 모니터 위치를 먼저 별도 슬롯에 보존합니다.
-            UpdateWindowStateData();
-
-            MonitorStateData savedState;
-            bool hasSavedState = TryGetMonitorState(monitorId, out savedState);
-            _pendingMonitorRestoreId = targetScreen.DeviceName;
-
-            _isRestoringState = true;
-            try
-            {
-                ApplyWindowPositionForMonitor(targetScreen, savedState, hasSavedState);
-                appData.WindowState.MonitorId = targetScreen.DeviceName;
-            }
-            finally
-            {
-                _isRestoringState = false;
-            }
-
-            SaveCurrentState();
-
-            // 모니터별 DPI가 다르면 WPF가 위치 단위를 다시 계산하므로,
-            // 레이아웃이 안정된 뒤 한 번 더 현재 위치를 저장합니다.
-            Dispatcher.BeginInvoke(
-                new Action(() =>
-                {
-                    if (string.Equals(
-                            _pendingMonitorRestoreId,
-                            targetScreen.DeviceName,
-                            StringComparison.OrdinalIgnoreCase))
-                    {
-                        _pendingMonitorRestoreId = null;
-                        SaveCurrentState();
-                    }
-                }),
-                DispatcherPriority.ApplicationIdle);
-
-            return true;
-        }
-
         // ── 설정 ──
-
-        private void SettingsButton_Click(object sender, RoutedEventArgs e) => OpenUnifiedSettings(SettingsPage.General);
 
         private void BeginSettingsEdit()
         {
             if (appData == null)
                 return;
-
-            // 설정을 여는 동안에는 위젯 이동 모드를 잠시 끕니다.
-            ModeToggle.IsChecked = false;
 
             ResetMiniPreviewOwnership();
 

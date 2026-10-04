@@ -53,188 +53,47 @@
               SizeChanged="WidgetContent_SizeChanged">
             <Grid>
                 <Grid.RowDefinitions>
-                    <RowDefinition Height="60"/>
-                    <RowDefinition Height="36"/>
+                    <RowDefinition Height="40"/>
                     <RowDefinition Height="*"/>
                     <!-- Auto (at least 144, set on the add form): taller only while 여러 날 shows its 종료 날짜 row. -->
                     <RowDefinition Height="Auto"/>
                 </Grid.RowDefinitions>
 
-                <!-- compact header -->
-                <Border Grid.Row="0"
+                <!-- The schedule list is a secondary window: drag the header, close with X. -->
+                <Border x:Name="ScheduleHeader" Grid.Row="0"
                         Background="{DynamicResource TopBarBrush}"
-                        CornerRadius="19,0,0,0"
-                        Padding="16,0"
+                        CornerRadius="19,19,0,0" Padding="12,0" Cursor="SizeAll"
                         MouseLeftButtonDown="TopBar_MouseLeftButtonDown">
                     <Grid VerticalAlignment="Center">
                         <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="32"/>
+                            <ColumnDefinition Width="24"/>
                             <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="32"/>
-                            <ColumnDefinition Width="32"/>
-                            <ColumnDefinition Width="32"/>
-                            <ColumnDefinition Width="32"/>
-                            <ColumnDefinition Width="32"/>
+                            <ColumnDefinition Width="28"/>
                         </Grid.ColumnDefinitions>
-
-                        <Border Width="30" Height="30"
-                                CornerRadius="15"
-                                Background="{DynamicResource AccentBrush}"
-                                VerticalAlignment="Center">
+                        <Border Width="24" Height="24" CornerRadius="12"
+                                Background="{DynamicResource AccentBrush}" VerticalAlignment="Center">
                             <Path Data="M2,3 H14 V14 H2 Z M5,1 V5 M11,1 V5 M2,6 H14"
-                                  Width="16"
-                                  Height="16"
-                                  Stretch="Fill"
-                                  Stroke="{DynamicResource AccentForegroundBrush}"
-                                  StrokeThickness="1.35"
-                                  StrokeStartLineCap="Round"
-                                  StrokeEndLineCap="Round"
-                                  StrokeLineJoin="Round"
-                                  HorizontalAlignment="Center"
-                                  VerticalAlignment="Center"/>
+                                  Width="14" Height="14" Stretch="Fill"
+                                  Stroke="{DynamicResource AccentForegroundBrush}" StrokeThickness="1.35"
+                                  StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"
+                                  HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
-                        <TextBlock Grid.Column="1"
-                                   Text="일정"
-                                   Foreground="{DynamicResource TextBrush}"
-                                   FontSize="17"
-                                   FontWeight="SemiBold"
-                                   VerticalAlignment="Center"
-                                   Margin="10,0,0,0"/>
-                        <ToggleButton x:Name="ModeToggle"
-                                      Grid.Column="2"
-                                      Style="{StaticResource WidgetModeButton}"
-                                      ToolTip="이동/크기 조절"
-                                      AutomationProperties.Name="이동/크기 조절"
-                                      HorizontalAlignment="Center"
-                                      VerticalAlignment="Center"
-                                      Checked="ModeToggle_Checked"
-                                      Unchecked="ModeToggle_Unchecked">
-                            <ToggleButton.Content>
-                                <Path Data="M10,0 L14,4 L11,4 L11,9 L16,9 L16,6 L20,10 L16,14 L16,11 L11,11 L11,16 L14,16 L10,20 L6,16 L9,16 L9,11 L4,11 L4,14 L0,10 L4,6 L4,9 L9,9 L9,4 L6,4 Z"
-                                      Width="16"
-                                      Height="16"
-                                      Stretch="Fill"
-                                      Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type ToggleButton}}}"/>
-                            </ToggleButton.Content>
-                        </ToggleButton>
-                        <Button x:Name="MonitorButton"
-                                Grid.Column="3"
-                                Style="{StaticResource WidgetIconButton}"
-                                Width="32"
-                                Height="32"
-                                ToolTip="모니터 선택"
-                                AutomationProperties.Name="모니터 선택"
-                                HorizontalAlignment="Center"
-                                VerticalAlignment="Center"
-                                Click="MonitorButton_Click">
-                            <Path Data="M2,3 H18 V14 H2 Z M6,18 H14 M10,14 V18"
-                                  Width="17"
-                                  Height="17"
-                                  Stretch="Fill"
-                                  Stroke="{DynamicResource SubTextBrush}"
-                                  StrokeThickness="1.5"
-                                  StrokeStartLineCap="Round"
-                                  StrokeEndLineCap="Round"
-                                  StrokeLineJoin="Round"/>
-                        </Button>
-                        <Button x:Name="OpenSettingsButton" Grid.Column="4"
-                                Style="{StaticResource WidgetIconButton}"
-                                Width="32"
-                                Height="32"
-                                ToolTip="설정"
-                                AutomationProperties.Name="설정"
-                                HorizontalAlignment="Center"
-                                VerticalAlignment="Center"
-                                Click="SettingsButton_Click">
-                            <Grid Width="17" Height="17">
-                                <Rectangle Width="3.5"
-                                           Height="17"
-                                           Fill="{DynamicResource SubTextBrush}"
-                                           RadiusX="1.5"
-                                           RadiusY="1.5"
-                                           HorizontalAlignment="Center"
-                                           VerticalAlignment="Center"/>
-                                <Rectangle Width="3.5"
-                                           Height="17"
-                                           Fill="{DynamicResource SubTextBrush}"
-                                           RadiusX="1.5"
-                                           RadiusY="1.5"
-                                           HorizontalAlignment="Center"
-                                           VerticalAlignment="Center"
-                                           RenderTransformOrigin="0.5,0.5">
-                                    <Rectangle.RenderTransform>
-                                        <RotateTransform Angle="45"/>
-                                    </Rectangle.RenderTransform>
-                                </Rectangle>
-                                <Rectangle Width="3.5"
-                                           Height="17"
-                                           Fill="{DynamicResource SubTextBrush}"
-                                           RadiusX="1.5"
-                                           RadiusY="1.5"
-                                           HorizontalAlignment="Center"
-                                           VerticalAlignment="Center"
-                                           RenderTransformOrigin="0.5,0.5">
-                                    <Rectangle.RenderTransform>
-                                        <RotateTransform Angle="90"/>
-                                    </Rectangle.RenderTransform>
-                                </Rectangle>
-                                <Rectangle Width="3.5"
-                                           Height="17"
-                                           Fill="{DynamicResource SubTextBrush}"
-                                           RadiusX="1.5"
-                                           RadiusY="1.5"
-                                           HorizontalAlignment="Center"
-                                           VerticalAlignment="Center"
-                                           RenderTransformOrigin="0.5,0.5">
-                                    <Rectangle.RenderTransform>
-                                        <RotateTransform Angle="135"/>
-                                    </Rectangle.RenderTransform>
-                                </Rectangle>
-                                <Ellipse Width="7"
-                                         Height="7"
-                                         Fill="{DynamicResource TopBarBrush}"
-                                         Stroke="{DynamicResource SubTextBrush}"
-                                         StrokeThickness="2"
-                                         HorizontalAlignment="Center"
-                                         VerticalAlignment="Center"/>
-                            </Grid>
-                        </Button>
-                        <!-- 👤: show / hide the pets beside this window (same pets and clicks as the mini window). -->
-                        <Button x:Name="MainPetsButton" Grid.Column="5"
-                                Style="{StaticResource WidgetIconButton}"
-                                Width="32"
-                                Height="32"
-                                ToolTip="캐릭터 켜기 / 끄기"
-                                AutomationProperties.Name="캐릭터 켜기 / 끄기"
-                                HorizontalAlignment="Center"
-                                VerticalAlignment="Center"
-                                Click="MainPetsButton_Click">
-                            <TextBlock Text="👤" FontFamily="Segoe UI Emoji" FontSize="15" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                        </Button>
-                        <Button x:Name="CloseScheduleListButton" Grid.Column="6"
-                                Style="{StaticResource WidgetIconButton}"
-                                Width="32"
-                                Height="32"
-                                ToolTip="일정 목록 닫기"
-                                AutomationProperties.Name="일정 목록 닫기"
-                                HorizontalAlignment="Center"
-                                VerticalAlignment="Center"
-                                Click="CloseScheduleList_Click">
-                            <Path Data="M4,4 L14,14 M14,4 L4,14"
-                                  Width="14"
-                                  Height="14"
-                                  Stretch="Fill"
+                        <TextBlock Grid.Column="1" Text="일정" FontSize="15" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextBrush}" Margin="8,0,0,0" VerticalAlignment="Center"/>
+                        <Button x:Name="CloseScheduleListButton" Grid.Column="2"
+                                Style="{StaticResource WidgetIconButton}" Width="26" Height="26" Cursor="Hand"
+                                ToolTip="일정 목록 닫기" AutomationProperties.Name="일정 목록 닫기"
+                                HorizontalAlignment="Center" VerticalAlignment="Center" Click="CloseScheduleList_Click">
+                            <Path Data="M4,4 L14,14 M14,4 L4,14" Width="12" Height="12" Stretch="Fill"
                                   Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type Button}}}"
-                                  StrokeThickness="1.8"
-                                  StrokeStartLineCap="Round"
-                                  StrokeEndLineCap="Round"/>
+                                  StrokeThickness="1.7" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
                         </Button>
                     </Grid>
                 </Border>
 
                 <!-- schedule list -->
 
-                <Border Grid.Row="2"
+                <Border Grid.Row="1"
                         Background="{DynamicResource BackgroundBrush}"
                         Padding="13,13,13,3">
                     <!-- Virtualized: only the cards in view are built (a Google import can bring hundreds), scrolled by pixels. -->
@@ -312,7 +171,7 @@
                 </Border>
 
                 <!-- add schedule -->
-                <Border Grid.Row="3"
+                <Border Grid.Row="2"
                         MinHeight="144"
                         Background="{DynamicResource BottomBarBrush}"
                         CornerRadius="0,0,0,19"
@@ -1063,140 +922,6 @@
                 </Grid>
             </Border>
 
-            <!-- monitor selection is kept inside the widget so it never floats above other apps -->
-            <Border x:Name="MonitorPanel"
-                    Background="#660B1220"
-                    CornerRadius="19"
-                    Panel.ZIndex="40"
-                    Visibility="Collapsed">
-                <Border Width="300"
-                        Height="276"
-                        Background="{DynamicResource CardBrush}"
-                        BorderBrush="{DynamicResource CardBorderBrush}"
-                        BorderThickness="1"
-                        CornerRadius="16"
-                        HorizontalAlignment="Center"
-                        VerticalAlignment="Center"
-                        Padding="18,16,18,14">
-                    <Border.Effect>
-                        <DropShadowEffect BlurRadius="20" ShadowDepth="4" Opacity="0.22"/>
-                    </Border.Effect>
-                    <Grid>
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="34"/>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="*"/>
-                        </Grid.RowDefinitions>
-
-                        <Grid Grid.Row="0">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="30"/>
-                            </Grid.ColumnDefinitions>
-                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                <Path Data="M2,3 H18 V14 H2 Z M6,18 H14 M10,14 V18"
-                                      Width="17"
-                                      Height="17"
-                                      Stretch="Fill"
-                                      Stroke="{DynamicResource AccentBrush}"
-                                      StrokeThickness="1.5"
-                                      StrokeStartLineCap="Round"
-                                      StrokeEndLineCap="Round"
-                                      StrokeLineJoin="Round"
-                                      Margin="0,0,8,0"/>
-                                <TextBlock Text="모니터 선택"
-                                           Foreground="{DynamicResource TextBrush}"
-                                           FontSize="17"
-                                           FontWeight="SemiBold"
-                                           VerticalAlignment="Center"/>
-                            </StackPanel>
-                            <Button Grid.Column="1"
-                                    Style="{StaticResource WidgetIconButton}"
-                                    Width="30"
-                                    Height="30"
-                                    ToolTip="모니터 선택 닫기"
-                                    AutomationProperties.Name="모니터 선택 닫기"
-                                    Click="MonitorPanelCloseButton_Click">
-                                <Path Data="M4,4 L12,12 M12,4 L4,12"
-                                      Width="13"
-                                      Height="13"
-                                      Stretch="Fill"
-                                      Stroke="{DynamicResource SubTextBrush}"
-                                      StrokeThickness="1.5"
-                                      StrokeStartLineCap="Round"
-                                      StrokeEndLineCap="Round"/>
-                            </Button>
-                        </Grid>
-
-                        <TextBlock Grid.Row="1"
-                                   Text="위젯을 표시할 모니터를 선택하세요."
-                                   Foreground="{DynamicResource SubTextBrush}"
-                                   FontSize="10"
-                                   Margin="1,6,0,10"/>
-
-                        <ScrollViewer Grid.Row="2"
-                                      VerticalScrollBarVisibility="Hidden"
-                                      HorizontalScrollBarVisibility="Disabled">
-                            <ItemsControl x:Name="MonitorOptionsList">
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate>
-                                        <Button Tag="{Binding Id}"
-                                                Style="{StaticResource WidgetSecondaryButton}"
-                                                Height="52"
-                                                Margin="0,0,0,7"
-                                                HorizontalContentAlignment="Stretch"
-                                                Click="MonitorOptionButton_Click">
-                                            <Grid>
-                                                <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="34"/>
-                                                    <ColumnDefinition Width="*"/>
-                                                    <ColumnDefinition Width="Auto"/>
-                                                </Grid.ColumnDefinitions>
-                                                <Border Width="28"
-                                                        Height="28"
-                                                        CornerRadius="8"
-                                                        Background="{DynamicResource ControlHoverBrush}"
-                                                        VerticalAlignment="Center">
-                                                    <Path Data="M2,3 H18 V14 H2 Z M6,18 H14 M10,14 V18"
-                                                          Width="16"
-                                                          Height="16"
-                                                          Stretch="Fill"
-                                                          Stroke="{DynamicResource AccentBrush}"
-                                                          StrokeThickness="1.35"
-                                                          StrokeStartLineCap="Round"
-                                                          StrokeEndLineCap="Round"
-                                                          StrokeLineJoin="Round"
-                                                          HorizontalAlignment="Center"
-                                                          VerticalAlignment="Center"/>
-                                                </Border>
-                                                <StackPanel Grid.Column="1"
-                                                            VerticalAlignment="Center"
-                                                            Margin="9,0,6,0">
-                                                    <TextBlock Text="{Binding DisplayName}"
-                                                               Foreground="{DynamicResource TextBrush}"
-                                                               FontWeight="SemiBold"/>
-                                                    <TextBlock Text="{Binding Detail}"
-                                                               Foreground="{DynamicResource SubTextBrush}"
-                                                               FontSize="10"
-                                                               Margin="0,3,0,0"/>
-                                                </StackPanel>
-                                                <TextBlock Grid.Column="2"
-                                                           Text="{Binding StatusText}"
-                                                           Foreground="{DynamicResource AccentBrush}"
-                                                           FontSize="10"
-                                                           FontWeight="SemiBold"
-                                                           VerticalAlignment="Center"/>
-                                            </Grid>
-                                        </Button>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
-                        </ScrollViewer>
-                    </Grid>
-                </Border>
-            </Border>
-
-            <!-- edit dialog shown in the widget -->
             <Border x:Name="InlineEditPanel"
                     Background="#660B1220"
                     CornerRadius="19"
