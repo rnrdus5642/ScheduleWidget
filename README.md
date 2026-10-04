@@ -473,33 +473,19 @@ msbuild ScheduleWidget.sln -restore /p:RestorePackagesConfig=true /p:Configurati
 
 - 실행 파일은 `ScheduleWidget\bin\Release\ScheduleWidget.exe`입니다. 앱이 실행 중이면 파일 잠금으로 빌드가 실패할 수 있으므로 트레이에서 먼저 종료합니다.
 - `ScheduleWidget\google_client.bin`이 있으면 빌드가 `ScheduleWidget.exe`의 리소스로 넣습니다. 그러므로 배포 폴더에 `google_client.json`이나 `Pet` 폴더는 필요 없습니다. 반대로 프로젝트 폴더에 `google_client.json`이 있으면 빌드가 출력 폴더로 복사하고 앱은 그 파일을 내장 클라이언트보다 먼저 쓰므로, 배포용 빌드에서는 두지 않습니다.
-- 배포할 때는 `ScheduleWidget.exe`, `ScheduleWidget.exe.config`, Newtonsoft.Json·WebView2 DLL, `Player`, `runtimes`가 포함된 `ScheduleWidget\bin\Release` 폴더 전체를 옮깁니다. 실행 파일만 따로 복사하면 동작하지 않습니다. `*.pdb`, `*.xml`은 필요 없습니다(예전 검사 실행이 남긴 `FeatureChecks.exe*`도 필요 없습니다).
+- 배포할 때는 `ScheduleWidget.exe`, `ScheduleWidget.exe.config`, `ScheduleWidget.Updater.exe`, Newtonsoft.Json·WebView2 DLL, `Player`, `DefaultPets`, `runtimes`가 포함된 `ScheduleWidget\bin\Release` 폴더 전체를 옮깁니다. 실행 파일만 따로 복사하면 동작하지 않습니다. `*.pdb`, `*.xml`은 필요 없습니다.
+- 업데이트 저장소는 `Services\UpdateClient.cs`의 `GitHubRepository`이며, 가져온 설정은 `rnrdus5642/ScheduleWidget`입니다. 앱은 `Services\UpdatePublicKey.cs`의 공개키로 업데이트를 검증합니다. `tools\Publish-Update.ps1`로 새 업데이트를 발행하려면 이 공개키와 일치하는 개인키가 `%USERPROFILE%\.schedulewidget\update-signing-key.xml`에 있어야 합니다. 개인키는 저장소에 포함되지 않습니다.
 
 ## 검증
 
+기능 이식 후 추가한 오프라인 검증 하네스입니다. 가져온 폴더에는 이전 README가 설명하던 테스트 코드가 없어, 아래 범위부터 새로 검증합니다.
+
 ```powershell
-# 미니 달력·말풍선·메뉴·테마·캐릭터·캐릭터 배치·음악 막대·구글 동기화 규칙 등 집중 검사
-powershell -NoProfile -ExecutionPolicy Bypass -File tests\Run-Checks.ps1 -PetCalendar
-
-# 캐릭터 화면(character.html)의 애니메이션·랜덤/음악 동작·애니메이션 효과 끄기·다시 그리기 검사
-node tests\CharacterAnimationChecks.js
-
-# 전체 기능 검사 / 실제 YouTube 연결과 무음 재생까지 포함한 검사
 powershell -NoProfile -ExecutionPolicy Bypass -File tests\Run-Checks.ps1
-powershell -NoProfile -ExecutionPolicy Bypass -File tests\Run-Checks.ps1 -YouTube
-
-# 전체 기능·회귀 검사와 캐릭터 화면 검사를 한 번에(빌드는 한 번)
-powershell -NoProfile -ExecutionPolicy Bypass -File tests\Run-Checks.ps1 -All
 ```
 
-- `Run-Checks.ps1`은 MSBuild가 PATH에 있는 PowerShell에서 실행합니다. 모든 모드에서 앱과 검사기를 `.work` 아래 실행별 폴더에 따로 빌드하므로 `ScheduleWidget\bin\Release`나 실행 중인 앱에 영향을 주지 않습니다. 통과하면 그 폴더를 지우고, 실패하면 스크린샷 확인을 위해 남겨 두며, 오래된 검사 폴더는 종류별로 최근 2개만 남깁니다.
-- **`-PetCalendar`(집중 검사)**: 미니 창과 캐릭터, 구글 동기화 규칙을 오프라인으로 확인합니다(실제 구글 계정에는 접속하지 않음).
-  - 미니 창 화면: 달력·일정 블록과 D-day 표시, 날짜·일정 말풍선 편집, 기간 선택, 공휴일(2024~2026년 공식 목록과 날짜별 비교), 달력 넘김 애니메이션(효과 1~6과 애니메이션 없음), 테마와 머리띠.
-  - 음악 막대: 재생 위치·음량·재생 소스·다른 앱 창 앞으로 가져오기·지금 재생 목록.
-  - 캐릭터: 배치·크기·`캐릭터 설정`·`캐릭터 선택`·좌/우클릭·TODO 창 옆 캐릭터, 캐릭터별 마지막 자리 기억, 캐릭터 가져오기·내보내기·삭제·예전 `Pet` 폴더 이관, 캐릭터 화면 자동 복구.
-  - 그 밖: 단축키 조합 규칙, 스위치·색 대비 같은 공통 화면 요소, 오류 기록 위치, 구글 동기화 규칙·이벤트 변환·클라이언트 파일 처리와 `Protect-GoogleClient.ps1`.
-- **옵션 없이 실행(`FeatureChecks`)**: 시간 규칙, 마감 알림 판정·중복 방지, 데이터 저장·백업 복구, 텔레그램·카카오톡 요청 처리(가짜 응답), 캐릭터 카탈로그, 원본 창의 일정 추가·수정·목록·설정·트레이 동작, 미니 창 일정 편집과 저장 실패 처리, 가짜 서버로 하는 구글 동기화(재시도·삭제 규칙), 음악 재생 규칙(랜덤·반복)과 재생할 수 없는 곡 건너뛰기·플레이어 복구를 확인합니다. `-YouTube`를 붙이면 실제 YouTube 임베디드 재생도 무음으로 확인합니다.
-- **`-All`**: 한 번 빌드한 뒤 `FeatureChecks`, `PetCalendarChecks`, 데스크톱 회귀 검사 6종, 실제 .NET HTTP 전송을 쓰는 로컬 다운로드 검사를 각자 폴더에서 차례로 실행합니다. 가짜 키·MSBuild·gh를 쓰는 배포 검사, 업데이트 패키지 검사, `node tests\CharacterAnimationChecks.js`도 포함합니다(node가 없으면 JavaScript 검사만 건너뜀). 검사 프로세스가 5분 넘게 끝나지 않으면 실패로 기록합니다. 실제 메시지 전송·배포는 하지 않습니다.
-- `FeatureChecks`의 설정 저장 검사는 실행별 임시 HKCU 테스트 키를 사용하며, Windows의 실제 자동 실행 항목은 바꾸지 않습니다.
-- **`node tests\CharacterAnimationChecks.js`**: 브라우저 없이 `character.html`의 스크립트만 실행해 동작·애니메이션 효과 끄기·랜덤/음악 동작·여러 캐릭터·다시 그리기·이미지 읽기 재시도와 크기 오류 보고를 확인합니다.
-- 검사 코드는 실제 텔레그램·카카오톡 메시지를 보내지 않습니다. 실제 발송과 구글 로그인·동기화는 계정을 연결한 환경에서 별도로 확인해야 합니다.
+- MSBuild를 PATH 또는 Visual Studio 설치에서 찾고 NuGet 패키지를 복원한 뒤 앱·업데이터·검사기를 `.work\checks\<실행 ID>\app`에 Release로 빌드합니다. 검사 결과는 같은 실행 폴더의 `checks.log`에 남깁니다.
+- 데이터 저장·복구 검사는 실행 폴더의 `data`만 사용합니다. 실제 일정 파일·자동 시작 레지스트리·계정 토큰은 변경하지 않습니다. 기존 앱을 실행한 상태에서도 검사할 수 있습니다.
+- 검증 범위: 구버전 데이터 이전과 일정 ID, 추가 설정 보존, 불필요한 저장 방지, 손상 파일 백업 복구, 사용 중인 파일 보호, 여러 날 일정, 시간·알림 규칙, YouTube 주소 판별, 구글 일정 변경·삭제 규칙, 드라이브 캐릭터 삭제 규칙, 기본 캐릭터와 배포 파일, 업데이트 서명 변조 거부, 단축키, 주요 창 6개의 WPF 리소스·레이아웃 생성.
+- 창 검사는 실제 창을 표시하거나 앱의 시작 이벤트를 실행하지 않습니다. WebView2 렌더링, 음악 재생, 바탕화면·DPI 동작, 구글 로그인·동기화, 실제 알림 발송은 별도 실행 검증이 필요합니다. 검사 중에는 외부 서비스에 요청하거나 메시지를 보내지 않습니다. NuGet 복원에는 인터넷이 필요할 수 있습니다.
+- 검사 프로세스의 제한 시간은 기본 120초이며 `-TimeoutSeconds`로 바꿀 수 있습니다. 실행 결과 폴더는 자동 삭제하지 않습니다.

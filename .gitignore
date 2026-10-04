@@ -19,6 +19,8 @@ dist/
 ScheduleWidget/bin/Release/FeatureChecks.exe*
 Updater/bin/Debug/
 Updater/obj/
+tests/bin/
+tests/obj/
 
 # OS files
 .DS_Store
