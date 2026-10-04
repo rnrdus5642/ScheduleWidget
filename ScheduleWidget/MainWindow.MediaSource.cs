@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 
 namespace ScheduleWidget
@@ -22,16 +23,20 @@ namespace ScheduleWidget
             automaticMediaSource.Reset();
             SetExternalMusicSource(null, notify: false);
             ApplyAutomaticMusicSource(DateTime.UtcNow);
-            UpdateExternalPollInterval();
+            UpdateMediaWatchVisibility();
             MusicWindow.RaisePlaybackChanged();
-            PollExternalMediaSoon(0);
+            RequestExternalMediaRefresh(0);
         }
 
         private bool ApplyAutomaticMusicSource(DateTime now)
         {
             string next = automaticMediaSource.Select(externalSources, selectedExternalApp,
                 musicWindow?.IsPlaying == true, automaticMusicSource, now);
-            return SetExternalMusicSource(next, notify: false);
+            bool changed = SetExternalMusicSource(next, notify: false);
+            // A vanished session produces only one event. Finish its brief grace period without periodic polling.
+            if (automaticMusicSource && next != null && !externalSources.Any(s => string.Equals(s.AppId, next, StringComparison.OrdinalIgnoreCase)))
+                QueueMediaRefresh(MediaChangeKind.Playback, 5100);
+            return changed;
         }
 
         private bool SetExternalMusicSource(string appId, bool notify = true)
@@ -40,8 +45,8 @@ namespace ScheduleWidget
             selectedExternalApp = appId;
             externalVolume = externalVolumeTaken = null;
             externalVolumeApp = null;
-            externalVolumeReads = 0;
-            UpdateExternalPollInterval();
+            ResetExternalVolumeWatch();
+            UpdateMediaWatchVisibility();
             if (notify) MusicWindow.RaisePlaybackChanged();
             return true;
         }

@@ -287,6 +287,9 @@ namespace ScheduleWidget.Checks
                 Run("Embedded agenda lists distant schedules, resizes and reuses schedule editing", AllSchedulesPanel);
                 Run("Music bar keeps one row across playback states and narrow widths", FixedMusicBar);
                 Run("External media automatically updates the bar without controlling other apps", AutomaticMediaRouting);
+                Run("Media events coalesce and keep idle metadata and volume queries at zero", EventDrivenMediaWatch);
+                Run("Late media subscription completion cannot restart hidden work", LateMediaSubscription);
+                Run("Audio volume events preserve mute and stop after disposal", VolumeEventCallbacks);
                 Run("Unified settings navigation, save, cancel and content lifecycle", () => UnifiedSettingsFlow(main, mini, data));
                 SettingsAudit();
             }

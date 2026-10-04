@@ -11,8 +11,9 @@ namespace ScheduleWidget
     // audio sessions belong to processes, and browsers play from child processes, so every audio session whose
     // process has that exe name (or whose session id contains the package name) is used together.
     // Any COM failure returns null/false, and the caller keeps its own (widget) volume.
-    public static class AppVolumeService
+    public static partial class AppVolumeService
     {
+        private static readonly Guid VolumeEventContext = Guid.NewGuid();
         public sealed class SessionInfo
         {
             public int ProcessId { get; set; }
@@ -51,9 +52,9 @@ namespace ScheduleWidget
             bool any = false;
             ForEachSession(appId, (volume, info) =>
             {
-                Guid context = Guid.Empty;
+                Guid context = VolumeEventContext;
                 if (volume.SetMasterVolume(value, ref context) >= 0) any = true;
-                if (value > 0f && info.Muted) { Guid unmute = Guid.Empty; volume.SetMute(false, ref unmute); }
+                if (value > 0f && info.Muted) { Guid unmute = VolumeEventContext; volume.SetMute(false, ref unmute); }
             });
             return any;
         }
@@ -173,7 +174,8 @@ namespace ScheduleWidget
             return tail.Length > 0 && string.Equals(process, tail, StringComparison.OrdinalIgnoreCase);
         }
 
-        private static void ForEachSession(string appId, Action<ISimpleAudioVolume, SessionInfo> action)
+        private static void ForEachSession(string appId, Action<ISimpleAudioVolume, SessionInfo> action,
+            Func<object, IAudioSessionControl2, SessionInfo, bool> retain = null)
         {
             IMMDeviceEnumerator enumerator = null;
             IMMDevice device = null;
@@ -191,6 +193,7 @@ namespace ScheduleWidget
                 for (int i = 0; i < count; i++)
                 {
                     object sessionObject = null;
+                    bool retained = false;
                     try
                     {
                         if (sessions.GetSession(i, out sessionObject) < 0 || sessionObject == null) continue;
@@ -207,10 +210,11 @@ namespace ScheduleWidget
                         info.Volume = level;
                         info.Muted = muted;
                         action(volume, info);
+                        if (retain != null) retained = retain(sessionObject, control, info);
                     }
                     catch (COMException) { }
                     catch (InvalidCastException) { }
-                    finally { Release(sessionObject); }
+                    finally { if (!retained) Release(sessionObject); }
                 }
             }
             catch (COMException) { }
@@ -282,8 +286,8 @@ namespace ScheduleWidget
             [PreserveSig] int SetIconPath([MarshalAs(UnmanagedType.LPWStr)] string value, ref Guid eventContext);
             [PreserveSig] int GetGroupingParam(out Guid groupingParam);
             [PreserveSig] int SetGroupingParam(ref Guid overrideValue, ref Guid eventContext);
-            [PreserveSig] int RegisterAudioSessionNotification(IntPtr client);
-            [PreserveSig] int UnregisterAudioSessionNotification(IntPtr client);
+            [PreserveSig] int RegisterAudioSessionNotification([MarshalAs(UnmanagedType.Interface)] IAudioSessionEvents client);
+            [PreserveSig] int UnregisterAudioSessionNotification([MarshalAs(UnmanagedType.Interface)] IAudioSessionEvents client);
             // IAudioSessionControl2
             [PreserveSig] int GetSessionIdentifier([MarshalAs(UnmanagedType.LPWStr)] out string identifier);
             [PreserveSig] int GetSessionInstanceIdentifier([MarshalAs(UnmanagedType.LPWStr)] out string identifier);

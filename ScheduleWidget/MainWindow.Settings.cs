@@ -11,28 +11,14 @@ namespace ScheduleWidget
     {
         private readonly List<SettingsContentLease> settingsContentLeases = new List<SettingsContentLease>();
         private ContentControl settingsMusicContent, settingsReminderContent, settingsCharacterContent;
-        private StackPanel settingsConnectionsContent;
+        private ContentControl settingsConnectionsContent;
+        private FrameworkElement settingsGoogleContent;
         private PetSettingsWindow settingsPetEditor;
         private IPetSettingsHost settingsPetHost;
         private ComboBox settingsDayCount;
         private CheckBox settingsPlayerVisible;
 
         private SettingsWindow UnifiedSettings => settingsHost as SettingsWindow;
-
-        private void OpenCharacterSettings(MiniWindow host, int index)
-        {
-            if (host == null) return;
-            OpenUnifiedSettings(SettingsPage.Characters);
-            if (!ReferenceEquals(settingsPetHost, host))
-            {
-                settingsCharacterContent.Content = null;
-                settingsPetEditor?.Close();
-                settingsPetEditor = null;
-                settingsPetHost = host;
-                PrepareSettingsPage(SettingsPage.Characters);
-            }
-            settingsPetEditor?.Select(index);
-        }
 
         private void OpenUnifiedSettings(SettingsPage page)
         {
@@ -135,13 +121,7 @@ namespace ScheduleWidget
                 SettingsCard("전체 일정 색상", TakeSettingsControl(SettingsColorButtons), TakeSettingsControl(SettingsColorHint)))));
 
             settingsCharacterContent = new ContentControl();
-            var characters = new Grid();
-            characters.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            characters.RowDefinitions.Add(new RowDefinition());
-            characters.Children.Add(TakeSettingsControl(SettingsChooseCharacterButton));
-            Grid.SetRow(settingsCharacterContent, 1);
-            characters.Children.Add(settingsCharacterContent);
-            window.SetPage(SettingsPage.Characters, characters);
+            window.SetPage(SettingsPage.Characters, settingsCharacterContent);
 
             settingsMusicContent = new ContentControl();
             settingsPlayerVisible = new CheckBox { Content = "달력 아래 음악 막대 표시", IsChecked = appData.MiniPlayerVisible,
@@ -163,8 +143,9 @@ namespace ScheduleWidget
 
             settingsReminderContent = new ContentControl();
             window.SetPage(SettingsPage.Notifications, SettingsScroll(settingsReminderContent));
-            settingsConnectionsContent = SettingsStack(TakeSettingsControl(SettingsGoogleCard));
-            window.SetPage(SettingsPage.Connections, SettingsScroll(settingsConnectionsContent));
+            settingsGoogleContent = TakeSettingsControl(SettingsGoogleCard);
+            settingsConnectionsContent = new ContentControl();
+            window.SetPage(SettingsPage.Connections, settingsConnectionsContent);
             window.SetPage(SettingsPage.About, SettingsScroll(SettingsStack(
                 SettingsCard("ScheduleWidget", new TextBlock { Text = "바탕화면에서 일정을 확인하고 관리하는 달력 위젯입니다.", TextWrapping = TextWrapping.Wrap }),
                 TakeSettingsControl(UpdateCard))));
@@ -188,10 +169,10 @@ namespace ScheduleWidget
         {
             if (contactWindow != null) return;
             contactWindow = new ContactWindow(appData, communicationService, () => SaveDataSafely(), embedded: true);
-            contactWindow.CreateEmbeddedViews();
+            contactWindow.CreateEmbeddedViews(settingsGoogleContent);
             contactWindow.StatusChanged += text => UnifiedSettings?.ShowStatus(text);
             settingsReminderContent.Content = SettingsCard("마감 알림", contactWindow.RemindersContent);
-            settingsConnectionsContent.Children.Add(contactWindow.ConnectionsContent);
+            settingsConnectionsContent.Content = contactWindow.ConnectionsContent;
             if (!string.IsNullOrWhiteSpace(contactWindow.StatusMessage)) UnifiedSettings?.ShowStatus(contactWindow.StatusMessage);
         }
 
@@ -227,6 +208,7 @@ namespace ScheduleWidget
             settingsContentLeases.Clear();
             settingsMusicContent = settingsReminderContent = settingsCharacterContent = null;
             settingsConnectionsContent = null;
+            settingsGoogleContent = null;
             settingsDayCount = null;
             settingsPlayerVisible = null;
         }

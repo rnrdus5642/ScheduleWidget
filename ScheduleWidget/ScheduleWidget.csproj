@@ -107,6 +107,7 @@
     <Page Include="Styles\AuxiliaryStyles.xaml"><Generator>MSBuild:Compile</Generator></Page>
     <Compile Include="MainWindow.Features.cs" />
     <Compile Include="MainWindow.MediaSource.cs" />
+    <Compile Include="MainWindow.MediaWatch.cs" />
     <Compile Include="MainWindow.Settings.cs" />
     <Page Include="SettingsWindow.xaml"><Generator>MSBuild:Compile</Generator></Page>
     <Compile Include="SettingsWindow.xaml.cs"><DependentUpon>SettingsWindow.xaml</DependentUpon></Compile>
@@ -125,15 +126,19 @@
     <Compile Include="Services\YouTubePlaylistService.cs" />
     <Compile Include="Services\KoreanHolidays.cs" />
     <Compile Include="Services\SystemMediaService.cs" />
+    <Compile Include="Services\SystemMediaService.Events.cs" />
     <Compile Include="Services\AutomaticMediaSource.cs" />
     <Compile Include="Services\AppVolumeService.cs" />
+    <Compile Include="Services\AppVolumeService.Events.cs" />
     <Page Include="MiniWindow.xaml"><Generator>MSBuild:Compile</Generator></Page>
     <Compile Include="MiniWindow.xaml.cs"><DependentUpon>MiniWindow.xaml</DependentUpon></Compile>
     <Compile Include="MiniWindow.UpcomingPreview.cs"><DependentUpon>MiniWindow.xaml</DependentUpon></Compile>
     <Compile Include="MiniWindow.AllSchedules.cs"><DependentUpon>MiniWindow.xaml</DependentUpon></Compile>
     <Compile Include="MiniWindow.Appearance.cs"><DependentUpon>MiniWindow.xaml</DependentUpon></Compile>
+    <Compile Include="MiniWindow.PetSettings.cs"><DependentUpon>MiniWindow.xaml</DependentUpon></Compile>
     <Page Include="ContactWindow.xaml"><Generator>MSBuild:Compile</Generator></Page>
     <Compile Include="ContactWindow.xaml.cs"><DependentUpon>ContactWindow.xaml</DependentUpon></Compile>
+    <Compile Include="ContactWindow.Connections.cs"><DependentUpon>ContactWindow.xaml</DependentUpon></Compile>
     <Page Include="MusicWindow.xaml"><Generator>MSBuild:Compile</Generator></Page>
     <Compile Include="MusicWindow.xaml.cs"><DependentUpon>MusicWindow.xaml</DependentUpon></Compile>
     <Page Include="CharacterWindow.xaml"><Generator>MSBuild:Compile</Generator></Page>

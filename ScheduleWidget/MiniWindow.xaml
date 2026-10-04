@@ -88,6 +88,16 @@
         </Style>
         <Style x:Key="PlayerButton" TargetType="Button" BasedOn="{StaticResource WeekArrow}">
             <Setter Property="Width" Value="30"/><Setter Property="Height" Value="28"/>
+            <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button">
+                <Border x:Name="PlayerFace" Background="{TemplateBinding Background}" CornerRadius="8">
+                    <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                </Border>
+                <ControlTemplate.Triggers>
+                    <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="PlayerFace" Property="Background" Value="{DynamicResource MiniHoverBrush}"/></Trigger>
+                    <Trigger Property="IsPressed" Value="True"><Setter TargetName="PlayerFace" Property="Opacity" Value="0.7"/></Trigger>
+                    <Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.35"/></Trigger>
+                </ControlTemplate.Triggers>
+            </ControlTemplate></Setter.Value></Setter>
         </Style>
         <Style x:Key="PlayerTextButton" TargetType="Button" BasedOn="{StaticResource WeekArrow}">
             <Setter Property="Width" Value="Auto"/><Setter Property="Height" Value="26"/><Setter Property="Padding" Value="9,0"/>
@@ -120,17 +130,15 @@
                 <Grid x:Name="SeekFace" Background="Transparent">
                     <Track x:Name="PART_Track" Orientation="Horizontal" Minimum="{TemplateBinding Minimum}" Maximum="{TemplateBinding Maximum}"
                            Value="{TemplateBinding Value}" IsDirectionReversed="{TemplateBinding IsDirectionReversed}">
-                        <Track.DecreaseRepeatButton><RepeatButton Command="{x:Static Slider.DecreaseLarge}" Style="{StaticResource InlineSeekPage}" Background="{DynamicResource MiniFrameBrush}"/></Track.DecreaseRepeatButton>
-                        <Track.IncreaseRepeatButton><RepeatButton Command="{x:Static Slider.IncreaseLarge}" Style="{StaticResource InlineSeekPage}" Background="{DynamicResource MiniHoverBrush}"/></Track.IncreaseRepeatButton>
-                        <Track.Thumb><Thumb x:Name="SeekThumb" Width="7" Height="7" Opacity="0">
-                            <Thumb.Template><ControlTemplate TargetType="Thumb"><Ellipse Fill="{DynamicResource MiniFrameBrush}"/></ControlTemplate></Thumb.Template>
+                        <Track.DecreaseRepeatButton><RepeatButton x:Name="SeekPlayed" Command="{x:Static Slider.DecreaseLarge}" Style="{StaticResource InlineSeekPage}" Background="{DynamicResource MiniFrameBrush}"/></Track.DecreaseRepeatButton>
+                        <Track.IncreaseRepeatButton><RepeatButton x:Name="SeekRemaining" Command="{x:Static Slider.IncreaseLarge}" Style="{StaticResource InlineSeekPage}" Background="{DynamicResource MiniHoverBrush}"/></Track.IncreaseRepeatButton>
+                        <Track.Thumb><Thumb x:Name="SeekThumb" Width="7" Height="7">
+                            <Thumb.Template><ControlTemplate TargetType="Thumb"><Ellipse Fill="Black"/></ControlTemplate></Thumb.Template>
                         </Thumb></Track.Thumb>
                     </Track>
                 </Grid>
                 <ControlTemplate.Triggers>
-                    <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="SeekThumb" Property="Opacity" Value="1"/></Trigger>
-                    <Trigger Property="IsKeyboardFocusWithin" Value="True"><Setter TargetName="SeekThumb" Property="Opacity" Value="1"/></Trigger>
-                    <Trigger Property="IsEnabled" Value="False"><Setter TargetName="SeekFace" Property="Opacity" Value="0.3"/></Trigger>
+                    <Trigger Property="IsEnabled" Value="False"><Setter TargetName="SeekPlayed" Property="Opacity" Value="0.3"/><Setter TargetName="SeekRemaining" Property="Opacity" Value="0.3"/></Trigger>
                 </ControlTemplate.Triggers>
             </ControlTemplate></Setter.Value></Setter>
         </Style>
@@ -178,7 +186,7 @@
                     <Button x:Name="PlayerPrevious" Style="{StaticResource PlayerButton}" Click="PlayerPrevious_Click" ToolTip="이전 곡" AutomationProperties.Name="이전 곡">
                         <Path Data="M2,1 L2,11 M10,1 L4,6 L10,11 Z" Stroke="{DynamicResource MiniInkBrush}" Fill="{DynamicResource MiniInkBrush}" StrokeThickness="1.6" StrokeLineJoin="Round"/>
                     </Button>
-                    <Button x:Name="PlayerPlay" Style="{StaticResource PlayerButton}" Background="{DynamicResource MiniHoverBrush}" Margin="4,0" Click="PlayerPlay_Click" ToolTip="재생" AutomationProperties.Name="재생 / 일시정지">
+                    <Button x:Name="PlayerPlay" Style="{StaticResource PlayerButton}" Margin="4,0" Click="PlayerPlay_Click" ToolTip="재생" AutomationProperties.Name="재생 / 일시정지">
                         <Grid>
                             <Path x:Name="PlayIcon" Data="M3,1 L11,6.5 L3,12 Z" Fill="{DynamicResource MiniInkBrush}" Stroke="{DynamicResource MiniInkBrush}" StrokeThickness="1" StrokeLineJoin="Round"/>
                             <Path x:Name="PauseIcon" Data="M3,1 L3,12 M9,1 L9,12" Stroke="{DynamicResource MiniInkBrush}" StrokeThickness="2.6" Visibility="Collapsed"/>

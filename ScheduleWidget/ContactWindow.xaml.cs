@@ -54,37 +54,6 @@ namespace ScheduleWidget
         public FrameworkElement ConnectionsContent { get; private set; }
         public FrameworkElement RemindersContent { get; private set; }
 
-        public void CreateEmbeddedViews()
-        {
-            if (ConnectionsContent != null) return;
-            var connections = new StackPanel();
-            foreach (TabItem tab in ConnectionTabs.Items)
-            {
-                var viewer = tab.Content as ScrollViewer;
-                var body = viewer?.Content as FrameworkElement;
-                if (body == null) continue;
-                viewer.Content = null;
-                if (ReferenceEquals(tab, RemindersTab)) { RemindersContent = body; continue; }
-                var section = new Expander { Header = tab.Header, Content = body, FontSize = 15, Padding = new Thickness(2) };
-                section.SetResourceReference(ForegroundProperty, "AuxInkBrush");
-                body.Margin = new Thickness(0, 16, 0, 0);
-                var card = new Border { Child = section, Margin = new Thickness(0, 0, 0, 12), Style = (Style)FindResource("AuxRoundSection") };
-                connections.Children.Add(card);
-            }
-            ContactContent.Children.Remove(MessageSection);
-            MessageSection.Margin = new Thickness(0, 8, 0, 0);
-            connections.Children.Add(MessageSection);
-            ConnectionsContent = connections;
-            foreach (var view in new[] { ConnectionsContent, RemindersContent })
-            {
-                view.Resources.MergedDictionaries.Add(Resources);
-                view.AddHandler(TextBox.TextChangedEvent, new TextChangedEventHandler((s, e) => HasPendingChanges = true));
-                view.AddHandler(PasswordBox.PasswordChangedEvent, new RoutedEventHandler((s, e) => HasPendingChanges = true));
-                view.AddHandler(System.Windows.Controls.Primitives.ToggleButton.CheckedEvent, new RoutedEventHandler((s, e) => HasPendingChanges = true));
-                view.AddHandler(System.Windows.Controls.Primitives.ToggleButton.UncheckedEvent, new RoutedEventHandler((s, e) => HasPendingChanges = true));
-            }
-        }
-
         private string LoadSecret(string encrypted)
         {
             try { return SecretStore.Unprotect(encrypted); }
@@ -92,8 +61,13 @@ namespace ScheduleWidget
         }
         public void SetMessage(string message)
         {
+            if (ConnectionsContent != null && SelectedConnection == ConnectionProvider.Google)
+                SelectConnection(!string.IsNullOrWhiteSpace(TelegramToken.Password) && !string.IsNullOrWhiteSpace(TelegramChat.Text) ? ConnectionProvider.Telegram
+                    : !string.IsNullOrWhiteSpace(KakaoToken.Password) ? ConnectionProvider.Kakao
+                    : !string.IsNullOrWhiteSpace(PhoneNumber.Text) ? ConnectionProvider.Phone : ConnectionProvider.Telegram);
             MessageInput.Text = message;
             MessageComposer.IsExpanded = true;
+            MessageSection.BringIntoView();
         }
         public void ReportStatus(string message) { StatusText.Text = message; StatusChanged?.Invoke(message); }
         private string UpdatedSecret(PasswordBox box, string loaded, string current) =>

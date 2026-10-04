@@ -69,7 +69,6 @@ namespace ScheduleWidget
                 petCompanion = new MiniWindow(appData, () => SaveDataSafely(false), ShowMusic, companion: true, musicPlaying: () => ((IMusicControls)this).IsPlaying) { Owner = this, ShowActivated = false };
                 petCompanion.CompanionHideRequested += () => { appData.MainPetsVisible = false; SaveDataSafely(false); Dispatcher.BeginInvoke(new Action(UpdatePetCompanion)); };
                 petCompanion.SlotsChanged += () => miniWindow?.ReloadCharacter(); // the same pets in the mini window
-                petCompanion.CharacterSettingsRequested += index => OpenCharacterSettings(petCompanion, index);
                 petCompanion.Closed += (s, e) => { if (ReferenceEquals(petCompanion, s)) petCompanion = null; };
                 if (_themeApplied) petCompanion.ApplyAppearance(_inlineSettingsDraft ?? appData.Appearance, refresh: false);
             }
@@ -134,21 +133,19 @@ namespace ScheduleWidget
                 {
                     bool saved = SaveDataSafely();
                     RefreshScheduleList(); // while this window is hidden that only refreshes the mini window
-                    UpdateExternalPollInterval();
+                    UpdateMediaWatchVisibility();
                     return saved;
                 }, ShowMusic, player: this, settings: OpenSettingsFromMini);
                 ConnectScheduleActions(miniWindow);
                 miniWindow.SetReminderWarning(reminderErrorMessage);
-                miniWindow.CharacterSettingsRequested += index => OpenCharacterSettings(miniWindow, index);
                 if (_themeApplied) miniWindow.ApplyAppearance(_inlineSettingsDraft ?? appData.Appearance);
                 miniWindow.SlotsChanged += () => petCompanion?.ReloadCharacter(); // the same pets beside the TODO window
-                // Hidden (Esc → tray): no need to poll other apps' media every 1.5 s. Only the timer pauses — the known
-                // sources stay, and showing the window again (ShowMiniWindow) restarts it with an immediate poll.
+                // Hide: release OS subscriptions. Showing the widget attaches them again and takes one fresh snapshot.
                 miniWindow.IsVisibleChanged += (s, e) =>
                 {
                     if (!(bool)e.NewValue)
                     {
-                        externalMediaTimer?.Stop();
+                        StopExternalMediaWatch(clearSources: false);
                         if (!closingApp) HideScheduleList();
                     }
                 };
@@ -464,7 +461,7 @@ namespace ScheduleWidget
                 if (musicWindow?.IsPlaying == true) await musicWindow.TogglePlayAsync(); // one thing plays at a time
                 if (request != musicSourceRequest) return;
                 SetExternalMusicSource(appId, notify: false);
-                UpdateExternalPollInterval();
+                UpdateMediaWatchVisibility();
                 MusicWindow.RaisePlaybackChanged();
             }
             catch (Exception ex) when (!SystemMediaService.IsFatal(ex)) { } // async void: a failure here must not end the app
@@ -478,7 +475,7 @@ namespace ScheduleWidget
         {
             try
             {
-                if (UseExternal) { await SystemMediaService.SeekAsync(selectedExternalApp, position); PollExternalMediaSoon(); }
+                if (UseExternal) { await SystemMediaService.SeekAsync(selectedExternalApp, position); RequestExternalMediaRefresh(); }
                 else musicWindow?.Seek(position);
             }
             catch (Exception ex) when (!SystemMediaService.IsFatal(ex)) { }
@@ -497,7 +494,7 @@ namespace ScheduleWidget
             try
             {
                 if (appData == null) return;
-                if (UseExternal) { await SystemMediaService.TogglePlayPauseAsync(selectedExternalApp); PollExternalMediaSoon(); return; }
+                if (UseExternal) { await SystemMediaService.TogglePlayPauseAsync(selectedExternalApp); RequestExternalMediaRefresh(); return; }
                 EnsureMusicWindow(); await musicWindow.TogglePlayAsync();
             }
             catch (Exception ex) when (!SystemMediaService.IsFatal(ex)) { }
@@ -507,7 +504,7 @@ namespace ScheduleWidget
             try
             {
                 if (appData == null) return;
-                if (UseExternal) { await SystemMediaService.NextAsync(selectedExternalApp); PollExternalMediaSoon(); return; }
+                if (UseExternal) { await SystemMediaService.NextAsync(selectedExternalApp); RequestExternalMediaRefresh(); return; }
                 EnsureMusicWindow(); await musicWindow.NextAsync();
             }
             catch (Exception ex) when (!SystemMediaService.IsFatal(ex)) { }
@@ -517,78 +514,13 @@ namespace ScheduleWidget
             try
             {
                 if (appData == null) return;
-                if (UseExternal) { await SystemMediaService.PreviousAsync(selectedExternalApp); PollExternalMediaSoon(); return; }
+                if (UseExternal) { await SystemMediaService.PreviousAsync(selectedExternalApp); RequestExternalMediaRefresh(); return; }
                 EnsureMusicWindow(); await musicWindow.PreviousAsync();
             }
             catch (Exception ex) when (!SystemMediaService.IsFatal(ex)) { }
         }
 
-        // ---- Other apps' media (polled while the mini window is open) ----
-        // The visible bar checks every 1.5 s so a newly playing app appears without opening the dropdown.
-        private static readonly TimeSpan FastExternalPoll = TimeSpan.FromSeconds(1.5), SlowExternalPoll = TimeSpan.FromSeconds(5);
-        private DispatcherTimer externalMediaTimer;
-        private bool pollingExternalMedia;
-        private System.Windows.Controls.Primitives.Popup watchedSourcePopup, watchedVolumePopup; // the mini window's drop-down / volume bar
-        private int externalVolumeReads;
-
-        private void StartExternalMediaWatch()
-        {
-            if (externalMediaTimer == null)
-            {
-                externalMediaTimer = new DispatcherTimer { Interval = SlowExternalPoll };
-                externalMediaTimer.Tick += async (s, e) =>
-                {
-                    try { await PollExternalMediaAsync(); }
-                    catch (Exception ex) when (!SystemMediaService.IsFatal(ex)) { } // a timer tick must never end the app
-                };
-            }
-            WatchMiniMusicPopups();
-            UpdateExternalPollInterval();
-            externalMediaTimer.Start();
-            PollExternalMediaSoon();
-        }
-
-        private void StopExternalMediaWatch()
-        {
-            externalMediaTimer?.Stop();
-            externalSources = new List<SystemMediaService.NowPlaying>();
-            WatchMiniMusicPopups(detach: true); // the closed mini window's popups are not kept alive from here
-        }
-
-        // The mini window's source drop-down and volume bar decide how eagerly other apps are read (found by name: the
-        // mini window stays unaware of the polling).
-        private void WatchMiniMusicPopups(bool detach = false)
-        {
-            var source = detach ? null : miniWindow?.FindName("PlaylistPopup") as System.Windows.Controls.Primitives.Popup;
-            var volume = detach ? null : miniWindow?.FindName("VolumePopup") as System.Windows.Controls.Primitives.Popup;
-            if (source != watchedSourcePopup)
-            {
-                if (watchedSourcePopup != null) { watchedSourcePopup.Opened -= SourcePopup_Opened; watchedSourcePopup.Closed -= SourcePopup_Closed; }
-                watchedSourcePopup = source;
-                if (source != null) { source.Opened += SourcePopup_Opened; source.Closed += SourcePopup_Closed; }
-            }
-            watchedVolumePopup = volume;
-        }
-
-        private void SourcePopup_Opened(object sender, EventArgs e) { UpdateExternalPollInterval(); PollExternalMediaSoon(0); }
-        private void SourcePopup_Closed(object sender, EventArgs e) => UpdateExternalPollInterval();
-
-        private void UpdateExternalPollInterval()
-        {
-            if (externalMediaTimer == null) return;
-            var interval = appData?.MiniPlayerVisible == true || UseExternal || watchedSourcePopup?.IsOpen == true ? FastExternalPoll : SlowExternalPoll;
-            if (externalMediaTimer.Interval != interval) externalMediaTimer.Interval = interval;
-        }
-
-        private void PollExternalMediaSoon(int delayMs = 300) => Dispatcher.BeginInvoke(new Action(async () =>
-        {
-            try
-            {
-                if (delayMs > 0) await System.Threading.Tasks.Task.Delay(delayMs);
-                await PollExternalMediaAsync();
-            }
-            catch (Exception ex) when (!SystemMediaService.IsFatal(ex)) { }
-        }));
+        private bool readingExternalMedia;
 
         // Backup for older WebView2 runtimes: the widget's own hidden player may show up as a WebView2 media session playing
         // one of our songs. The titles to compare are built only when such a session is there, and kept while the
@@ -615,13 +547,20 @@ namespace ScheduleWidget
         private static bool IsWebViewSession(SystemMediaService.NowPlaying n) =>
             (n.AppId ?? "").IndexOf("msedgewebview2", StringComparison.OrdinalIgnoreCase) >= 0;
 
-        private async System.Threading.Tasks.Task PollExternalMediaAsync()
+        private async System.Threading.Tasks.Task RefreshExternalMediaAsync()
         {
-            if (pollingExternalMedia) return;
-            pollingExternalMedia = true;
+            if (readingExternalMedia) return;
+            readingExternalMedia = true;
+            int generation = mediaWatchGeneration;
             try
             {
                 var now = await (mediaSourcesOverride?.Invoke() ?? SystemMediaService.GetAllAsync());
+                if (generation != mediaWatchGeneration) return;
+                if (mediaSourcesOverride == null && !SystemMediaService.LastReadSucceeded)
+                {
+                    if (++mediaReadFailures <= 3) QueueMediaRefresh(MediaChangeKind.Metadata, mediaReadFailures * 1000);
+                }
+                else mediaReadFailures = 0;
                 if (now.Any(IsWebViewSession))
                 {
                     var ownTitles = OwnTrackTitles();
@@ -631,26 +570,10 @@ namespace ScheduleWidget
                 bool changed = Signature(now) != Signature(externalSources);
                 externalSources = now;
                 bool sourceChanged = ApplyAutomaticMusicSource(DateTime.UtcNow);
-                UpdateExternalPollInterval();
-                // The picked app's volume may also be changed elsewhere (Windows volume mixer, the site's own slider). It is
-                // only shown on the music bar: read it every poll while the volume bar is open, every other poll (~3 s)
-                // otherwise, never while the bar is hidden or a level of ours is still being applied.
-                double? volumeBefore = externalVolume;
-                bool barShown = appData?.MiniPlayerVisible != false;
-                bool eager = watchedVolumePopup?.IsOpen == true || externalVolumeApp != selectedExternalApp;
-                if (UseExternal && barShown && externalVolumeSetter?.IsBusy != true && (eager || externalVolumeReads++ % 2 == 0))
-                {
-                    // Core Audio enumeration costs ~6 ms: do it off the UI thread (COM objects are created per call on that thread).
-                    string app = selectedExternalApp;
-                    float? read = mediaVolumeOverride != null ? mediaVolumeOverride(app)
-                        : await System.Threading.Tasks.Task.Run(() => AppVolumeService.GetVolume(app));
-                    if (app == selectedExternalApp && externalVolumeSetter?.IsBusy != true) { externalVolumeApp = app; externalVolume = read; }
-                }
-                bool volumeChanged = UseExternal && externalVolume.HasValue != volumeBefore.HasValue ||
-                    externalVolume.HasValue && volumeBefore.HasValue && Math.Abs(externalVolume.Value - volumeBefore.Value) > 0.004;
-                if (changed || sourceChanged || volumeChanged) MusicWindow.RaisePlaybackChanged();
+                if (changed || sourceChanged) MusicWindow.RaisePlaybackChanged();
+                await EnsureExternalVolumeWatchAsync();
             }
-            finally { pollingExternalMedia = false; }
+            finally { readingExternalMedia = false; }
         }
         void IMusicControls.SetMode(PlayMode mode) { if (appData == null) return; EnsureMusicWindow(); musicWindow.SetPlayMode(mode); }
 
@@ -660,22 +583,11 @@ namespace ScheduleWidget
         private double? externalVolume;
         private string externalVolumeApp;
 
-        private double? ExternalVolume(bool refresh)
-        {
-            // Cached per picked app, including "no audio session yet" (null): the poll refreshes it (every ~3 s, every 1.5 s
-            // while the volume bar is open), so reads from the bar (every playback change) never repeat the ~6 ms Core Audio lookup.
-            if (!refresh && externalVolumeApp == selectedExternalApp) return externalVolume;
-            externalVolumeApp = selectedExternalApp;
-            externalVolume = selectedExternalApp == null ? null
-                : (double?)(mediaVolumeOverride != null ? mediaVolumeOverride(selectedExternalApp) : AppVolumeService.GetVolume(selectedExternalApp));
-            return externalVolume;
-        }
-
         double IMusicControls.Volume
         {
             get
             {
-                if (UseExternal) { double? app = ExternalVolume(refresh: false); if (app.HasValue) return app.Value; }
+                if (UseExternal && externalVolumeApp == selectedExternalApp && externalVolume.HasValue) return externalVolume.Value;
                 return musicWindow?.Volume ?? appData?.Music.Volume ?? 0.5;
             }
         }

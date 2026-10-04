@@ -11,7 +11,7 @@ namespace ScheduleWidget
     // Reads and controls what other apps are playing through Windows media sessions (the same source as the
     // volume flyout / lock-screen player): YouTube or YouTube Music in Chrome/Edge, the YouTube Music app, Spotify, …
     // Sessions from this app itself (its hidden YouTube player) are skipped.
-    public static class SystemMediaService
+    public static partial class SystemMediaService
     {
         public sealed class NowPlaying
         {
@@ -21,6 +21,7 @@ namespace ScheduleWidget
             public string Artist { get; set; }
             public bool IsPlaying { get; set; }
             public bool IsCurrent { get; set; } // Windows' current media app breaks ties at startup
+            internal GlobalSystemMediaTransportControlsSession Session;
             // Timeline for the seek bar (null when the app does not report one). Position is as of UpdatedAt.
             public TimeSpan? Position { get; set; }
             public TimeSpan? Duration { get; set; }
@@ -30,15 +31,22 @@ namespace ScheduleWidget
         }
 
         private static Task<GlobalSystemMediaTransportControlsSessionManager> manager;
+        private static readonly object managerGate = new object();
 
         private static async Task<GlobalSystemMediaTransportControlsSessionManager> ManagerAsync()
         {
-            if (manager == null || manager.IsFaulted) manager = GlobalSystemMediaTransportControlsSessionManager.RequestAsync().AsTask();
-            return await manager.ConfigureAwait(false);
+            Task<GlobalSystemMediaTransportControlsSessionManager> request;
+            lock (managerGate)
+            {
+                if (manager == null || manager.IsFaulted || manager.IsCanceled) manager = GlobalSystemMediaTransportControlsSessionManager.RequestAsync().AsTask();
+                request = manager;
+            }
+            return await request.ConfigureAwait(false);
         }
 
         private static bool IsOwn(GlobalSystemMediaTransportControlsSession session) =>
             (session.SourceAppUserModelId ?? string.Empty).IndexOf("ScheduleWidget", StringComparison.OrdinalIgnoreCase) >= 0;
+        public static bool LastReadSucceeded { get; private set; } = true;
 
         /// <summary>Every other app with a media session (playing first). Empty when none or unsupported.</summary>
         public static async Task<List<NowPlaying>> GetAllAsync()
@@ -59,7 +67,7 @@ namespace ScheduleWidget
                     string site = SiteFromWindowTitle(titles, title);
                     result.Add(new NowPlaying
                     {
-                        AppId = session.SourceAppUserModelId, Title = title, Artist = props.Artist?.Trim(),
+                        Session = session, AppId = session.SourceAppUserModelId, Title = title, Artist = props.Artist?.Trim(),
                         SourceName = site != null ? app + " (" + site + ")" : app,
                         IsPlaying = session.GetPlaybackInfo()?.PlaybackStatus == GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing,
                         IsCurrent = string.Equals(session.SourceAppUserModelId, currentApp, StringComparison.OrdinalIgnoreCase)
@@ -76,6 +84,7 @@ namespace ScheduleWidget
             }
             catch (Exception ex) when (!IsFatal(ex))
             {
+                LastReadSucceeded = false;
                 // Media sessions come and go at any moment: a tab closed mid-read ends in RO_E_CLOSED (ObjectDisposedException),
                 // a vanished app in Argument / FileNotFound errors, a busy service in COM errors — none may take the app down.
                 // A one-off failure keeps the last good answer for a few seconds, so the bar (and the pets sized around it) do
@@ -85,6 +94,7 @@ namespace ScheduleWidget
                 return result;
             }
             var ordered = result.OrderByDescending(n => n.IsPlaying).ThenByDescending(n => n.IsCurrent).ToList();
+            LastReadSucceeded = true;
             lastGood = ordered;
             lastGoodAt = DateTime.UtcNow;
             return ordered;

@@ -4392,7 +4392,7 @@ namespace ScheduleWidget
             undrawnPets.Add(pet);
             string name = pet >= 0 && pet < slotCharacters.Count ? slotCharacters[pet].Name + ": " : "";
             ShowCharacterError(name + (reason == "size" ? "이미지 크기가 캐릭터 형식과 맞지 않습니다." : "이미지를 읽지 못했습니다.") +
-                " 더블클릭해 설정에서 캐릭터를 다시 선택해 주세요.", pet);
+                " 설정 → 캐릭터에서 다시 선택해 주세요.", pet);
         }
 
         // At the pet it is about; when that pet is hidden (보이기 off), at the first pet that shows.
@@ -4503,7 +4503,7 @@ namespace ScheduleWidget
                 });
                 undrawnPets.UnionWith(unreadablePets);
                 undrawnPets.UnionWith(emptyPets);
-                if (unreadablePets.Count > 0) ShowCharacterError("캐릭터 파일을 읽지 못했습니다. 더블클릭해 설정에서 다시 선택해 주세요.", unreadablePets.Min());
+                if (unreadablePets.Count > 0) ShowCharacterError("캐릭터 파일을 읽지 못했습니다. 설정 → 캐릭터에서 다시 선택해 주세요.", unreadablePets.Min());
                 else CharacterError.Visibility = Visibility.Collapsed;
                 ScheduleReadRetry(passing, unreadablePets.Count > 0);
                 pageReadyAt = DateTime.MinValue; // loading: the pixel check waits for the new page
@@ -4518,7 +4518,7 @@ namespace ScheduleWidget
                 // old ones: no sheet may be sent by index to that page (it would draw another character's frames), and no
                 // stale load handed to it. The next reload builds both again.
                 characterPayload = null;
-                ShowCharacterError("더블클릭해 설정에서 캐릭터를 다시 선택해 주세요.");
+                ShowCharacterError("설정 → 캐릭터에서 다시 선택해 주세요.");
             }
             // The view's browser process is gone (Navigate / the folder mapping throw): build a new view instead of crashing
             // the app — this runs from clicks (바꾸기, 추가, 빼기) that can come before the ProcessFailed recovery has run.
@@ -4746,6 +4746,7 @@ namespace ScheduleWidget
         // ---- 드래그로 위치 설정 (캐릭터 설정, or 캐릭터 선택 opened for a pet): drag each pet anywhere around the calendar ----
         private double characterCellHeight = 130;
         private bool placingPets;
+        private int placingPet = -1; // -1: all pets; otherwise only the pet whose settings opened placement
         private int draggingPet = -1;
         private Vector dragGrab;
 
@@ -4857,12 +4858,19 @@ namespace ScheduleWidget
 
         /// <summary>Starts 드래그로 위치 설정: until 완료 (or Esc / right-click), dragging a pet moves only that pet.</summary>
         public void StartPetPlacement()
+            => StartPetPlacement(-1);
+
+        public void StartPetPlacement(int index)
         {
             if (closed || !PetsShown) return;
+            if (index != -1 && (!IsPet(index) || PetHidden(index))) return;
             if (Enumerable.Range(0, SlotCount).All(PetHidden)) return; // nothing to drag
             CloseDayPopup();
             petSettings?.Close(); // the pets are dragged on the mini window itself
             placingPets = true;
+            placingPet = index;
+            PlacementBannerText.Text = index < 0 ? "캐릭터를 끌어서 원하는 자리에 놓으세요"
+                : ((IPetSettingsHost)this).PetName(index) + " · 이 캐릭터를 끌어서 이동하세요";
             PlacementBanner.Visibility = Visibility.Visible;
             ApplyPetLayout(); // move cursor on the pets
         }
@@ -4871,6 +4879,7 @@ namespace ScheduleWidget
         {
             if (!placingPets) return;
             placingPets = false;
+            placingPet = -1;
             draggingPet = -1;
             Mouse.Capture(null);
             PlacementBanner.Visibility = Visibility.Collapsed;
@@ -4883,6 +4892,7 @@ namespace ScheduleWidget
 
         private void PlacementReset_Click(object sender, RoutedEventArgs e)
         {
+            if (placingPet >= 0) { ResetPetPosition(placingPet); return; }
             Spots.Clear(); // back to the default spots from 캐릭터 위치
             RememberSpots(forgetUnplaced: true); // these characters forget their old spots too
             ApplyPetLayout();
@@ -4894,7 +4904,7 @@ namespace ScheduleWidget
             Point at = e.GetPosition(CharacterHost);
             var rects = PetRects();
             draggingPet = -1;
-            for (int i = rects.Count - 1; i >= 0; i--) if (rects[i].Width > 0 && rects[i].Contains(at)) { draggingPet = i; break; } // hidden: empty rect
+            for (int i = rects.Count - 1; i >= 0; i--) if (CanDragPet(i) && rects[i].Width > 0 && rects[i].Contains(at)) { draggingPet = i; break; } // hidden: empty rect
             if (draggingPet < 0) return;
             dragGrab = at - rects[draggingPet].TopLeft;
             CharacterHost.CaptureMouse();
@@ -4959,6 +4969,8 @@ namespace ScheduleWidget
         {
             CloseDayPopup();
             if (SlotCount <= 1) return;
+            petSettings?.Close(); // a shifted slot must never edit a different character
+            EndPetPlacement();
             ClampActiveSlot();
             int removed = activeSlot;
             if (activeSlot <= 0)
@@ -5164,7 +5176,7 @@ namespace ScheduleWidget
                 {
                     bool used = shown && i < inView.Count && inView[i].Width > 0; // hidden pets get no hit box
                     hits[i].Visibility = used ? Visibility.Visible : Visibility.Collapsed;
-                    hits[i].Cursor = placingPets ? Cursors.SizeAll : Cursors.Hand;
+                    hits[i].Cursor = placingPets ? (CanDragPet(i) ? Cursors.SizeAll : Cursors.Arrow) : Cursors.Hand;
                     if (!used) continue;
                     // A little inset so the empty corners of a sprite cell do not catch clicks meant for the calendar.
                     Canvas.SetLeft(hits[i], inView[i].X + inView[i].Width * 0.12);
@@ -5369,7 +5381,7 @@ namespace ScheduleWidget
             PostToPage(JsonConvert.SerializeObject(new { action = "animation", index, state = key }));
             UpdateActivePetState();
         }
-        void IPetSettingsHost.ChangePet(int index) { if (!IsPet(index)) return; activeSlot = index; OpenCharacterPicker(); }
+        void IPetSettingsHost.ChangePet(int index) { if (!IsPet(index)) return; petSettings?.Close(); EndPetPlacement(); activeSlot = index; OpenCharacterPicker(); }
         void IPetSettingsHost.AddPet()
         {
             // The new pet starts at the size of the pet 캐릭터 설정 shows, not of the last one right-clicked.
@@ -5381,10 +5393,9 @@ namespace ScheduleWidget
         void IPetSettingsHost.SetPetScale(int index, int percent)
         {
             if (!IsPet(index)) return;
-            var before = PetBoardRects(BoardWidth, BoardHeight);
+            PinOtherPetPositions(index);
             SetSlotScale(index, percent);
             UpdateCharacterSize();
-            KeepPetsApart(before);
             SaveSoon();
             MiniSettingsStateChanged?.Invoke();
         }
@@ -5429,6 +5440,7 @@ namespace ScheduleWidget
             // The TODO window's pets have no calendar to right-click: the last one showing there stays (see PetSettingsWindow).
             if (companion && !visible && !PetHidden(index) && Enumerable.Range(0, SlotCount).Count(i => !PetHidden(i)) <= 1)
             { PetsChanged?.Invoke(); return; }
+            PinOtherPetPositions(index);
             SetPetHidden(index, !visible);
             ApplyPetLayout();
             SaveSoon();

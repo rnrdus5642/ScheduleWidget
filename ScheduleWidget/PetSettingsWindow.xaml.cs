@@ -35,6 +35,11 @@ namespace ScheduleWidget
         int CharacterGap { get; }
         void SetCharacterPlacement(string side, int vertical, int gap);
         void StartPetPlacement();
+        void StartPetPlacement(int index);
+        void OpenPetSettings(int index);
+        void ResetPetPosition(int index);
+        void ResetPetDefaults(int index);
+        void ResetCharacterPlacement();
         void ResetPetDefaults();                 // 초기화: every pet shown, 100 %, default spots (left, bottom, 8 px), 대기
         event Action PetsChanged;
     }
@@ -43,6 +48,7 @@ namespace ScheduleWidget
     public partial class PetSettingsWindow : Window
     {
         private readonly IPetSettingsHost host;
+        private readonly bool globalSettings;
         private int selected;
         private bool shut; // closed (e.g. 드래그로 위치 설정 chosen in the picker): nothing left to refresh
         private bool loading = true; // until the window is filled: XAML sets slider minimums while loading, which must not reach the mini window
@@ -50,6 +56,7 @@ namespace ScheduleWidget
         public PetSettingsWindow(IPetSettingsHost host, int selectedPet, bool embedded = false)
         {
             this.host = host;
+            globalSettings = embedded;
             selected = selectedPet;
             InitializeComponent();
             if (!embedded) ChromelessWindow.Apply(this, addCloseButton: false, rounded: true);
@@ -86,7 +93,7 @@ namespace ScheduleWidget
         private void Reload()
         {
             resetArmed = false;
-            if (ResetButton != null) ResetButton.Content = "초기화";
+            if (ResetButton != null) ResetButton.Content = globalSettings ? "전체 배치 초기화" : "이 캐릭터 초기화";
             loading = true;
             try
             {
@@ -94,15 +101,19 @@ namespace ScheduleWidget
                 if (selected >= count || selected < 0) selected = 0;
                 // The TODO window's pets stand around that window: the same settings, named for it.
                 string board = host.BesideTodoWindow ? "일정" : "달력";
-                HeaderHint.Text = host.BesideTodoWindow ? "바꾸는 즉시 일정 옆 캐릭터에 반영되고 저장됩니다." : "바꾸는 즉시 달력에 반영되고 저장됩니다.";
+                HeaderHint.Text = "이 캐릭터에만 즉시 적용하고 저장합니다.";
+                PetRosterSection.Visibility = GlobalPlacementPanel.Visibility = VisibleToggle.Visibility = globalSettings ? Visibility.Visible : Visibility.Collapsed;
+                ActionSection.Visibility = PersonalAppearancePanel.Visibility = PositionResetButton.Visibility = globalSettings ? Visibility.Collapsed : Visibility.Visible;
                 VisibleToggle.Content = host.BesideTodoWindow ? "일정 옆에 캐릭터 표시" : "달력에 캐릭터 표시";
                 PlacementTitle.Text = "위치 (" + board + " 기준)";
                 SideLeftItem.Content = board + " 왼쪽";
                 SideRightItem.Content = board + " 오른쪽";
                 GapTitle.Text = board + "과 간격";
                 AutomationProperties.SetName(GapSlider, "캐릭터와 " + board + " 사이 간격");
-                PlaceHint.Text = "누르면 이 창이 닫히고, 캐릭터를 끌어서 " + board + " 주위 어디에나 놓을 수 있습니다.";
-                ResetHint.Text = "모든 캐릭터를 보이게, 크기 100%, 좌우 반전 끔, 기본 위치(" + board + " 왼쪽·아래·간격 8px), 동작 대기로 되돌립니다. 캐릭터 목록은 그대로 둡니다.";
+                PlaceButton.Content = globalSettings ? "전체 캐릭터 배치" : "이 캐릭터 이동";
+                PlaceHint.Text = globalSettings ? "설정창을 닫고 캐릭터들을 각각 끌어 배치합니다." : "창을 닫고 이 캐릭터만 끌어 이동합니다. 다른 캐릭터의 자리는 유지합니다.";
+                ResetHint.Text = globalSettings ? "전체 위치를 " + board + " 왼쪽·아래·간격 8px로 되돌립니다. 각 캐릭터의 크기와 동작은 유지합니다."
+                    : "이 캐릭터만 크기 100%, 대기 동작, 반전 끔, 보이기와 기본 위치로 되돌립니다.";
                 // The TODO window's pets have no calendar to right-click: the last pet showing there cannot be hidden, or
                 // nothing would be left to open 캐릭터 설정 from.
                 int shownPets = Enumerable.Range(0, count).Count(host.PetVisible);
@@ -114,11 +125,13 @@ namespace ScheduleWidget
                 AddPetButton.IsEnabled = count < host.MaxPets;
                 // The header names the pet being edited; the sections just follow it.
                 string petName = host.PetName(selected);
-                HeaderTitle.Text = Title = "캐릭터 설정 - " + petName;
-                ActionTitle.Text = "동작 · " + petName;
-                ScaleTitle.Text = "크기 · " + petName;
-                FlipTitle.Text = "좌우 반전 · " + petName;
+                HeaderTitle.Text = Title = globalSettings ? "캐릭터 전체 설정" : "캐릭터 설정 · " + petName;
+                ActionTitle.Text = "동작";
+                ScaleTitle.Text = "크기";
+                FlipTitle.Text = "좌우 반전";
                 FlipSwitch.IsChecked = host.PetFlipped(selected);
+                IndividualVisibleToggle.IsChecked = host.PetVisible(selected);
+                IndividualVisibleToggle.IsEnabled = !(host.BesideTodoWindow && shownPets <= 1 && host.PetVisible(selected));
                 string current = host.PetAnimation(selected);
                 var options = host.PetAnimationOptions(selected);
                 ActionButtons.ItemsSource = options
@@ -131,10 +144,9 @@ namespace ScheduleWidget
                 GapSlider.Value = host.CharacterGap;
                 UpdateLabels();
                 bool shown = host.CharactersVisible;
-                FlipSwitch.IsEnabled = ScaleSlider.IsEnabled = SideCombo.IsEnabled = VerticalSlider.IsEnabled = GapSlider.IsEnabled = PlaceButton.IsEnabled = shown;
-                ActionButtons.IsEnabled = shown && host.PetAnimates(selected); // a still image has no actions (like the mini window's menu)
+                ActionButtons.IsEnabled = host.PetAnimates(selected);
                 // Nothing to drag when every pet is hidden.
-                PlaceButton.IsEnabled = shown && Enumerable.Range(0, count).Any(host.PetVisible);
+                PlaceButton.IsEnabled = shown && (globalSettings ? Enumerable.Range(0, count).Any(host.PetVisible) : host.PetVisible(selected));
             }
             finally { loading = false; }
         }
@@ -173,6 +185,19 @@ namespace ScheduleWidget
             selected = index;
             Reload();
         }
+
+        private void ConfigurePet_Click(object sender, RoutedEventArgs e)
+        {
+            int index = RowPet(sender);
+            if (index >= 0) host.OpenPetSettings(index);
+        }
+
+        private void IndividualVisible_Click(object sender, RoutedEventArgs e)
+        {
+            if (!loading && !globalSettings) host.SetPetVisible(selected, IndividualVisibleToggle.IsChecked == true);
+        }
+
+        private void PositionReset_Click(object sender, RoutedEventArgs e) => host.ResetPetPosition(selected);
 
         private void Action_Click(object sender, RoutedEventArgs e)
         {
@@ -236,14 +261,16 @@ namespace ScheduleWidget
                 ResetButton.Content = "정말 초기화";
                 return;
             }
-            host.ResetPetDefaults();
+            if (globalSettings) host.ResetCharacterPlacement();
+            else host.ResetPetDefaults(selected);
             Reload();
         }
 
         private void Place_Click(object sender, RoutedEventArgs e)
         {
             RequestClose();
-            host.StartPetPlacement();
+            if (globalSettings) host.StartPetPlacement();
+            else host.StartPetPlacement(selected);
         }
 
         private void Close_Click(object sender, RoutedEventArgs e) => RequestClose();

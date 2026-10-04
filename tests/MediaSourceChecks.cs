@@ -65,7 +65,7 @@ namespace ScheduleWidget.Checks
             MusicWindow.PlaybackChanged += changed;
             void Poll()
             {
-                ((Task)typeof(MainWindow).GetMethod("PollExternalMediaAsync", BindingFlags.Instance | BindingFlags.NonPublic).Invoke(main, null)).GetAwaiter().GetResult();
+                ((Task)typeof(MainWindow).GetMethod("RefreshExternalMediaAsync", BindingFlags.Instance | BindingFlags.NonPublic).Invoke(main, null)).GetAwaiter().GetResult();
                 // The normal event queues this UI refresh. Do not pump App's startup operation in headless checks.
                 mini.UpdatePlayerBar();
             }
@@ -106,10 +106,6 @@ namespace ScheduleWidget.Checks
                 sources = new List<SystemMediaService.NowPlaying> { Media("Edge", "New external song") };
                 Poll();
                 Require(!controls.AutomaticSource && controls.SelectedExternal == null, "A manual playlist choice was not retained.");
-                var timer = new System.Windows.Threading.DispatcherTimer();
-                SetField(main, "externalMediaTimer", timer);
-                Call(main, "UpdateExternalPollInterval");
-                Require(timer.Interval == TimeSpan.FromSeconds(1.5), "A visible idle bar still waits five seconds for external playback.");
                 Require(!mini.IsVisible, "Automatic routing displayed a check window.");
             }
             finally
