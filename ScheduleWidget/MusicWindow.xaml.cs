@@ -35,7 +35,7 @@ namespace ScheduleWidget
         private Task playerInitialization;
         private TaskCompletionSource<bool> shellReady;
 
-        public MusicWindow(MusicSettings settings, Func<bool> save, Action exitApplication)
+        public MusicWindow(MusicSettings settings, Func<bool> save, Action exitApplication, bool embedded = false)
         {
             this.settings = settings;
             this.save = save;
@@ -44,7 +44,8 @@ namespace ScheduleWidget
             // The player view is disposed on this thread when the window closes (or the app's dispatcher shuts down): the
             // finalizer must never do it — HwndHost's finalizer thread cleanup crashed a run (InvalidCastException).
             GC.SuppressFinalize(YouTubePlayer);
-            ChromelessWindow.Apply(this); // no title bar or taskbar button; X in the top-right corner
+            if (!embedded) ChromelessWindow.Apply(this);
+            else { MusicHeading.Visibility = Visibility.Collapsed; AuxTheme.ApplyTo(this); ShowInTaskbar = false; }
             Icon = TrayService.CreateWindowIcon();
             if (settings.Playlists.Count == 0) settings.Playlists.Add(new MusicPlaylist());
             VolumeSlider.Value = settings.Volume;
@@ -93,6 +94,31 @@ namespace ScheduleWidget
                 Dispatcher.BeginInvoke(new Action(NotifyPlayback)); // after the owner has dropped its reference
             };
             loading = false;
+        }
+
+        private Window settingsOwner;
+        private Window DialogOwner => settingsOwner ?? this;
+        public bool IsSettingsHosted => settingsOwner != null;
+
+        public FrameworkElement TakeSettingsContent(Window owner)
+        {
+            if (settingsOwner != null) return MusicSettingsContent;
+            if (!ReferenceEquals(Content, MusicSettingsContent)) throw new InvalidOperationException("Only the embedded player can be hosted in settings.");
+            settingsOwner = owner ?? throw new ArgumentNullException(nameof(owner));
+            MusicSettingsContent.Resources.MergedDictionaries.Clear();
+            MusicSettingsContent.Resources.MergedDictionaries.Add(Resources);
+            Content = null;
+            if (IsVisible) Hide();
+            return MusicSettingsContent;
+        }
+
+        public void ReturnSettingsContent(bool keepPlaying = true)
+        {
+            if (settingsOwner == null) return;
+            settingsOwner = null;
+            Content = MusicSettingsContent;
+            // Keep the existing browser and playback state alive after leaving the music page.
+            if (keepPlaying && !closed && playing?.IsYouTube == true) MoveToBackground();
         }
 
         private void DispatcherShuttingDown(object sender, EventArgs e) => DisposePlayer();
@@ -196,7 +222,7 @@ namespace ScheduleWidget
         }
         private void DeletePlaylist_Click(object sender, RoutedEventArgs e)
         {
-            if (playlist == null || MessageBox.Show(this, "‘" + playlist.Name + "’ 목록을 삭제할까요? 원본 음악 파일은 유지됩니다.",
+            if (playlist == null || MessageBox.Show(DialogOwner, "‘" + playlist.Name + "’ 목록을 삭제할까요? 원본 음악 파일은 유지됩니다.",
                 "플레이리스트 삭제", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
             StopPlayback(); settings.Playlists.Remove(playlist);
             if (settings.Playlists.Count == 0) settings.Playlists.Add(new MusicPlaylist());
@@ -210,7 +236,7 @@ namespace ScheduleWidget
         {
             var dialog = new OpenFileDialog { Multiselect = true, Title = "음악 파일 선택",
                 Filter = "음악 파일|*" + string.Join(";*", MusicExtensions) + "|모든 파일|*.*" };
-            if (dialog.ShowDialog(this) != true) return;
+            if (dialog.ShowDialog(DialogOwner) != true) return;
             InsertFiles(dialog.FileNames, playlist?.Tracks.Count ?? 0);
         }
 
@@ -553,7 +579,8 @@ namespace ScheduleWidget
                 if (track.IsYouTube)
                 {
                     // YouTube needs a live (shown) WebView. Without opening the settings window, host it off-screen.
-                    if (!closed && (!IsVisible || WindowState == WindowState.Minimized)) MoveToBackground();
+                    if (!closed && settingsOwner == null && (!IsVisible || WindowState == WindowState.Minimized)) MoveToBackground();
+                    VideoPreview.Visibility = Visibility.Visible;
                     YouTubePlayer.Visibility = Visibility.Visible;
                     YouTubePlayer.BringIntoView();
                     MusicStatus.Text = "YouTube 연결 중… 자동 재생이 차단되면 영상의 재생 버튼을 누르세요.";
@@ -622,6 +649,7 @@ namespace ScheduleWidget
             playRequest++; playing = null; paused = false; mediaOpening = false; autoAdvancing = false;
             media.Close(); Post(new { action = "stop" });
             if (YouTubePlayer != null) YouTubePlayer.Visibility = Visibility.Collapsed;
+            if (VideoPreview != null) VideoPreview.Visibility = Visibility.Collapsed;
             if (PlayButton != null) PlayButton.Content = "재생";
             if (NowPlaying != null) NowPlaying.Text = "재생할 곡을 선택하세요.";
             NotifyPlayback();
@@ -1015,6 +1043,7 @@ namespace ScheduleWidget
 
         private void MoveToBackground()
         {
+            if (settingsOwner != null) return;
             inBackground = true;
             ShowInTaskbar = false;
             ShowActivated = false;
@@ -1063,6 +1092,7 @@ namespace ScheduleWidget
 
         public void ShowPlayer()
         {
+            if (settingsOwner != null) { settingsOwner.Show(); settingsOwner.Activate(); return; }
             FitToWorkArea();
             if (inBackground)
             {

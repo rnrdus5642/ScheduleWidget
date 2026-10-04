@@ -16,13 +16,14 @@ namespace ScheduleWidget
         private string loadedTelegram, loadedKakao, loadedRefresh, loadedSecret;
         private bool sending;
 
-        public ContactWindow(AppData data, CommunicationService service, Func<bool> save)
+        public ContactWindow(AppData data, CommunicationService service, Func<bool> save, bool embedded = false)
         {
             this.data = data;
             this.service = service;
             this.save = save;
             InitializeComponent();
-            ChromelessWindow.Apply(this); // no title bar or taskbar button; X in the top-right corner
+            if (!embedded) ChromelessWindow.Apply(this);
+            else { AuxTheme.ApplyTo(this); ShowInTaskbar = false; }
             var c = data.Communication;
             TelegramToken.Password = loadedTelegram = LoadSecret(c.ProtectedTelegramToken);
             KakaoToken.Password = loadedKakao = LoadSecret(c.ProtectedKakaoToken);
@@ -41,6 +42,47 @@ namespace ScheduleWidget
             DaysBefore.Text = r.DaysBefore.ToString();
             Hour.Text = r.Hour.ToString("00");
             Minute.Text = r.Minute.ToString("00");
+            ContactContent.AddHandler(TextBox.TextChangedEvent, new TextChangedEventHandler((s, e) => HasPendingChanges = true));
+            ContactContent.AddHandler(PasswordBox.PasswordChangedEvent, new RoutedEventHandler((s, e) => HasPendingChanges = true));
+            ContactContent.AddHandler(System.Windows.Controls.Primitives.ToggleButton.CheckedEvent, new RoutedEventHandler((s, e) => HasPendingChanges = true));
+            ContactContent.AddHandler(System.Windows.Controls.Primitives.ToggleButton.UncheckedEvent, new RoutedEventHandler((s, e) => HasPendingChanges = true));
+        }
+
+        public bool HasPendingChanges { get; private set; }
+        public string StatusMessage => StatusText.Text;
+        public event Action<string> StatusChanged;
+        public FrameworkElement ConnectionsContent { get; private set; }
+        public FrameworkElement RemindersContent { get; private set; }
+
+        public void CreateEmbeddedViews()
+        {
+            if (ConnectionsContent != null) return;
+            var connections = new StackPanel();
+            foreach (TabItem tab in ConnectionTabs.Items)
+            {
+                var viewer = tab.Content as ScrollViewer;
+                var body = viewer?.Content as FrameworkElement;
+                if (body == null) continue;
+                viewer.Content = null;
+                if (ReferenceEquals(tab, RemindersTab)) { RemindersContent = body; continue; }
+                var section = new Expander { Header = tab.Header, Content = body, FontSize = 15, Padding = new Thickness(2) };
+                section.SetResourceReference(ForegroundProperty, "AuxInkBrush");
+                body.Margin = new Thickness(0, 16, 0, 0);
+                var card = new Border { Child = section, Margin = new Thickness(0, 0, 0, 12), Style = (Style)FindResource("AuxRoundSection") };
+                connections.Children.Add(card);
+            }
+            ContactContent.Children.Remove(MessageSection);
+            MessageSection.Margin = new Thickness(0, 8, 0, 0);
+            connections.Children.Add(MessageSection);
+            ConnectionsContent = connections;
+            foreach (var view in new[] { ConnectionsContent, RemindersContent })
+            {
+                view.Resources.MergedDictionaries.Add(Resources);
+                view.AddHandler(TextBox.TextChangedEvent, new TextChangedEventHandler((s, e) => HasPendingChanges = true));
+                view.AddHandler(PasswordBox.PasswordChangedEvent, new RoutedEventHandler((s, e) => HasPendingChanges = true));
+                view.AddHandler(System.Windows.Controls.Primitives.ToggleButton.CheckedEvent, new RoutedEventHandler((s, e) => HasPendingChanges = true));
+                view.AddHandler(System.Windows.Controls.Primitives.ToggleButton.UncheckedEvent, new RoutedEventHandler((s, e) => HasPendingChanges = true));
+            }
         }
 
         private string LoadSecret(string encrypted)
@@ -53,11 +95,11 @@ namespace ScheduleWidget
             MessageInput.Text = message;
             MessageComposer.IsExpanded = true;
         }
-        public void ReportStatus(string message) => StatusText.Text = message;
+        public void ReportStatus(string message) { StatusText.Text = message; StatusChanged?.Invoke(message); }
         private string UpdatedSecret(PasswordBox box, string loaded, string current) =>
             box.Password == loaded ? current : SecretStore.Protect(box.Password);
 
-        private bool SaveSettings()
+        public bool SaveSettings()
         {
             try
             {
@@ -103,6 +145,7 @@ namespace ScheduleWidget
                 loadedKakao = KakaoToken.Password;
                 loadedRefresh = KakaoRefresh.Password;
                 loadedSecret = KakaoSecret.Password;
+                HasPendingChanges = false;
                 return true;
             }
             catch (Exception ex) when (ex is InvalidOperationException || ex is CryptographicException)

@@ -5,7 +5,7 @@
         Title="내 플레이리스트" Width="880" Height="840" MinWidth="650" MinHeight="480"
         WindowStartupLocation="CenterScreen" Background="{DynamicResource AuxCanvasBrush}"
         Foreground="{DynamicResource AuxInkBrush}" FontFamily="Segoe UI"
-        AllowDrop="True" DragOver="Window_DragOver" Drop="Window_Drop">
+        AllowDrop="True">
     <Window.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
@@ -17,23 +17,23 @@
             </Style>
         </ResourceDictionary>
     </Window.Resources>
-    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-    <Grid Margin="28">
+    <ScrollViewer Drop="Window_Drop" DragOver="Window_DragOver" AllowDrop="True" x:Name="MusicSettingsContent" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+    <Grid Margin="0">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
-            <RowDefinition Height="320"/>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <StackPanel Grid.Row="0" Margin="0,0,0,24">
+        <StackPanel x:Name="MusicHeading" Grid.Row="0" Margin="0,0,0,24">
             <TextBlock Text="내 플레이리스트" Style="{StaticResource AuxTitle}"/>
             <TextBlock Text="파일과 YouTube를 한곳에서 듣고 관리하세요." Style="{StaticResource AuxCaption}" Margin="0,8,0,0"/>
         </StackPanel>
 
-        <Border Grid.Row="1" Background="{DynamicResource AuxDarkBrush}" Padding="18" ClipToBounds="True">
+        <Border Visibility="Collapsed" x:Name="VideoPreview" Grid.Row="1" Background="{DynamicResource AuxDarkBrush}" Padding="18" ClipToBounds="True">
             <Grid>
                 <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
                     <TextBlock Text="NOW PLAYING" Foreground="{DynamicResource AuxOnDarkMutedBrush}" FontSize="12" FontWeight="SemiBold"
@@ -43,7 +43,7 @@
                     <TextBlock Text="아래에서 곡을 추가하고 재생하세요." Foreground="{DynamicResource AuxOnDarkMutedBrush}"
                                FontSize="14" HorizontalAlignment="Center" Margin="0,7,0,0"/>
                 </StackPanel>
-                <wv:WebView2 x:Name="YouTubePlayer" Visibility="Collapsed" MinWidth="480" MinHeight="270"
+                <wv:WebView2 x:Name="YouTubePlayer" Visibility="Collapsed" MinWidth="480" MinHeight="180"
                              HorizontalAlignment="Stretch" VerticalAlignment="Stretch"/>
             </Grid>
         </Border>
@@ -52,6 +52,7 @@
             <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
             <DockPanel Grid.Row="0" LastChildFill="True" Margin="0,0,0,10">
                 <StackPanel Orientation="Horizontal" DockPanel.Dock="Right" VerticalAlignment="Center">
+                    <TextBlock Text="음량" VerticalAlignment="Center" Margin="0,0,8,0" Foreground="{DynamicResource AuxMutedBrush}"/>
                     <Slider x:Name="VolumeSlider" Width="120" Minimum="0" Maximum="1" Value="0.5" SmallChange="0.05"
                             VerticalAlignment="Center" ValueChanged="VolumeChanged" AutomationProperties.Name="음량"/>
                     <CheckBox x:Name="RepeatToggle" Content="반복" Style="{StaticResource AuxCheckBox}" Margin="18,0,0,0"

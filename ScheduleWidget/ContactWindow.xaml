@@ -10,7 +10,7 @@
             </ResourceDictionary.MergedDictionaries>
         </ResourceDictionary>
     </Window.Resources>
-    <Grid Margin="28">
+    <Grid x:Name="ContactContent" Margin="28">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
@@ -24,7 +24,7 @@
             <TextBlock Text="연동 정보를 저장하고 필요한 곳으로 메시지를 보내세요." Style="{StaticResource AuxCaption}" Margin="0,8,0,0"/>
         </StackPanel>
 
-        <TabControl Grid.Row="1" Style="{StaticResource AuxTabs}" Background="Transparent">
+        <TabControl x:Name="ConnectionTabs" Grid.Row="1" Style="{StaticResource AuxTabs}" Background="Transparent">
             <TabItem Header="텔레그램" Style="{StaticResource AuxTabItem}">
                 <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="0,18,0,0">
                     <StackPanel>
@@ -87,17 +87,17 @@
                     </StackPanel>
                 </ScrollViewer>
             </TabItem>
-            <TabItem Header="마감 알림" Style="{StaticResource AuxTabItem}">
+            <TabItem x:Name="RemindersTab" Header="마감 알림" Style="{StaticResource AuxTabItem}">
                 <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="0,18,0,0">
                     <StackPanel>
                         <CheckBox x:Name="RemindersEnabled" Content="마감 알림 사용" Style="{StaticResource AuxCheckBox}" Margin="0,0,0,22"/>
                         <TextBlock Text="알릴 시점 (0 = 당일, 최대 30일 전)" Style="{StaticResource AuxCaption}" Margin="0,0,0,8"/>
                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,0,18">
-                            <TextBox x:Name="DaysBefore" Width="64" Style="{StaticResource AuxTextBox}" AutomationProperties.Name="마감 며칠 전"/>
+                            <TextBox Padding="8,4" x:Name="DaysBefore" Width="80" Style="{StaticResource AuxTextBox}" AutomationProperties.Name="마감 며칠 전"/>
                             <TextBlock Text="일 전" VerticalAlignment="Center" Margin="8,0,18,0"/>
-                            <TextBox x:Name="Hour" Width="64" Style="{StaticResource AuxTextBox}" AutomationProperties.Name="알림 시"/>
+                            <TextBox Padding="8,4" x:Name="Hour" Width="80" Style="{StaticResource AuxTextBox}" AutomationProperties.Name="알림 시"/>
                             <TextBlock Text=":" VerticalAlignment="Center" Margin="8,0"/>
-                            <TextBox x:Name="Minute" Width="64" Style="{StaticResource AuxTextBox}" AutomationProperties.Name="알림 분"/>
+                            <TextBox Padding="8,4" x:Name="Minute" Width="80" Style="{StaticResource AuxTextBox}" AutomationProperties.Name="알림 분"/>
                         </StackPanel>
                         <CheckBox x:Name="DesktopReminder" Content="이 PC에 알림 표시" Style="{StaticResource AuxCheckBox}"/>
                         <CheckBox x:Name="TelegramReminder" Content="설정한 텔레그램 대화로 보내기" Style="{StaticResource AuxCheckBox}"/>
@@ -107,7 +107,7 @@
                         <!-- 초기화 (two presses): only these 마감 알림 options; 설정 저장 applies it. -->
                         <Button x:Name="ReminderResetButton" Content="알림 설정 초기화" Height="32" Padding="14,0" Margin="0,18,0,0" HorizontalAlignment="Left"
                                 Style="{StaticResource AuxCompactButton}" Click="ReminderReset_Click" AutomationProperties.Name="마감 알림 설정 초기화"/>
-                        <TextBlock Text="알림 끄기, 당일 09:00, 이 PC에만 알림으로 되돌립니다(설정 저장을 눌러야 적용). 봇 토큰·카카오 토큰·REST API 키·Client Secret·Chat ID·친구 UUID 같은 연동 정보는 지우지 않습니다."
+                        <TextBlock Text="알림 끄기·당일 09:00·PC 알림으로 되돌립니다. 연동 정보는 유지되며, 설정 저장을 눌러야 적용됩니다."
                                    TextWrapping="Wrap" Style="{StaticResource AuxCaption}" Margin="0,6,0,0"/>
                     </StackPanel>
                 </ScrollViewer>
@@ -123,7 +123,7 @@
             </DockPanel>
         </Border>
 
-        <Border Grid.Row="3" BorderBrush="{DynamicResource AuxHairlineBrush}"
+        <Border x:Name="MessageSection" Grid.Row="3" BorderBrush="{DynamicResource AuxHairlineBrush}"
                 BorderThickness="0,1,0,0" Padding="0,16,0,0" Margin="0,0,0,16">
             <Expander x:Name="MessageComposer" Header="메시지 작성" FontSize="17" Foreground="{DynamicResource AuxInkBrush}" IsExpanded="False">
             <StackPanel>

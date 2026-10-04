@@ -20,19 +20,11 @@ namespace ScheduleWidget
         private readonly Dictionary<string, DateTime> reminderRetries = new Dictionary<string, DateTime>();
         private readonly CommunicationService communicationService = new CommunicationService();
 
-        private void MiniButton_Click(object sender, RoutedEventArgs e) => OpenLastWindow();
-        private void MusicButton_Click(object sender, RoutedEventArgs e) => ShowMusic();
-        private void MusicButton_RightClick(object sender, MouseButtonEventArgs e)
-        {
-            e.Handled = true;
-            ShowMusicMenu((FrameworkElement)sender);
-        }
-        private void ContactButton_Click(object sender, RoutedEventArgs e) => ShowContacts();
         private void ChooseCharacter_Click(object sender, RoutedEventArgs e)
         {
             // Same picker as the mini window's; 드래그로 위치 설정 is offered while the mini window has pets to drag.
             var picker = new CharacterWindow(appData.CharacterManifest, offerPlacement: miniWindow?.CanPlacePets == true,
-                otherSlots: appData.MiniExtraCharacters?.Select(s => s.Manifest));
+                otherSlots: appData.MiniExtraCharacters?.Select(s => s.Manifest)) { Owner = settingsHost ?? (Window)miniWindow ?? this };
             bool chosen = picker.ShowDialog() == true;
             if (chosen)
             {
@@ -88,6 +80,7 @@ namespace ScheduleWidget
                     null, null, companion: true, musicPlaying: () => ((IMusicControls)this).IsPlaying) { Owner = this, ShowActivated = false };
                 petCompanion.CompanionHideRequested += () => { appData.MainPetsVisible = false; SaveDataSafely(false); Dispatcher.BeginInvoke(new Action(UpdatePetCompanion)); };
                 petCompanion.SlotsChanged += () => miniWindow?.ReloadCharacter(); // the same pets in the mini window
+                petCompanion.CharacterSettingsRequested += index => OpenCharacterSettings(petCompanion, index);
                 petCompanion.Closed += (s, e) => { if (ReferenceEquals(petCompanion, s)) petCompanion = null; };
                 if (_themeApplied) petCompanion.ApplyTheme(_themedPreset, refresh: false); // a theme being previewed in 설정
             }
@@ -204,6 +197,7 @@ namespace ScheduleWidget
                     return saved;
                 }, ShowMusic, ShowContacts, ShowMusicMenu, ExitApplication, this, OpenSettingsFromMini);
                 miniWindow.ScheduleListRequested += ToggleScheduleList;
+                miniWindow.CharacterSettingsRequested += index => OpenCharacterSettings(miniWindow, index);
                 if (_themeApplied && _themedPreset != appData.Appearance?.ThemePreset) miniWindow.ApplyTheme(_themedPreset, refresh: false);
                 miniWindow.ThemeChosen += () => ApplyAppearance(appData.Appearance); // style picked in the mini window header
                 miniWindow.SlotsChanged += () => petCompanion?.ReloadCharacter(); // the same pets beside the TODO window
@@ -239,8 +233,6 @@ namespace ScheduleWidget
         // so theme / character size / character visibility changes show on the mini window before they are saved.
         // 저장 keeps them; 취소, X, Esc or closing the window puts the mini window back the way it was.
         private Window settingsHost;
-        private Panel settingsHomeParent;
-        private int settingsHomeIndex;
         private int previewOriginalScale;
         private List<int?> previewOriginalExtraScales;
         private bool previewOriginalVisible;
@@ -262,54 +254,7 @@ namespace ScheduleWidget
         private bool _inlineCharacterSideTouched, _inlineCharacterVerticalTouched, _inlineCharacterGapTouched;
         private bool settingsHostClosing;
 
-        private void OpenSettingsFromMini()
-        {
-            if (appData == null) return;
-            if (settingsHost != null) { BringToFront(settingsHost); return; }
-            if (InlineSettingsPanel.Visibility == Visibility.Visible) CloseInlineSettings(false);
-            SettingsButton_Click(this, new RoutedEventArgs());
-            previewOriginalScale = appData.MiniCharacterScale;
-            previewOriginalExtraScales = (appData.MiniExtraCharacters ?? new List<MiniCharacterSlot>()).Select(s => s.Scale).ToList();
-            previewOriginalVisible = appData.MiniCharacterVisible;
-            previewOriginalSide = appData.MiniCharacterSide;
-            previewOriginalVertical = appData.MiniCharacterVertical;
-            previewOriginalGap = appData.MiniCharacterGap;
-            previewOriginalSpots = (appData.MiniPetSpots ?? new List<MiniPetSpot>()).Select(MiniWindow.CopySpot).ToList();
-            CaptureMiniPreviewState();
-            settingsPreviewMiniWindow = miniWindow;
-            miniWindow.PetsChanged += MiniPetsChangedWhileSettingsOpen;
-            miniWindow.MiniSettingsStateChanged += MiniPetsChangedWhileSettingsOpen;
-
-            settingsHomeParent = (Panel)InlineSettingsPanel.Parent;
-            settingsHomeIndex = settingsHomeParent.Children.IndexOf(InlineSettingsPanel);
-            settingsHomeParent.Children.Remove(InlineSettingsPanel);
-            settingsHost = new Window
-            {
-                Title = "설정", Width = 420, Height = Math.Min(720, SystemParameters.WorkArea.Height - 40),
-                MinWidth = 340, MinHeight = 360, Content = InlineSettingsPanel,
-                WindowStartupLocation = WindowStartupLocation.CenterScreen,
-                Background = (System.Windows.Media.Brush)InlineSettingsPanel.Background
-            };
-            settingsHost.SetResourceReference(Window.BackgroundProperty, "AuxCanvasBrush"); // follows the theme
-            ChromelessWindow.Apply(settingsHost, addCloseButton: false); // no title bar or taskbar button; the panel has its own X
-            settingsHost.Closing += (s, e) =>
-            {
-                // Window X: same as 취소 (the panel goes back home; this window is already closing).
-                if (settingsHost == null) return;
-                settingsHostClosing = true;
-                CloseInlineSettings(false);
-                settingsHostClosing = false;
-            };
-            // Esc: same as 취소. Bubbling (KeyDown), so an open drop-down closes first and the shortcut box keeps its own Esc.
-            settingsHost.KeyDown += (s, e) =>
-            {
-                if (e.Key != Key.Escape || InlineHotKeyBox.IsKeyboardFocused || settingsHost == null) return;
-                e.Handled = true;
-                CloseInlineSettings(false);
-            };
-            settingsHost.Show();
-            settingsHost.Activate();
-        }
+        private void OpenSettingsFromMini() => OpenUnifiedSettings(SettingsPage.General);
 
         /// <summary>Settings shown for the mini window: preview a draft value on it right away.</summary>
         private void PreviewMiniSettings()
@@ -518,10 +463,10 @@ namespace ScheduleWidget
                 }
             }
             var host = settingsHost;
+            ReleaseUnifiedSettingsContent();
             settingsHost = null;
             ResetMiniPreviewOwnership();
             host.Content = null;
-            settingsHomeParent.Children.Insert(Math.Min(settingsHomeIndex, settingsHomeParent.Children.Count), InlineSettingsPanel);
             if (!settingsHostClosing) host.Close();
         }
 
@@ -549,9 +494,7 @@ namespace ScheduleWidget
 
         public void ShowMusic()
         {
-            if (appData == null) return;
-            EnsureMusicWindow();
-            musicWindow.ShowPlayer();
+            OpenUnifiedSettings(SettingsPage.Music);
         }
 
         private void ShowMusicMenu(FrameworkElement target)
@@ -608,8 +551,8 @@ namespace ScheduleWidget
         void IMusicControls.ToggleSettings()
         {
             if (appData == null) return;
-            if (musicWindow != null && musicWindow.IsVisible && !musicWindow.InBackground && musicWindow.WindowState != WindowState.Minimized)
-                musicWindow.Close();
+            if (UnifiedSettings?.SelectedPage == SettingsPage.Music && settingsHost.IsVisible && settingsHost.WindowState != WindowState.Minimized)
+                CloseInlineSettings(false);
             else ShowMusic();
         }
 
@@ -897,7 +840,7 @@ namespace ScheduleWidget
         {
             if (musicWindow == null)
             {
-                musicWindow = new MusicWindow(appData.Music, () => SaveDataSafely(), ExitApplication);
+                musicWindow = new MusicWindow(appData.Music, () => SaveDataSafely(), ExitApplication, embedded: true);
                 musicWindow.Closed += (s, e) => musicWindow = null;
             }
         }
@@ -915,15 +858,9 @@ namespace ScheduleWidget
         private void OpenContacts(string message)
         {
             if (appData == null) return;
-            if (contactWindow == null)
-            {
-                contactWindow = new ContactWindow(appData, communicationService, () => SaveDataSafely());
-                contactWindow.Closed += (s, e) => contactWindow = null;
-            }
+            OpenUnifiedSettings(message == null ? SettingsPage.Notifications : SettingsPage.Connections);
+            EnsureContactSettings();
             if (message != null) contactWindow.SetMessage(message);
-            contactWindow.Show();
-            if (contactWindow.WindowState == WindowState.Minimized) contactWindow.WindowState = WindowState.Normal;
-            contactWindow.Activate();
         }
 
         private void ShareSchedule_Click(object sender, RoutedEventArgs e)
@@ -1029,14 +966,14 @@ namespace ScheduleWidget
                             item.ReminderReceipts[channel] = key;
                             reminderRetries.Remove(retryKey);
                             // That channel works again: the 연락 · 알림 button stops showing its last error.
-                            if (reminderErrorChannel == channel) { ContactButton.ToolTip = null; reminderErrorChannel = null; }
+                            if (reminderErrorChannel == channel) { OpenSettingsButton.ToolTip = "설정"; reminderErrorChannel = null; }
                             SaveDataSafely();
                         }
                         catch (Exception ex) when (ex is InvalidOperationException || ex is UnauthorizedAccessException || ex is System.Security.Cryptography.CryptographicException)
                         {
                             if (!reminderRetries.ContainsKey(retryKey)) trayService.Notify("마감 알림 전송 실패", ex.Message);
                             reminderRetries[retryKey] = DateTime.Now.AddMinutes(5);
-                            ContactButton.ToolTip = ex.Message;
+                            OpenSettingsButton.ToolTip = ex.Message;
                             reminderErrorChannel = channel;
                             contactWindow?.ReportStatus(ex.Message);
                             SaveDataSafely(); // Preserve a refreshed token even if the following send failed.

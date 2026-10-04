@@ -137,7 +137,7 @@
                                   StrokeEndLineCap="Round"
                                   StrokeLineJoin="Round"/>
                         </Button>
-                        <Button Grid.Column="4"
+                        <Button x:Name="OpenSettingsButton" Grid.Column="4"
                                 Style="{StaticResource WidgetIconButton}"
                                 Width="32"
                                 Height="32"
@@ -233,11 +233,7 @@
                 </Border>
 
                 <!-- schedule list -->
-                <UniformGrid Grid.Row="1" Columns="3" Margin="13,0,13,0">
-                    <Button Content="달력" ToolTip="달력 앞으로 가져오기" Style="{StaticResource WidgetSecondaryButton}" Margin="0,0,4,0" Click="MiniButton_Click"/>
-                    <Button x:Name="ContactButton" Content="연락 · 알림" Style="{StaticResource WidgetSecondaryButton}" Margin="0,0,4,0" Click="ContactButton_Click"/>
-                    <Button Content="음악" Style="{StaticResource WidgetSecondaryButton}" Click="MusicButton_Click" PreviewMouseRightButtonUp="MusicButton_RightClick" ToolTip="좌클릭: 음악 창 · 우클릭: 재생 설정"/>
-                </UniformGrid>
+
                 <Border Grid.Row="2"
                         Background="{DynamicResource BackgroundBrush}"
                         Padding="13,13,13,3">
@@ -676,7 +672,7 @@
                                   HorizontalScrollBarVisibility="Disabled">
                         <StackPanel>
                             <TextBlock Text="표시" Style="{StaticResource AuxSectionTitle}" FontSize="17" Margin="0,0,0,8"/>
-                            <Button Content="캐릭터 선택 / 가져오기" Height="40" Margin="0,0,0,10" Style="{StaticResource AuxPrimaryButton}" Click="ChooseCharacter_Click"/>
+                            <Button x:Name="SettingsChooseCharacterButton" Content="캐릭터 선택 / 가져오기" Height="40" Margin="0,0,0,10" Style="{StaticResource AuxPrimaryButton}" Click="ChooseCharacter_Click"/>
                             <Border Style="{StaticResource AuxRoundSection}" Padding="14,12" Margin="0,0,0,10">
                                 <StackPanel>
                                     <Grid Margin="0,0,0,7">
@@ -684,7 +680,7 @@
                                             <ColumnDefinition Width="*"/>
                                             <ColumnDefinition Width="Auto"/>
                                         </Grid.ColumnDefinitions>
-                                        <TextBlock Text="미니 창 캐릭터 크기" Foreground="{DynamicResource AuxInkBrush}" FontWeight="SemiBold"/>
+                                        <TextBlock Text="달력 캐릭터 크기" Foreground="{DynamicResource AuxInkBrush}" FontWeight="SemiBold"/>
                                         <TextBlock x:Name="InlineCharacterScaleText" Grid.Column="1" Text="100%"
                                                    Foreground="{DynamicResource AuxInkBrush}" FontWeight="SemiBold"/>
                                     </Grid>
@@ -727,23 +723,23 @@
                                                TextWrapping="Wrap" Style="{StaticResource AuxCaption}" Margin="0,6,0,0"/>
                                     <!-- Every on/off setting is the same ON / OFF switch: label left, switch right. (CheckBoxes kept where the
                                          code reads them as CheckBox; the switch style fits any ToggleButton.) -->
-                                    <Grid Margin="0,10,0,0">
+                                    <Grid x:Name="SettingsTopmostRow" Margin="0,10,0,0">
                                         <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                                        <TextBlock Text="모든 창 위에 표시 (일정 창·미니 창)" Foreground="{DynamicResource AuxInkBrush}" FontSize="14" VerticalAlignment="Center"
+                                        <TextBlock Text="모든 창 위에 표시 (일정·달력)" Foreground="{DynamicResource AuxInkBrush}" FontSize="14" VerticalAlignment="Center"
                                                    TextWrapping="Wrap" ToolTip="끄면(기본) 일반 앱처럼 클릭하면 앞으로 올라오고, 다른 앱을 쓰면 뒤로 갑니다."/>
                                         <CheckBox x:Name="InlineAlwaysOnTopToggle" Grid.Column="1" Margin="10,0,0,0" Style="{StaticResource AuxOnOffSwitch}" VerticalAlignment="Center"
                                                   AutomationProperties.Name="모든 창 위에 표시 켜기/끄기"
                                                   ToolTip="끄면(기본) 일반 앱처럼 클릭하면 앞으로 올라오고, 다른 앱을 쓰면 뒤로 갑니다."/>
                                     </Grid>
-                                    <Grid Margin="0,10,0,0">
+                                    <Grid x:Name="SettingsCalendarDdayRow" Margin="0,10,0,0">
                                         <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                                        <TextBlock Text="일정 블록에 D-day 표시 (미니 창)" Foreground="{DynamicResource AuxInkBrush}" FontSize="14" VerticalAlignment="Center"
+                                        <TextBlock Text="일정 블록에 D-day 표시 (달력)" Foreground="{DynamicResource AuxInkBrush}" FontSize="14" VerticalAlignment="Center"
                                                    TextWrapping="Wrap" ToolTip="미니 달력의 일정 블록 윗줄 오른쪽에 D-3 · D-day · D+2처럼 남은 날짜를 표시합니다."/>
                                         <ToggleButton x:Name="InlineBlockDDaySwitch" Grid.Column="1" Margin="10,0,0,0" Style="{StaticResource AuxOnOffSwitch}" VerticalAlignment="Center"
                                                       AutomationProperties.Name="일정 블록에 D-day 표시 켜기/끄기"/>
                                     </Grid>
                                     <!-- How the mini calendar turns to another week (‹ / ›). Tag = the saved MiniFlipEffect value. -->
-                                    <TextBlock Text="넘김 애니메이션 (미니 창)" Foreground="{DynamicResource AuxInkBrush}" FontSize="14" Margin="0,10,0,6"
+                                    <TextBlock x:Name="SettingsFlipLabel" Text="넘김 애니메이션 (달력)" Foreground="{DynamicResource AuxInkBrush}" FontSize="14" Margin="0,10,0,6"
                                                ToolTip="미니 달력에서 다른 주로 넘길 때의 움직임입니다."/>
                                     <ComboBox x:Name="InlineFlipEffectCombo" Height="34" Style="{StaticResource AuxComboBox}" AutomationProperties.Name="넘김 애니메이션">
                                         <ComboBoxItem Content="효과 1 · 위로 넘기기" Tag="1"/>
@@ -754,15 +750,14 @@
                                         <ComboBoxItem Content="효과 6 · 모서리 넘기기 (링 위 숨김)" Tag="6"/>
                                         <ComboBoxItem Content="애니메이션 없음" Tag="0"/>
                                     </ComboBox>
-                                    <Grid Margin="0,10,0,0">
+                                    <Grid x:Name="SettingsHotkeyToggleRow" Margin="0,10,0,0">
                                         <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                                         <TextBlock Text="단축키로 맨 앞에 띄우기" Foreground="{DynamicResource AuxInkBrush}" FontSize="14" VerticalAlignment="Center"
-                                                   TextWrapping="Wrap" ToolTip="어느 앱을 쓰고 있든 단축키를 누르면 일정 창(미니 모드면 미니 창)이 모든 창 위로 한 번 올라옵니다. 위에 고정되지는 않습니다."/>
+                                                   TextWrapping="Wrap" ToolTip="어느 앱을 쓰고 있든 단축키를 누르면 일정 창(미니 모드면 달력)이 모든 창 위로 한 번 올라옵니다. 위에 고정되지는 않습니다."/>
                                         <CheckBox x:Name="InlineHotKeyToggle" Grid.Column="1" Margin="10,0,0,0" Style="{StaticResource AuxOnOffSwitch}" VerticalAlignment="Center"
-                                                  Click="InlineHotKeyToggle_Click" AutomationProperties.Name="단축키로 맨 앞에 띄우기 켜기/끄기"
-                                                  ToolTip="어느 앱을 쓰고 있든 단축키를 누르면 일정 창(미니 모드면 미니 창)이 모든 창 위로 한 번 올라옵니다. 위에 고정되지는 않습니다."/>
+                                                  Click="InlineHotKeyToggle_Click" AutomationProperties.Name="단축키로 맨 앞에 띄우기 켜기/끄기" ToolTip="어느 앱을 쓰고 있든 단축키를 누르면 일정 창(미니 모드면 달력)이 모든 창 위로 한 번 올라옵니다. 위에 고정되지는 않습니다."/>
                                     </Grid>
-                                    <Grid Margin="0,6,0,0">
+                                    <Grid x:Name="SettingsHotkeyInputRow" Margin="0,6,0,0">
                                         <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                                         <!-- Own height and padding (not AuxTextBox's 36 px, 7 px padding and margins): the shortcut shows in full. -->
                                         <TextBox x:Name="InlineHotKeyBox" Height="32" MinHeight="32" Margin="0" Padding="10,0" IsReadOnly="True" IsReadOnlyCaretVisible="False" Cursor="Hand"
@@ -778,7 +773,7 @@
                                                Text="칸을 누른 뒤 새 단축키를 누르세요. 저장하면 적용됩니다."/>
                                     <Grid Margin="0,10,0,0">
                                         <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                                        <TextBlock Text="미니 창에 캐릭터 표시" Foreground="{DynamicResource AuxInkBrush}" FontSize="14" VerticalAlignment="Center"
+                                        <TextBlock Text="달력에 캐릭터 표시" Foreground="{DynamicResource AuxInkBrush}" FontSize="14" VerticalAlignment="Center"
                                                    TextWrapping="Wrap" ToolTip="끄면 달력만 표시합니다. 달력을 우클릭하면 메뉴가 열립니다."/>
                                         <CheckBox x:Name="InlineCharacterVisibleToggle" Grid.Column="1" Margin="10,0,0,0" Style="{StaticResource AuxOnOffSwitch}" VerticalAlignment="Center"
                                                   Click="InlineCharacterVisibleToggle_Click" AutomationProperties.Name="미니 창에 캐릭터 표시 켜기/끄기"
@@ -786,7 +781,7 @@
                                     </Grid>
                                 </StackPanel>
                             </Border>
-                            <UniformGrid Columns="2" Margin="0,0,0,10">
+                            <UniformGrid x:Name="SettingsColorButtons" Columns="2" Margin="0,0,0,10">
                                 <Button Content="목록 배경" Tag="BackgroundColor" Height="36" Margin="2" Style="{StaticResource AuxUtilityButton}" Click="AppearanceColor_Click"/>
                                 <Button Content="카드 배경" Tag="CardColor" Height="36" Margin="2" Style="{StaticResource AuxUtilityButton}" Click="AppearanceColor_Click"/>
                                 <Button Content="제목 글자" Tag="TextColor" Height="36" Margin="2" Style="{StaticResource AuxUtilityButton}" Click="AppearanceColor_Click"/>
@@ -794,8 +789,8 @@
                                 <Button Content="예정 D-day" Tag="FutureColor" Height="36" Margin="2" Style="{StaticResource AuxUtilityButton}" Click="AppearanceColor_Click"/>
                                 <Button Content="지난 D-day" Tag="PastColor" Height="36" Margin="2" Style="{StaticResource AuxUtilityButton}" Click="AppearanceColor_Click"/>
                             </UniformGrid>
-                            <TextBlock Text="각 할 일의 색상은 카드를 우클릭해 바꿀 수 있습니다." TextWrapping="Wrap" Style="{StaticResource AuxCaption}" Margin="6,0,6,12"/>
-                            <Border Style="{StaticResource AuxRoundSection}" Padding="14,12" Margin="0,0,0,10">
+                            <TextBlock x:Name="SettingsColorHint" Text="각 할 일의 색상은 카드를 우클릭해 바꿀 수 있습니다." TextWrapping="Wrap" Style="{StaticResource AuxCaption}" Margin="6,0,6,12"/>
+                            <Border x:Name="SettingsOpacityCard" Style="{StaticResource AuxRoundSection}" Padding="14,12" Margin="0,0,0,10">
                                 <StackPanel>
                                     <Grid Margin="0,0,0,7">
                                         <Grid.ColumnDefinitions>
@@ -823,7 +818,7 @@
                                 </StackPanel>
                             </Border>
 
-                            <Border Style="{StaticResource AuxRoundSection}" Padding="14,12" Margin="0,0,0,10">
+                            <Border x:Name="SettingsThemeCard" Style="{StaticResource AuxRoundSection}" Padding="14,12" Margin="0,0,0,10">
                                 <StackPanel>
                                     <StackPanel Margin="0,0,0,8">
                                         <StackPanel>
@@ -851,7 +846,7 @@
                                 </StackPanel>
                             </Border>
 
-                            <Border Style="{StaticResource AuxRoundSection}" Padding="14,12">
+                            <Border x:Name="SettingsFontCard" Style="{StaticResource AuxRoundSection}" Padding="14,12">
                                 <StackPanel>
                                     <TextBlock Text="폰트 크기"
                                                Style="{StaticResource AuxSectionTitle}"
@@ -949,7 +944,7 @@
                                 </StackPanel>
                             </Border>
 
-                            <Border Style="{StaticResource AuxRoundSection}" Padding="14,12" Margin="0,10,0,0">
+                            <Border x:Name="SettingsStartupCard" Style="{StaticResource AuxRoundSection}" Padding="14,12" Margin="0,10,0,0">
                                 <Grid>
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*"/>
@@ -978,7 +973,7 @@
                             </Border>
 
                             <!-- 구글 연동: 구글 로그인 first; the two switches work only while signed in. Applies at once (not part of 저장/취소/초기화). -->
-                            <Border Style="{StaticResource AuxRoundSection}" Padding="14,12" Margin="0,10,0,0">
+                            <Border x:Name="SettingsGoogleCard" Style="{StaticResource AuxRoundSection}" Padding="14,12" Margin="0,10,0,0">
                                 <StackPanel>
                                     <TextBlock Text="구글 연동" Style="{StaticResource AuxSectionTitle}" FontSize="15"/>
                                     <!-- Account line and the sign-in button, both centered. -->

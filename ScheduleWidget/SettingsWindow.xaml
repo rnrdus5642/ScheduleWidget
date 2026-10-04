@@ -1,0 +1,93 @@
+<Window x:Class="ScheduleWidget.SettingsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="설정" Width="1000" Height="760" MinWidth="760" MinHeight="500"
+        WindowStartupLocation="CenterScreen" Background="{DynamicResource AuxCanvasBrush}"
+        Foreground="{DynamicResource AuxInkBrush}" FontFamily="Segoe UI" FontSize="14"
+        UseLayoutRounding="True" TextOptions.TextFormattingMode="Display">
+    <Window.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="Styles/AuxiliaryStyles.xaml"/>
+            </ResourceDictionary.MergedDictionaries>
+            <Style x:Key="SettingsNavItem" TargetType="ListBoxItem">
+                <Setter Property="Padding" Value="14,12"/>
+                <Setter Property="Margin" Value="0,3"/>
+                <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                <Setter Property="Foreground" Value="{DynamicResource AuxInkBrush}"/>
+                <Setter Property="Cursor" Value="Hand"/>
+                <Setter Property="Template"><Setter.Value>
+                    <ControlTemplate TargetType="ListBoxItem">
+                        <Border x:Name="Face" Padding="{TemplateBinding Padding}" CornerRadius="8" Background="Transparent">
+                            <ContentPresenter/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Face" Property="Background" Value="{DynamicResource AuxHairlineBrush}"/></Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="Face" Property="Background" Value="{DynamicResource AuxActionBrush}"/>
+                                <Setter Property="Foreground" Value="White"/>
+                                <Setter Property="FontWeight" Value="SemiBold"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value></Setter>
+            </Style>
+        </ResourceDictionary>
+    </Window.Resources>
+    <Grid>
+        <Grid.ColumnDefinitions><ColumnDefinition Width="174"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+        <Border BorderBrush="{DynamicResource AuxHairlineBrush}" BorderThickness="0,0,1,0" Padding="18,26,18,18">
+            <DockPanel LastChildFill="True">
+                <StackPanel DockPanel.Dock="Top" Margin="12,0,0,24">
+                    <TextBlock Text="설정" FontSize="26" FontWeight="SemiBold"/>
+                    <TextBlock Text="ScheduleWidget" FontSize="11" Foreground="{DynamicResource AuxMutedBrush}" Margin="0,5,0,0"/>
+                </StackPanel>
+                <ListBox x:Name="SettingsNavigation" BorderThickness="0" Background="Transparent"
+                         ItemContainerStyle="{StaticResource SettingsNavItem}" SelectedIndex="0"
+                         SelectionChanged="Navigation_SelectionChanged" AutomationProperties.Name="설정 분류">
+                    <ListBoxItem Content="일반" Tag="General"/>
+                    <ListBoxItem Content="화면" Tag="Appearance"/>
+                    <ListBoxItem Content="캐릭터" Tag="Characters"/>
+                    <ListBoxItem Content="음악" Tag="Music"/>
+                    <ListBoxItem Content="알림" Tag="Notifications"/>
+                    <ListBoxItem Content="연동" Tag="Connections"/>
+                    <ListBoxItem Content="앱 정보" Tag="About"/>
+                </ListBox>
+            </DockPanel>
+        </Border>
+        <Grid Grid.Column="1">
+            <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+            <Grid Margin="26,24,18,18">
+                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="40"/></Grid.ColumnDefinitions>
+                <StackPanel>
+                    <TextBlock x:Name="PageTitle" FontSize="24" FontWeight="SemiBold"/>
+                    <TextBlock x:Name="PageDescription" Style="{StaticResource AuxCaption}" Margin="0,7,16,0"/>
+                </StackPanel>
+                <Button x:Name="SettingsCloseButton" Grid.Column="1" Content="✕" Width="34" Height="34" Padding="0"
+                        VerticalAlignment="Top" Style="{StaticResource AuxUtilityButton}" Click="Close_Click"
+                        ToolTip="설정 닫기" AutomationProperties.Name="설정 닫기"/>
+            </Grid>
+            <Grid x:Name="Pages" Grid.Row="1" Margin="26,0,20,0"/>
+            <Border Grid.Row="2" BorderBrush="{DynamicResource AuxHairlineBrush}" BorderThickness="0,1,0,0" Padding="26,14,24,16" Margin="0,18,0,0">
+                <Grid>
+                    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                    <TextBlock x:Name="SettingsStatus" Style="{StaticResource AuxCaption}" Visibility="Collapsed" Margin="0,0,0,10"
+                               AutomationProperties.LiveSetting="Polite"/>
+                    <DockPanel Grid.Row="1" LastChildFill="True">
+                        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Margin="18,0,0,0">
+                            <Button x:Name="SettingsDismissButton" Content="닫기" MinWidth="72" Margin="0,0,8,0"
+                                    Style="{StaticResource AuxSecondaryButton}" Click="Close_Click"/>
+                            <Button x:Name="SettingsSaveButton" Content="설정 저장" MinWidth="104"
+                                    Style="{StaticResource AuxSaveButton}" Click="Save_Click"/>
+                        </StackPanel>
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock x:Name="SaveHint" FontSize="12" Foreground="{DynamicResource AuxMutedBrush}" TextWrapping="Wrap"/>
+                            <Button x:Name="SettingsResetButton" Content="이 페이지 초기화" HorizontalAlignment="Left" Margin="0,6,0,0"
+                                    Style="{StaticResource AuxCompactButton}" Click="Reset_Click"/>
+                        </StackPanel>
+                    </DockPanel>
+                </Grid>
+            </Border>
+        </Grid>
+    </Grid>
+</Window>

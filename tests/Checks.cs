@@ -31,6 +31,7 @@ namespace ScheduleWidget.Checks
             ErrorLog.Root = PetLog.Root = root;
             var browserType = typeof(App).Assembly.GetType("ScheduleWidget.EmbeddedBrowser", true);
             browserType.GetField("UserDataRoot", BindingFlags.NonPublic | BindingFlags.Static).SetValue(null, root);
+            typeof(UpdateClient).GetProperty("GitHubRepositoryOverride", BindingFlags.NonPublic | BindingFlags.Static).SetValue(null, "");
 
             Run("Legacy data migration and distinct schedule IDs", LegacyMigration);
             Run("Extended settings survive save and reload", ExtendedRoundTrip);
@@ -277,6 +278,7 @@ namespace ScheduleWidget.Checks
                 var closeList = (System.Windows.Controls.Button)main.FindName("CloseScheduleListButton");
                 closeList.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
                 Require(!calendarClosed && !(bool)typeof(MainWindow).GetField("closingApp", flags).GetValue(main), "Closing the list shut down the calendar or app.");
+                Run("Unified settings navigation, save, cancel and content lifecycle", () => UnifiedSettingsFlow(main, mini, data));
             }
             finally { app.Shutdown(); }
         }
@@ -296,6 +298,93 @@ namespace ScheduleWidget.Checks
             Require(negative == new Point(-888, -100), "Negative monitor coordinates were lost.");
             var scaled = ScheduleListPlacement.Beside(new Rect(150, 150, 1200, 480), new Size(540, 750), new Rect(0, 0, 2880, 1560), 18);
             Require(scaled == new Point(1368, 150), "Placement did not preserve scaled coordinates.");
+        }
+
+        private static object Field(object owner, string name) => owner.GetType().GetField(name, BindingFlags.NonPublic | BindingFlags.Instance).GetValue(owner);
+        private static void SetField(object owner, string name, object value) => owner.GetType().GetField(name, BindingFlags.NonPublic | BindingFlags.Instance).SetValue(owner, value);
+        private static void Call(object owner, string name, params object[] args) => owner.GetType().GetMethod(name, BindingFlags.NonPublic | BindingFlags.Instance).Invoke(owner, args);
+
+        private static void UnifiedSettingsFlow(MainWindow main, MiniWindow mini, AppData data)
+        {
+            data.StartupEnabled = false;
+            data.BringToFrontHotKeyEnabled = false;
+            SetField(main, "appData", data);
+            SetField(main, "miniWindow", mini);
+            // Disabling startup uses a nonexistent per-run key and never touches Windows' Run key.
+            SetField(main, "startupService", new StartupService("Software\\ScheduleWidgetChecks\\" + Guid.NewGuid().ToString("N")));
+            Require(main.FindName("ContactButton") == null, "Schedule shortcut buttons were not removed.");
+            for (int round = 0; round < 2; round++)
+            {
+                Call(main, "BeginSettingsEdit");
+                var settings = new SettingsWindow();
+                SetField(main, "settingsHost", settings);
+                Call(main, "BuildUnifiedSettingsPages", settings);
+                var navigation = (System.Windows.Controls.ListBox)settings.FindName("SettingsNavigation");
+                Require(navigation.Items.Count == 7, "Unified settings must have seven categories.");
+                foreach (SettingsPage page in Enum.GetValues(typeof(SettingsPage)))
+                {
+                    settings.SelectPage(page);
+                    Call(main, "PrepareSettingsPage", page);
+                    ((FrameworkElement)settings.Content).Measure(new Size(1000, 760));
+                    ((FrameworkElement)settings.Content).Arrange(new Rect(0, 0, 1000, 760));
+                    Require(settings.SelectedPage == page, "Settings navigation did not select " + page);
+                }
+
+                settings.SelectPage(SettingsPage.Music);
+                Call(main, "PrepareSettingsPage", SettingsPage.Music);
+                var music = (MusicWindow)Field(main, "musicWindow");
+                var editor = music.FindName("MusicSettingsContent") as FrameworkElement;
+                Require(music.IsSettingsHosted && editor.Parent != null, "Music editor did not join settings.");
+                var track = new MusicTrack { Title = "Silent settings check", Source = SilentWave() };
+                music.CurrentPlaylist.Tracks.Add(track);
+                music.SetVolume(0);
+                music.PlayFromListAsync(track).GetAwaiter().GetResult();
+                Require(music.IsPlaying && music.PlayingTrack == track, "The isolated local track did not start.");
+                settings.SelectPage(SettingsPage.General);
+                Call(main, "PrepareSettingsPage", SettingsPage.General);
+                Require(!music.IsSettingsHosted && ReferenceEquals(music.Content, editor), "Leaving music did not return its existing player view.");
+                Require(music.IsPlaying && music.PlayingTrack == track, "Changing settings pages stopped playback.");
+
+                var contact = (ContactWindow)Field(main, "contactWindow");
+                var chat = (System.Windows.Controls.TextBox)contact.FindName("TelegramChat");
+                chat.Text = "checks-chat-" + round;
+                Require(contact.HasPendingChanges, "Embedded connection edits were not tracked.");
+                var themes = (System.Windows.Controls.ComboBox)main.FindName("InlinePresetCombo");
+                themes.SelectedIndex = 1; // preview Dark
+                if (round == 0)
+                {
+                    Call(main, "CloseInlineSettings", false);
+                    Require(data.Communication.TelegramChatId == null && data.Appearance.ThemePreset == "Light", "Closing settings saved pending connection or theme edits.");
+                    Require(AuxTheme.Current == "Light", "Closing settings did not undo the theme preview.");
+                }
+                else
+                {
+                    Call(main, "InlineSettingsApplyButton_Click", settings, new RoutedEventArgs());
+                    Require(data.Communication.TelegramChatId == "checks-chat-1" && data.Appearance.ThemePreset == "Dark", "Settings save did not preserve all edited pages.");
+                    Require(Store("window").LoadData().Data.Communication.TelegramChatId == "checks-chat-1", "Connection settings were not written to the isolated store.");
+                }
+                Require(Field(main, "settingsHost") == null && Field(main, "contactWindow") == null, "Settings editors were not released on close.");
+                Require(!music.IsSettingsHosted && music.Content != null, "Closing settings lost the music editor.");
+                Require(music.IsPlaying && music.PlayingTrack == track, "Closing settings stopped playback.");
+                Call(music, "StopPlayback");
+                Require(main.FindName("InlinePresetCombo") == themes && themes.Parent != null, "Named controls were not restored for the next settings session.");
+            }
+        }
+
+        private static string SilentWave()
+        {
+            string path = Path.Combine(root, "settings-silence.wav");
+            if (File.Exists(path)) return path;
+            const int bytes = 8000 * 2 * 30;
+            using (var writer = new BinaryWriter(File.Create(path)))
+            {
+                writer.Write(Encoding.ASCII.GetBytes("RIFF")); writer.Write(36 + bytes);
+                writer.Write(Encoding.ASCII.GetBytes("WAVEfmt ")); writer.Write(16);
+                writer.Write((short)1); writer.Write((short)1); writer.Write(8000); writer.Write(16000);
+                writer.Write((short)2); writer.Write((short)16);
+                writer.Write(Encoding.ASCII.GetBytes("data")); writer.Write(bytes); writer.Write(new byte[bytes]);
+            }
+            return path;
         }
     }
 }

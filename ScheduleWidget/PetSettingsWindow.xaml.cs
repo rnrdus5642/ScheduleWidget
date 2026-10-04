@@ -47,12 +47,13 @@ namespace ScheduleWidget
         private bool shut; // closed (e.g. 드래그로 위치 설정 chosen in the picker): nothing left to refresh
         private bool loading = true; // until the window is filled: XAML sets slider minimums while loading, which must not reach the mini window
 
-        public PetSettingsWindow(IPetSettingsHost host, int selectedPet)
+        public PetSettingsWindow(IPetSettingsHost host, int selectedPet, bool embedded = false)
         {
             this.host = host;
             selected = selectedPet;
             InitializeComponent();
-            ChromelessWindow.Apply(this, addCloseButton: false, rounded: true); // it has its own X in the header; soft rounded corners
+            if (!embedded) ChromelessWindow.Apply(this, addCloseButton: false, rounded: true);
+            else { PetEditorHeader.Visibility = Visibility.Collapsed; AuxTheme.ApplyTo(this); ShowInTaskbar = false; }
             host.PetsChanged += Reload;
             loading = false;
             Closed += (s, e) => { shut = true; host.PetsChanged -= Reload; };
@@ -60,6 +61,17 @@ namespace ScheduleWidget
         }
 
         public int SelectedPet => selected;
+        public event Action CloseRequested;
+
+        public FrameworkElement TakeSettingsContent()
+        {
+            var view = (FrameworkElement)Content;
+            Content = null;
+            view.Resources.MergedDictionaries.Add(Resources);
+            return view;
+        }
+
+        private void RequestClose() { if (CloseRequested != null) CloseRequested(); else Close(); }
 
         // 타이핑 반응 counts key presses only (TypingInput): said where the mode is offered.
         internal const string TypingPrivacyNote = "어떤 키를 눌렀는지는 읽지 않고, 눌렀다는 사실만 셉니다.";
@@ -81,9 +93,9 @@ namespace ScheduleWidget
                 int count = host.PetCount;
                 if (selected >= count || selected < 0) selected = 0;
                 // The TODO window's pets stand around that window: the same settings, named for it.
-                string board = host.BesideTodoWindow ? "TODO 창" : "달력";
-                HeaderHint.Text = host.BesideTodoWindow ? "바꾸는 즉시 TODO 창 옆 캐릭터에 반영되고 저장됩니다." : "바꾸는 즉시 미니 창에 반영되고 저장됩니다.";
-                VisibleToggle.Content = host.BesideTodoWindow ? "TODO 창 옆에 캐릭터 표시" : "미니 창에 캐릭터 표시";
+                string board = host.BesideTodoWindow ? "일정" : "달력";
+                HeaderHint.Text = host.BesideTodoWindow ? "바꾸는 즉시 일정 옆 캐릭터에 반영되고 저장됩니다." : "바꾸는 즉시 달력에 반영되고 저장됩니다.";
+                VisibleToggle.Content = host.BesideTodoWindow ? "일정 옆에 캐릭터 표시" : "달력에 캐릭터 표시";
                 PlacementTitle.Text = "위치 (" + board + " 기준)";
                 SideLeftItem.Content = board + " 왼쪽";
                 SideRightItem.Content = board + " 오른쪽";
@@ -230,11 +242,11 @@ namespace ScheduleWidget
 
         private void Place_Click(object sender, RoutedEventArgs e)
         {
-            Close();
+            RequestClose();
             host.StartPetPlacement();
         }
 
-        private void Close_Click(object sender, RoutedEventArgs e) => Close();
+        private void Close_Click(object sender, RoutedEventArgs e) => RequestClose();
 
         // No title bar: the header moves the window.
         private void Header_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
@@ -248,7 +260,7 @@ namespace ScheduleWidget
             if (e.Key != Key.Escape) return;
             e.Handled = true;
             if (SideCombo.IsDropDownOpen) SideCombo.IsDropDownOpen = false; // Esc closes the open list first, like any drop-down
-            else Close();
+            else RequestClose();
         }
     }
 }

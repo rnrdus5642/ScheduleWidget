@@ -111,7 +111,7 @@ namespace ScheduleWidget
             text += Environment.NewLine + Environment.NewLine + "설치하면 내려받은 뒤 앱이 닫히고 새 버전으로 다시 열립니다." + Environment.NewLine +
                     "일정과 설정은 그대로 유지됩니다. 설치할까요?";
             Window fromNotice = updateFromNotice ? updateNotice?.Owner : null;
-            Window owner = fromNotice != null && fromNotice.IsVisible ? fromNotice : Window.GetWindow(InlineSettingsPanel) ?? this;
+            Window owner = fromNotice != null && fromNotice.IsVisible ? fromNotice : settingsHost ?? this;
             return System.Windows.MessageBox.Show(owner, text, "업데이트", MessageBoxButton.OKCancel, MessageBoxImage.Question) == MessageBoxResult.OK;
         }
 

@@ -32,6 +32,7 @@ namespace ScheduleWidget
         private bool keepDayPopupState;
 
         public event Action ScheduleListRequested;
+        public event Action<int> CharacterSettingsRequested;
 
         // The visible calendar and its pets, in device pixels for placement on monitors with different DPI.
         internal bool TryGetWorkspaceScreenBounds(out Rect bounds)
@@ -2930,7 +2931,12 @@ namespace ScheduleWidget
 
         private void PlayerVisible_Click(object sender, RoutedEventArgs e)
         {
-            data.MiniPlayerVisible = PlayerVisibleToggle.IsChecked == true;
+            SetPlayerVisible(PlayerVisibleToggle.IsChecked == true);
+        }
+
+        public void SetPlayerVisible(bool visible)
+        {
+            data.MiniPlayerVisible = visible;
             UpdatePlayerBar();
             changed?.Invoke();
         }
@@ -3009,6 +3015,12 @@ namespace ScheduleWidget
         private void DayCount_Click(object sender, RoutedEventArgs e)
         {
             if (!(((FrameworkElement)sender).Tag is int count)) return;
+            SetDayCount(count);
+            e.Handled = true;
+        }
+
+        public void SetDayCount(int count)
+        {
             RangePopup.IsOpen = false;
             EndRush(); // the new day count lays out its own page, even mid-오늘로 이동
             count = Math.Max(1, Math.Min(7, count));
@@ -3017,7 +3029,6 @@ namespace ScheduleWidget
             weekStart = DefaultRangeStart(); // before the save, whose refresh then shows the new range right away
             if (countChanged) SaveAndRefresh();
             else Refresh();
-            e.Handled = true;
         }
 
         private void WeekDays_SizeChanged(object sender, SizeChangedEventArgs e)
@@ -5572,6 +5583,7 @@ namespace ScheduleWidget
             ActionsPopup.IsOpen = false;
             activeSlot = Math.Max(0, Math.Min(SlotCount - 1, pet));
             UpdateAnimationButtons();
+            if (CharacterSettingsRequested != null) { CharacterSettingsRequested(activeSlot); return; }
             if (petSettings != null) { petSettings.Select(activeSlot); petSettings.Activate(); return; }
             petSettings = new PetSettingsWindow(this, activeSlot) { Owner = this };
             petSettings.Closed += (s, e) => petSettings = null;

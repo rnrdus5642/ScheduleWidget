@@ -88,6 +88,7 @@
     <Compile Include="Services\DataManager.cs" />
     <Compile Include="Services\IAppDataStore.cs" />
     <Compile Include="Services\ScheduleListPlacement.cs" />
+    <Compile Include="Services\SettingsContentLease.cs" />
     <Compile Include="Services\NativeMethods.cs" />
     <Compile Include="Services\StartupService.cs" />
     <Compile Include="Services\SliderInteraction.cs" />
@@ -106,6 +107,9 @@
     <Compile Include="Models\FeatureSettings.cs" />
     <Page Include="Styles\AuxiliaryStyles.xaml"><Generator>MSBuild:Compile</Generator></Page>
     <Compile Include="MainWindow.Features.cs" />
+    <Compile Include="MainWindow.Settings.cs" />
+    <Page Include="SettingsWindow.xaml"><Generator>MSBuild:Compile</Generator></Page>
+    <Compile Include="SettingsWindow.xaml.cs"><DependentUpon>SettingsWindow.xaml</DependentUpon></Compile>
     <Compile Include="MainWindow.Google.cs" />
     <Compile Include="MainWindow.Update.cs" />
     <Compile Include="MainWindow.UpdateNotice.cs" />

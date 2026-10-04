@@ -1611,18 +1611,12 @@ namespace ScheduleWidget
 
         // ── 설정 ──
 
-        private void SettingsButton_Click(object sender, RoutedEventArgs e)
+        private void SettingsButton_Click(object sender, RoutedEventArgs e) => OpenUnifiedSettings(SettingsPage.General);
+
+        private void BeginSettingsEdit()
         {
             if (appData == null)
                 return;
-
-            if (InlineSettingsPanel.Visibility == Visibility.Visible)
-            {
-                // Open in its own window (from the mini window): bring that forward instead of throwing its changes away.
-                if (settingsHost != null) BringToFront(settingsHost);
-                else CloseInlineSettings(false);
-                return;
-            }
 
             // 설정을 여는 동안에는 위젯 이동 모드를 잠시 끕니다.
             ModeToggle.IsChecked = false;
@@ -1659,7 +1653,7 @@ namespace ScheduleWidget
             UpdateInlineSettingsLabels();
             _inlineSettingsLoading = false;
 
-            InlineSettingsPanel.Visibility = Visibility.Visible;
+            InlineSettingsPanel.Visibility = Visibility.Collapsed; // its named sections are hosted by SettingsWindow
         }
 
         // 넘김 애니메이션 (the mini calendar's ‹ / › page turn): the saved value ↔ the combo's item, each item's Tag being its
@@ -1777,6 +1771,7 @@ namespace ScheduleWidget
         {
             if (_inlineSettingsDraft == null)
                 return;
+            if (contactWindow?.HasPendingChanges == true && !contactWindow.SaveSettings()) return;
 
             string startupError;
             bool startupApplied = _inlineStartupDraft
@@ -1785,7 +1780,7 @@ namespace ScheduleWidget
             if (!startupApplied)
             {
                 System.Windows.MessageBox.Show(
-                    this,
+                    settingsHost ?? this,
                     startupError,
                     "자동 시작 설정",
                     MessageBoxButton.OK,
@@ -1805,10 +1800,15 @@ namespace ScheduleWidget
             bool blockDDay = InlineBlockDDaySwitch.IsChecked == true;
             if (appData.MiniBlockDDayVisible != blockDDay) { appData.MiniBlockDDayVisible = blockDDay; miniWindow?.Refresh(); }
             appData.MiniFlipEffect = DraftFlipEffect; // the mini window reads it when a flip starts: nothing to refresh
+            if (settingsDayCount != null && settingsDayCount.SelectedIndex + 1 != appData.MiniDayCount)
+            {
+                if (miniWindow != null) miniWindow.SetDayCount(settingsDayCount.SelectedIndex + 1);
+                else appData.MiniDayCount = settingsDayCount.SelectedIndex + 1;
+            }
             appData.BringToFrontHotKeyEnabled = InlineHotKeyToggle.IsChecked == true;
             appData.BringToFrontHotKey = _inlineHotKeyDraft.ToString();
             if (!ApplyBringToFrontHotKey())
-                System.Windows.MessageBox.Show(this,
+                System.Windows.MessageBox.Show(settingsHost ?? this,
                     $"{appData.BringToFrontHotKey}는 다른 프로그램이 이미 쓰고 있어 등록하지 못했습니다. 설정에서 다른 단축키로 바꿔 주세요.",
                     "단축키 설정", MessageBoxButton.OK, MessageBoxImage.Warning);
             if (_inlinePetSpotsReset)

@@ -14,11 +14,11 @@
     <Border BorderBrush="{DynamicResource AuxHairlineBrush}" BorderThickness="1">
     <Grid>
         <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
-        <Grid Background="Transparent" Margin="18,14,10,10" MouseLeftButtonDown="Header_MouseLeftButtonDown" Cursor="SizeAll">
+        <Grid x:Name="PetEditorHeader" Background="Transparent" Margin="18,14,10,10" MouseLeftButtonDown="Header_MouseLeftButtonDown" Cursor="SizeAll">
             <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
             <StackPanel>
                 <TextBlock x:Name="HeaderTitle" Text="캐릭터 설정" Style="{StaticResource AuxTitle}" FontSize="22" TextTrimming="CharacterEllipsis"/>
-                <TextBlock x:Name="HeaderHint" Text="바꾸는 즉시 미니 창에 반영되고 저장됩니다." Style="{StaticResource AuxCaption}" Margin="0,4,0,0"/>
+                <TextBlock x:Name="HeaderHint" Text="바꾸는 즉시 달력에 반영되고 저장됩니다." Style="{StaticResource AuxCaption}" Margin="0,4,0,0"/>
             </StackPanel>
             <Button Grid.Column="1" Width="34" Height="34" Padding="0" VerticalAlignment="Top" Cursor="Hand" Style="{StaticResource AuxUtilityButton}"
                     Click="Close_Click" AutomationProperties.Name="닫기">
@@ -81,7 +81,7 @@
                  kept apart from the mini window's; the labels say which). -->
             <Border Style="{StaticResource AuxRoundSection}" Padding="12" Margin="0,0,0,10">
                 <StackPanel>
-                    <CheckBox x:Name="VisibleToggle" Content="미니 창에 캐릭터 표시" Style="{StaticResource AuxCheckBox}" Click="Visible_Click" Margin="0,0,0,10"/>
+                    <CheckBox x:Name="VisibleToggle" Content="달력에 캐릭터 표시" Style="{StaticResource AuxCheckBox}" Click="Visible_Click" Margin="0,0,0,10"/>
                     <Grid>
                         <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                         <TextBlock x:Name="ScaleTitle" Text="크기" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource AuxInkBrush}"/>
