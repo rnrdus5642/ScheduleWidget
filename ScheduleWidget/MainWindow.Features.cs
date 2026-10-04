@@ -66,8 +66,7 @@ namespace ScheduleWidget
             if (petCompanion == null)
             {
                 // No music bar here, but pets in 음악 반복 still follow the music the bar would control.
-                petCompanion = new MiniWindow(appData, () => SaveDataSafely(false), ShowMusic, ShowContacts, ShowMusicMenu, ExitApplication,
-                    null, null, companion: true, musicPlaying: () => ((IMusicControls)this).IsPlaying) { Owner = this, ShowActivated = false };
+                petCompanion = new MiniWindow(appData, () => SaveDataSafely(false), ShowMusic, companion: true, musicPlaying: () => ((IMusicControls)this).IsPlaying) { Owner = this, ShowActivated = false };
                 petCompanion.CompanionHideRequested += () => { appData.MainPetsVisible = false; SaveDataSafely(false); Dispatcher.BeginInvoke(new Action(UpdatePetCompanion)); };
                 petCompanion.SlotsChanged += () => miniWindow?.ReloadCharacter(); // the same pets in the mini window
                 petCompanion.CharacterSettingsRequested += index => OpenCharacterSettings(petCompanion, index);
@@ -184,7 +183,7 @@ namespace ScheduleWidget
                     bool saved = SaveDataSafely();
                     RefreshScheduleList(); // while this window is hidden that only refreshes the mini window
                     return saved;
-                }, ShowMusic, ShowContacts, ShowMusicMenu, ExitApplication, this, OpenSettingsFromMini);
+                }, ShowMusic, player: this, settings: OpenSettingsFromMini);
                 miniWindow.ScheduleListRequested += ToggleScheduleList;
                 miniWindow.SetReminderWarning(reminderErrorMessage);
                 miniWindow.CharacterSettingsRequested += index => OpenCharacterSettings(miniWindow, index);
@@ -484,13 +483,6 @@ namespace ScheduleWidget
         public void ShowMusic()
         {
             OpenUnifiedSettings(SettingsPage.Music);
-        }
-
-        private void ShowMusicMenu(FrameworkElement target)
-        {
-            if (appData == null) return;
-            EnsureMusicWindow();
-            musicWindow.OpenQuickMenu(target);
         }
 
         // Mini window player bar → the (possibly hidden) music window, created on first use.

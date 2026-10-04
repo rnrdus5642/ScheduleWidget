@@ -16,10 +16,7 @@ namespace ScheduleWidget
         private readonly AppData data;
         private readonly Func<bool> changed;
         private readonly Action music;
-        private readonly Action contacts;
-        private readonly Action<FrameworkElement> musicMenu;
-        private readonly Action exit;
-        private readonly Action settings; // 설정 in the menu: back to the original window with its settings panel open
+        private readonly Action settings; // the calendar's gear opens unified settings
         private readonly IMusicControls player;
         private bool closed;
         private string characterPayload;
@@ -28,7 +25,6 @@ namespace ScheduleWidget
         private int pressedPetClickCount;
         private int previousPetClickSlot = -1;
         private DateTime weekStart;
-        private int previewCount = 3;
         private Guid? miniEditId;
         private DateTime? selectedDay;
         private bool miniDateInvalid;
@@ -48,8 +44,8 @@ namespace ScheduleWidget
 
         /// <param name="musicPlaying">Whether music plays, for pets in 음악 반복 when there is no <paramref name="player"/>
         /// (the TODO window's pets: no music bar, but they still dance to the music).</param>
-        public MiniWindow(AppData data, Func<bool> changed, Action music, Action contacts = null,
-            Action<FrameworkElement> musicMenu = null, Action exit = null, IMusicControls player = null, Action settings = null, bool companion = false,
+        public MiniWindow(AppData data, Func<bool> changed, Action music,
+            IMusicControls player = null, Action settings = null, bool companion = false,
             Func<bool> musicPlaying = null)
         {
             this.data = data;
@@ -58,9 +54,6 @@ namespace ScheduleWidget
             if (data.MiniExtraCharacters == null) data.MiniExtraCharacters = new System.Collections.Generic.List<MiniCharacterSlot>();
             this.changed = changed;
             this.music = music;
-            this.contacts = contacts;
-            this.musicMenu = musicMenu;
-            this.exit = exit;
             this.player = player;
             this.settings = settings;
             InitializeComponent();
@@ -77,11 +70,10 @@ namespace ScheduleWidget
             // (it used to be counted as shown here and the pets jumped in size right after opening when it is hidden).
             if (!companion) PlayerBar.Visibility = player != null && data.MiniPlayerVisible ? Visibility.Visible : Visibility.Collapsed;
             UpdateCharacterSize();
-            syncingScale = false;
             UpdateCharacterVisibility();
             UpdatePlayerBar();
             if (player != null || this.musicPlaying != null) MusicWindow.PlaybackChanged += OnPlaybackChanged;
-            TrackPopupClose(PlaylistPopup, VolumePopup, RangePopup, QueuePopup, BlockPopup, ActionsPopup, DayPopup);
+            TrackPopupClose(PlaylistPopup, VolumePopup, RangePopup, QueuePopup, BlockPopup, DayPopup);
             BlockPopup.CustomPopupPlacementCallback = PlaceBlockPopup;
             InitUpcomingPreview(); // › hover: a summary of the schedules after this page (MiniWindow.UpcomingPreview.cs)
             // Restore the calendar board where it was; the window then grows around it for the pets (ApplyPetLayout).
@@ -106,7 +98,7 @@ namespace ScheduleWidget
                 UpdateCharacterSize();
             }
             Refresh();
-            UpdateAnimationButtons();
+            UpdateActivePetState();
             SourceInitialized += (s, e) =>
             {
                 var handle = new WindowInteropHelper(this).Handle;
@@ -151,7 +143,7 @@ namespace ScheduleWidget
                 _ = Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.ApplicationIdle, new Action(PrewarmPopups));
                 await InitCharacterViewAsync();
             };
-            Closed += (s, e) => { FlushSave(); closed = true; MusicWindow.PlaybackChanged -= OnPlaybackChanged; ActionsPopup.IsOpen = false; recoveryTimer?.Stop(); healthTimer?.Stop(); pixelTimer?.Stop(); petWatchTimer?.Stop(); CharacterView.Dispose(); };
+            Closed += (s, e) => { FlushSave(); closed = true; MusicWindow.PlaybackChanged -= OnPlaybackChanged; recoveryTimer?.Stop(); healthTimer?.Stop(); pixelTimer?.Stop(); petWatchTimer?.Stop(); CharacterView.Dispose(); };
             // Pets vanishing: the view's capture can stall after the screen sleeps, the session is locked, the PC resumes
             // or a (virtual) monitor comes and goes — check the view and repaint it (or reload it) when that happens.
             Microsoft.Win32.SystemEvents.PowerModeChanged += OnPowerModeChanged;
@@ -249,12 +241,10 @@ namespace ScheduleWidget
                 DateTime date = weekStart.AddDays(offset);
                 int weekday = ((int)date.DayOfWeek + 6) % 7;
                 var tasks = DayTasks(byDay[date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)], ranges, date);
-                var dayColors = BlockColors(tasks.Take(previewCount).ToList());
+                var dayColors = BlockColors(tasks);
                 string holiday = KoreanHolidays.NameOf(date);
                 string label = date.ToString("M월 d일 (ddd)", korean);
-                int shown = Math.Min(tasks.Count, previewCount);
-                bool hasMore = tasks.Count > previewCount;
-                var previews = tasks.Take(previewCount).Select(s =>
+                var blocks = tasks.Select(s =>
                 {
                     string color = dayColors[s];
                     bool hasTime = !string.IsNullOrWhiteSpace(s.Time);
@@ -271,23 +261,19 @@ namespace ScheduleWidget
                         // 설정's "일정 블록에 D-day 표시" is off.
                         DDay = s.IsCompleted || !data.MiniBlockDDayVisible ? "" : s.DDay,
                         ShowTopLine = hasTime || range.Length > 0 || (!s.IsCompleted && data.MiniBlockDDayVisible),
-                        TitleMaxHeight = TitleLines(shown, hasMore, hasTime || range.Length > 0 || data.MiniBlockDDayVisible) * BlockLineHeight,
                         BlockColor = color, BlockInk = FeatureRules.ReadableText(color),
                         Hint = (range.Length == 0 ? "" : range + " · ") + (string.IsNullOrWhiteSpace(s.Time) ? "" : s.Time + " · ") + s.Title
                     };
                 }).ToList();
                 return new DayCell
                 {
-                    // Everything the day's blocks show: they are rebuilt only when it changes — including each title's line
-                    // budget (the cell was resized) and the top line (the D-day switch).
-                    PreviewKey = string.Join("\u0001", previews.Select(p => System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(p.Item) + "|" +
-                        p.Title + "|" + p.Time + "|" + p.IsCompleted + "|" + p.BlockColor + "|" + p.DDay + "|" + p.ShowTopLine + "|" + p.TitleMaxHeight))
-                        + "|" + tasks.Count + "|" + previewCount,
+                    // Keep every schedule in the day; the list scrolls instead of dropping items at smaller heights.
+                    BlockKey = string.Join("\u0001", blocks.Select(p => System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(p.Item) + "|" +
+                        p.Title + "|" + p.Time + "|" + p.IsCompleted + "|" + p.BlockColor + "|" + p.DDay + "|" + p.ShowTopLine)),
                     Date = date, Day = date.Day, Weekday = "월화수목금토일"[weekday].ToString(), Holiday = holiday,
                     DayInk = holiday != null || weekday == 6 ? theme.Holiday : theme.Ink,
-                    IsToday = date == DateTime.Today, HasTasks = tasks.Any(s => !s.IsCompleted),
-                    TaskPreviews = previews,
-                    MoreLabel = tasks.Count > previewCount ? "+ " + (tasks.Count - previewCount) + "개 일정" : "",
+                    IsToday = date == DateTime.Today,
+                    TaskBlocks = blocks,
                     Ink = holiday != null || weekday == 6 ? theme.Holiday : weekday == 5 ? theme.Saturday : theme.Weekday,
                     Hint = label + (holiday != null ? " · " + holiday : "") + "\n" + (tasks.Count == 0 ? "할 일 없음" : string.Join("\n", tasks.Select(s =>
                         (string.IsNullOrWhiteSpace(s.Time) ? "" : s.Time + " ") + (s.IsCompleted ? "✓ " : "• ") + s.Title +
@@ -303,9 +289,9 @@ namespace ScheduleWidget
         public sealed class DayCell : System.ComponentModel.INotifyPropertyChanged
         {
             public event System.ComponentModel.PropertyChangedEventHandler PropertyChanged;
-            internal string PreviewKey;
-            private DateTime date; private int day; private string weekday, holiday, dayInk, ink, hint, moreLabel;
-            private bool isToday, hasTasks; private object taskPreviews;
+            internal string BlockKey;
+            private DateTime date; private int day; private string weekday, holiday, dayInk, ink, hint;
+            private bool isToday; private object taskBlocks;
             private void Set<T>(ref T field, T value, string name)
             {
                 if (Equals(field, value)) return;
@@ -319,16 +305,14 @@ namespace ScheduleWidget
             public string DayInk { get => dayInk; set => Set(ref dayInk, value, nameof(DayInk)); }
             public string Ink { get => ink; set => Set(ref ink, value, nameof(Ink)); }
             public string Hint { get => hint; set => Set(ref hint, value, nameof(Hint)); }
-            public string MoreLabel { get => moreLabel; set => Set(ref moreLabel, value, nameof(MoreLabel)); }
             public bool IsToday { get => isToday; set => Set(ref isToday, value, nameof(IsToday)); }
-            public bool HasTasks { get => hasTasks; set => Set(ref hasTasks, value, nameof(HasTasks)); }
-            public object TaskPreviews { get => taskPreviews; set => Set(ref taskPreviews, value, nameof(TaskPreviews)); }
+            public object TaskBlocks { get => taskBlocks; set => Set(ref taskBlocks, value, nameof(TaskBlocks)); }
 
             internal void CopyFrom(DayCell next)
             {
                 Date = next.Date; Day = next.Day; Weekday = next.Weekday; Holiday = next.Holiday; DayInk = next.DayInk; Ink = next.Ink;
-                Hint = next.Hint; MoreLabel = next.MoreLabel; IsToday = next.IsToday; HasTasks = next.HasTasks;
-                if (PreviewKey != next.PreviewKey) { PreviewKey = next.PreviewKey; TaskPreviews = next.TaskPreviews; }
+                Hint = next.Hint; IsToday = next.IsToday;
+                if (BlockKey != next.BlockKey) { BlockKey = next.BlockKey; TaskBlocks = next.TaskBlocks; }
             }
         }
 
@@ -457,7 +441,7 @@ namespace ScheduleWidget
 
         private void Block_RightClick(object sender, MouseButtonEventArgs e)
         {
-            e.Handled = true; // the calendar's own right-click menu must not open for a block
+            e.Handled = true;
             if (RecentlyDragged) return;
             var block = sender as FrameworkElement;
             var context = block?.DataContext;
@@ -787,7 +771,6 @@ namespace ScheduleWidget
             var button = sender as Button;
             if (button == null || !(button.Tag is DateTime) || RecentlyDragged) return;
             e.Handled = true;
-            ActionsPopup.IsOpen = false;
             DateTime day = ((DateTime)button.Tag).Date;
             // Clicking the same day again while its bubble shows (or the press that just closed it) only closes it.
             bool sameDay = dayPopupDay == day;
@@ -2126,25 +2109,12 @@ namespace ScheduleWidget
         // A batch of key presses (just how many) for the page's pets in 타이핑 반응.
         private void OnTypingKeys(int count) => PostToPage("{\"action\":\"typing\",\"count\":" + count.ToString(System.Globalization.CultureInfo.InvariantCulture) + "}");
 
-        // Built-in actions, then the music actions this pet declares in pet.json (only those), then the two cycling modes.
-        private void UpdateAnimationButtons()
+        // Keep the selected pet and its settings page synchronized after a character or slot changes.
+        private void UpdateActivePetState()
         {
-            // The menu acts on the pet that was right-clicked (activeSlot).
             if (activeSlot >= SlotCount) activeSlot = 0;
             if (activeSlot < slotCharacters.Count) currentCharacter = slotCharacters[activeSlot];
-            if (currentCharacter != null) characterRows = currentCharacter.Rows;
-            AnimationTitle.Text = SlotCount <= 1 ? "캐릭터 동작"
-                : (activeSlot + 1) + "번째 캐릭터" + (activeSlot < slotCharacters.Count ? " · " + slotCharacters[activeSlot].Name : "");
-            AddCharacterButton.IsEnabled = SlotCount < MaxCharacters;
-            RemoveCharacterButton.IsEnabled = SlotCount > 1;
-            AnimationButtons.IsEnabled = PetsShown && characterRows > 0;
-            string current = SlotAnimation(activeSlot);
-            AnimationButtons.ItemsSource = AnimationOptions(currentCharacter).Select(o => new { o.Key, Name = o.Label, Selected = o.Key == current,
-                Tip = o.Key == TypingMode ? "타이핑 반응: " + PetSettingsWindow.TypingPrivacyNote : null }).ToList();
-            CharacterScaleLabel.Text = SlotCount > 1 ? (activeSlot + 1) + "번째 캐릭터 크기" : "캐릭터 크기"; // the right-clicked pet
-            RemoveCharacterButton.Content = SlotCount > 1 ? (activeSlot + 1) + "번째 캐릭터 빼기" : "이 캐릭터 빼기";
-            SyncScaleSlider();
-            PetsChanged?.Invoke(); // keep an open 캐릭터 설정 window in step
+            PetsChanged?.Invoke();
         }
 
         // The actions a pet offers: the standard ones, its pet.json extra actions (music, keyboard), 랜덤 순회, 음악 반복 (only with
@@ -2169,8 +2139,6 @@ namespace ScheduleWidget
             if (closed || PlayerBar == null) return;
             bool shown = player != null && data.MiniPlayerVisible;
             PlayerBar.Visibility = shown ? Visibility.Visible : Visibility.Collapsed;
-            PlayerVisibleToggle.IsChecked = data.MiniPlayerVisible;
-            PlayerVisibleToggle.Visibility = player != null ? Visibility.Visible : Visibility.Collapsed;
             UpdateCalendarBottom();
             if (!shown)
             {
@@ -2580,18 +2548,13 @@ namespace ScheduleWidget
         }
 
         /// <summary>
-        /// True when a right-click menu (actions menu or block bubble) is open or was just closed by this same press;
-        /// both get closed. A right-click while the buttons are showing should only make them go away.
+        /// True when the schedule block menu is open or was just closed by this same press.
+        /// A right-click while its buttons are showing should only make them go away.
         /// </summary>
         private bool CloseRightClickMenus()
         {
-            bool wasOpen = false;
-            foreach (var popup in new[] { ActionsPopup, BlockPopup })
-            {
-                if (popup.IsOpen) { popup.IsOpen = false; wasOpen = true; }
-                else if (popupClosedAt.TryGetValue(popup, out DateTime closedAt) && (DateTime.Now - closedAt).TotalMilliseconds < 300) wasOpen = true;
-            }
-            return wasOpen;
+            if (BlockPopup.IsOpen) { BlockPopup.IsOpen = false; return true; }
+            return popupClosedAt.TryGetValue(BlockPopup, out DateTime closedAt) && (DateTime.Now - closedAt).TotalMilliseconds < 300;
         }
 
         // ---- Playlist picker (dropdown next to ⏮) ----
@@ -2889,11 +2852,6 @@ namespace ScheduleWidget
             UpdatePlayerBar();
         }
 
-        private void PlayerVisible_Click(object sender, RoutedEventArgs e)
-        {
-            SetPlayerVisible(PlayerVisibleToggle.IsChecked == true);
-        }
-
         public void SetPlayerVisible(bool visible)
         {
             data.MiniPlayerVisible = visible;
@@ -2941,7 +2899,6 @@ namespace ScheduleWidget
         private void RangeLabel_Click(object sender, RoutedEventArgs e)
         {
             CloseDayPopup();
-            ActionsPopup.IsOpen = false;
             if (!RangePopup.IsOpen) RangeCalendar.Visibility = Visibility.Collapsed;
             if (!RangePopup.IsOpen) UpdateDayCountButtons();
             TogglePopup(RangePopup);
@@ -2956,7 +2913,7 @@ namespace ScheduleWidget
             UpdateDayCountButtons();
             var infinite = new Size(double.PositiveInfinity, double.PositiveInfinity);
             RangeCalendar.Visibility = Visibility.Visible;
-            foreach (var popup in new[] { RangePopup, DayPopup, ActionsPopup, BlockPopup, PlaylistPopup, VolumePopup, QueuePopup })
+            foreach (var popup in new[] { RangePopup, DayPopup, BlockPopup, PlaylistPopup, VolumePopup, QueuePopup })
             {
                 if (popup == null || popup.IsOpen || !(popup.Child is FrameworkElement content)) continue;
                 content.ApplyTemplate();
@@ -2991,48 +2948,19 @@ namespace ScheduleWidget
             else Refresh();
         }
 
+        private void DaySchedules_DateChanged(object sender, System.Windows.Data.DataTransferEventArgs e)
+        {
+            // The day cells are reused across weeks. A different date starts at its first schedule.
+            if (e.Property != TagProperty || !(sender is ItemsControl list)) return;
+            (list.Template?.FindName("DayScheduleScroll", list) as ScrollViewer)?.ScrollToTop();
+        }
+
         private void WeekDays_SizeChanged(object sender, SizeChangedEventArgs e)
         {
             // A flip's old page is a picture of the day area at its old size: a resize (corner grip, music bar rows) ends it.
             FinishWeekFlip();
-            // Show as many schedule blocks per day as the resized calendar can fit.
-            int fit = e.NewSize.Height > 0 ? Math.Max(0, Math.Min(8, (int)((e.NewSize.Height - 70) / 50))) : 3;
-            double area = e.NewSize.Height > 0 ? Math.Max(0, e.NewSize.Height - 70) : DefaultBlockArea;
-            bool linesChanged = (int)(area / BlockLineHeight) != (int)(blockArea / BlockLineHeight);
-            blockArea = area;
-            if (fit == previewCount && !linesChanged) return;
-            previewCount = fit;
-            Refresh();
         }
 
-        private const double BlockLineHeight = 14, DefaultBlockArea = 178;
-        private double blockArea = DefaultBlockArea;
-
-        // Long titles wrap onto as many lines as the day cell has room for, split evenly between that day's
-        // blocks (at least the original two lines); the rest is trimmed with an ellipsis.
-        private int TitleLines(int shown, bool hasMore, bool hasTime)
-        {
-            if (shown <= 0) return 2;
-            double perBlock = (blockArea - (hasMore ? 16 : 0)) / shown;
-            double chrome = 8 + 5 + (hasTime ? BlockLineHeight : 0); // padding, gap, time line
-            return Math.Max(2, Math.Min(12, (int)((perBlock - chrome) / BlockLineHeight)));
-        }
-
-        private int characterRows = 1;
-        private bool syncingScale = true; // blocks slider events until the saved scale is loaded
-
-        private void CharacterScale_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
-        {
-            int scale = (int)Math.Round(CharacterScaleSlider.Value);
-            if (CharacterScaleText != null) CharacterScaleText.Text = scale + "%";
-            if (syncingScale || scale == SlotScale(activeSlot)) return;
-            var before = PetBoardRects(BoardWidth, BoardHeight);
-            SetSlotScale(activeSlot, scale); // the right-clicked pet only
-            UpdateCharacterSize();
-            KeepPetsApart(before);
-            SaveSoon(); // dragging the slider fires many ticks; write the file once it settles
-            PetsChanged?.Invoke();
-        }
 
         // The pets are sized from the board, not from the calendar (whose height follows the music bar's rows): only the
         // calendar's first real size (none before the first layout) or a new size basis (the bar shown / hidden, the board
@@ -3062,7 +2990,6 @@ namespace ScheduleWidget
         public void UpdateCharacterSize()
         {
             if (closed || CharacterView == null) return;
-            SyncScaleSlider();
             // Before the first layout (or while collapsed) the board has no real size yet: keep the last good size.
             if (!companion && IsLoaded && WeekCalendar.ActualHeight <= 0) return;
             characterBaseHeight = PetSizeBasis() * 0.5; // 100% = half the calendar; each pet scales this by its own size
@@ -3147,13 +3074,9 @@ namespace ScheduleWidget
         {
             if (RecentlyDragged) return;
             CloseDayPopup();
-            ActionsPopup.IsOpen = false;
             ScheduleListRequested?.Invoke();
         }
-        private void Music_Click(object sender, RoutedEventArgs e) { CloseDayPopup(); ActionsPopup.IsOpen = false; music(); }
-        private void Contacts_Click(object sender, RoutedEventArgs e) { CloseDayPopup(); ActionsPopup.IsOpen = false; contacts?.Invoke(); }
-        private void Exit_Click(object sender, RoutedEventArgs e) { CloseDayPopup(); ActionsPopup.IsOpen = false; exit?.Invoke(); }
-        private void Settings_Click(object sender, RoutedEventArgs e) { if (RecentlyDragged) return; CloseDayPopup(); ActionsPopup.IsOpen = false; settings?.Invoke(); }
+        private void Settings_Click(object sender, RoutedEventArgs e) { if (RecentlyDragged) return; CloseDayPopup(); settings?.Invoke(); }
 
         public void SetReminderWarning(string message) => HeaderSettingsButton.ToolTip = string.IsNullOrWhiteSpace(message) ? "설정" : message;
 
@@ -3272,45 +3195,11 @@ namespace ScheduleWidget
             OpenPetSettings(pet);
         }
 
-        // With the character hidden, right-clicking the calendar is the way into the same menu.
-        private void Calendar_RightClick(object sender, MouseButtonEventArgs e)
-        {
-            e.Handled = true;
-            if (RecentlyDragged || CloseRightClickMenus()) return;
-            CloseDayPopup();
-            activeSlot = FirstShownSlot();
-            UpdateAnimationButtons();
-            RangePopup.IsOpen = false;
-            OpenActions();
-        }
-
-        // The pet a menu opened without pointing at one acts on: the first that shows (the first pet when none does).
+        // The default pet selected in settings: the first that shows, or the first pet when none does.
         internal int FirstShownSlot()
         {
             for (int i = 0; i < SlotCount; i++) if (!PetHidden(i)) return i;
             return 0;
-        }
-
-        // Right-click menu opens right below the mouse pointer (top-left corner at the pointer).
-        // Opened from the keyboard (Apps / Shift+F10) it keeps the old anchor above the character (or the calendar).
-        private void OpenActions(bool atPointer = true)
-        {
-            if (atPointer)
-            {
-                ActionsPopup.PlacementTarget = this;
-                ActionsPopup.Placement = System.Windows.Controls.Primitives.PlacementMode.MousePoint;
-            }
-            else
-            {
-                // Above the menu's pet — only while its hit box shows (a hidden pet has none: it would anchor nowhere).
-                var hit = new[] { PetHit0, PetHit1, PetHit2 }[Math.Max(0, Math.Min(2, activeSlot))];
-                bool characterShown = PetsShown && hit.Visibility == Visibility.Visible;
-                ActionsPopup.PlacementTarget = characterShown ? (UIElement)hit : WeekCalendar;
-                ActionsPopup.Placement = characterShown ? System.Windows.Controls.Primitives.PlacementMode.Top
-                    : System.Windows.Controls.Primitives.PlacementMode.Bottom;
-            }
-            RemeasurePopup(ActionsPopup);
-            ActionsPopup.IsOpen = true;
         }
 
         // Only the calendar's top band (period label, arrows, style drop-down, ⚙, TODO) moves the window when dragged; the
@@ -3365,7 +3254,6 @@ namespace ScheduleWidget
         {
             if (companion) { Mouse.Capture(null); return; } // the TODO window's pets don't move that window
             CloseDayPopup();
-            ActionsPopup.IsOpen = false;
             RangePopup.IsOpen = false;
             // The volume bar stays open by itself and would be left behind where the window was.
             CloseVolumeBar();
@@ -3460,18 +3348,6 @@ namespace ScheduleWidget
             EndWindowDrag();
         }
 
-        private void CharacterVisible_Click(object sender, RoutedEventArgs e)
-        {
-            SetCharacterVisible(CharacterVisibleToggle.IsChecked == true);
-            changed?.Invoke();
-            // The menu was anchored to the character; reopen it at the pointer when the character disappears.
-            if (!data.MiniCharacterVisible && ActionsPopup.IsOpen)
-            {
-                ActionsPopup.IsOpen = false;
-                OpenActions();
-            }
-        }
-
         // Width of the character column plus its gap, for a window of the given height.
         public static double CharacterColumnWidth(AppData data, double windowHeight)
         {
@@ -3515,9 +3391,6 @@ namespace ScheduleWidget
             bool shown = PetsShown;
             if (!shown) EndPetPlacement(); // nothing left to drag
             ApplyPetLayout();
-            CharacterVisibleToggle.IsChecked = shown;
-            CharacterScaleSlider.IsEnabled = shown;
-            AnimationButtons.IsEnabled = shown && characterRows > 0;
             PetsChanged?.Invoke();
         }
 
@@ -3609,13 +3482,6 @@ namespace ScheduleWidget
             changed?.Invoke();
         }
 
-        private void Music_RightClick(object sender, MouseButtonEventArgs e)
-        {
-            e.Handled = true;
-            CloseDayPopup();
-            ActionsPopup.IsOpen = false;
-            musicMenu?.Invoke(CharacterView);
-        }
         private void OnDisplayChanged(object sender, EventArgs e) =>
             Dispatcher.BeginInvoke(new Action(ReattachToDesktop), System.Windows.Threading.DispatcherPriority.Background);
 
@@ -3851,24 +3717,9 @@ namespace ScheduleWidget
                 else if (VolumePopup.IsOpen) VolumePopup.IsOpen = false;
                 else if (PlaylistPopup.IsOpen) PlaylistPopup.IsOpen = false;
                 else if (BlockPopup.IsOpen) BlockPopup.IsOpen = false;
-                else if (ActionsPopup.IsOpen) ActionsPopup.IsOpen = false;
                 else HideToTray(); // nothing open: hide the widget; the tray icon (열기) brings it back
                 return;
             }
-            if (e.Key == Key.Apps || e.Key == Key.F10 && Keyboard.Modifiers == ModifierKeys.Shift)
-            { if (!CloseRightClickMenus()) { activeSlot = FirstShownSlot(); UpdateAnimationButtons(); OpenActions(atPointer: false); } e.Handled = true; }
-        }
-
-        private void Animation_Click(object sender, RoutedEventArgs e)
-        {
-            CloseDayPopup();
-            string state = (string)((Button)sender).Tag;
-            // A menu opened for a pet that is gone since (removed in the other pets window) must not change another pet.
-            if (activeSlot < 0 || activeSlot >= SlotCount) { UpdateAnimationButtons(); return; }
-            SetSlotAnimation(activeSlot, state);
-            changed();
-            UpdateAnimationButtons(); // only the selected-action highlight changes
-            PostToPage(JsonConvert.SerializeObject(new { action = "animation", index = activeSlot, state }));
         }
 
         // ---- The pets' web view: start it, and bring it back when it dies or stops drawing ----
@@ -4505,7 +4356,7 @@ namespace ScheduleWidget
             {
                 // Starting, or waiting for the new view after a crash (that one loads the pets itself). An open 캐릭터 설정
                 // still hears of it (a pet added or removed meanwhile), so its list never points past the pets.
-                UpdateAnimationButtons();
+                UpdateActivePetState();
                 return;
             }
             try
@@ -4576,7 +4427,7 @@ namespace ScheduleWidget
                         changed?.Invoke();
                     }
                 currentCharacter = slotCharacters[0];
-                UpdateAnimationButtons();
+                UpdateActivePetState();
                 UpdateCharacterSize(); // the view is as wide as the number of pets
                 lastLayoutJson = null; // a fresh page needs the layout again
                 characterPayload = JsonConvert.SerializeObject(new
@@ -4595,10 +4446,6 @@ namespace ScheduleWidget
                 if (unreadablePets.Count > 0) ShowCharacterError("캐릭터 파일을 읽지 못했습니다. 더블클릭해 설정에서 다시 선택해 주세요.", unreadablePets.Min());
                 else CharacterError.Visibility = Visibility.Collapsed;
                 ScheduleReadRetry(passing, unreadablePets.Count > 0);
-                AnimationHint.Text = characterRows > 0
-                    ? (SlotCount > 1 ? "우클릭한 캐릭터의 동작을 바꿉니다. 위치는 캐릭터 설정의 드래그로 위치 설정에서 옮길 수 있어요."
-                        : "선택한 동작을 유지합니다. 위치는 캐릭터 설정의 드래그로 위치 설정에서 옮길 수 있어요.")
-                    : "일반 이미지와 GIF는 원본 모습으로 표시합니다.";
                 pageReadyAt = DateTime.MinValue; // loading: the pixel check waits for the new page
                 navigatedAt = DateTime.Now;
                 core.Navigate(EmbeddedBrowser.Origin + "character.html?mini&character=" + Guid.NewGuid().ToString("N"));
@@ -4683,9 +4530,6 @@ namespace ScheduleWidget
             RemoveSpotSlot(i);
         }
 
-        // Calendar menu → 캐릭터 설정 (also the way in when every pet is hidden).
-        private void PetSettingsMenu_Click(object sender, RoutedEventArgs e) => OpenPetSettings(activeSlot);
-
         // One picker for every way in (left-clicking a pet, 캐릭터 설정's 바꾸기 / 추가), always with 드래그로 위치 설정.
         internal Action pickerOverride = null; // tests: stands in for the modal picker
 
@@ -4693,7 +4537,7 @@ namespace ScheduleWidget
         /// the app reloads the other pets window (mini window ↔ TODO window's pets), which shows the same pets.</summary>
         public event Action SlotsChanged;
 
-        // The right-click menu and 캐릭터 설정 act on activeSlot; after pets were removed it may point past them.
+        // Character settings act on activeSlot; after pets were removed it may point past them.
         private void ClampActiveSlot() => activeSlot = Math.Max(0, Math.Min(SlotCount - 1, activeSlot));
 
         // The characters of every pet but this one (the picker says when a character it deletes is one of them).
@@ -4708,7 +4552,6 @@ namespace ScheduleWidget
             if (closed) return; // picking a replacement is an explicit action in character settings
             if (pickerOverride != null) { pickerOverride(); return; }
             CloseDayPopup();
-            ActionsPopup.IsOpen = false;
             ClampActiveSlot();
             int slot = activeSlot;
             var picker = new CharacterWindow(SlotManifest(slot), offerPlacement: CanPlacePets, otherSlots: OtherSlotManifests(slot)) { Owner = this };
@@ -4727,7 +4570,7 @@ namespace ScheduleWidget
         // ---- Several pets (up to 3) side by side in the one character view ----
         public const int MaxCharacters = 3;
         private readonly System.Collections.Generic.List<CharacterEntry> slotCharacters = new System.Collections.Generic.List<CharacterEntry>();
-        private int activeSlot; // the pet the right-click menu acts on
+        private int activeSlot; // the pet currently selected in character settings
         private double characterCellWidth = 120;
 
         private int SlotCount => 1 + Math.Min(MaxCharacters - 1, data.MiniExtraCharacters?.Count ?? 0);
@@ -4823,15 +4666,6 @@ namespace ScheduleWidget
             // Not capped by the calendar: pets can stand outside it, so up to 300 % may be taller than the calendar itself.
             double height = Math.Max(40, characterBaseHeight * SlotScale(i) / 100.0);
             return new Size(Math.Round(height * 12 / 13), height); // sprite cell aspect 192:208
-        }
-
-        // The menu's 캐릭터 크기 slider shows the right-clicked pet's size.
-        private void SyncScaleSlider()
-        {
-            if (CharacterScaleSlider == null || (int)Math.Round(CharacterScaleSlider.Value) == SlotScale(activeSlot)) return;
-            syncingScale = true;
-            try { CharacterScaleSlider.Value = SlotScale(activeSlot); }
-            finally { syncingScale = false; }
         }
 
         /// <summary>Which pet is under this point of the character view (the one drawn on top wins; else the nearest).</summary>
@@ -4967,7 +4801,6 @@ namespace ScheduleWidget
             if (closed || !PetsShown) return;
             if (Enumerable.Range(0, SlotCount).All(PetHidden)) return; // nothing to drag
             CloseDayPopup();
-            ActionsPopup.IsOpen = false;
             petSettings?.Close(); // the pets are dragged on the mini window itself
             placingPets = true;
             PlacementBanner.Visibility = Visibility.Visible;
@@ -5043,7 +4876,6 @@ namespace ScheduleWidget
         private void AddCharacter_Click(object sender, RoutedEventArgs e)
         {
             CloseDayPopup();
-            ActionsPopup.IsOpen = false;
             if (SlotCount >= MaxCharacters) return;
             ClampActiveSlot();
             // A new pet has no character yet: none is "the current one" (deleting one the pets use says so instead).
@@ -5066,7 +4898,6 @@ namespace ScheduleWidget
         private void RemoveCharacter_Click(object sender, RoutedEventArgs e)
         {
             CloseDayPopup();
-            ActionsPopup.IsOpen = false;
             if (SlotCount <= 1) return;
             ClampActiveSlot();
             int removed = activeSlot;
@@ -5456,7 +5287,7 @@ namespace ScheduleWidget
         int IPetSettingsHost.MaxPets => MaxCharacters;
         string IPetSettingsHost.PetName(int index) => index >= 0 && index < slotCharacters.Count ? slotCharacters[index].Name : (index + 1) + "번째 캐릭터";
         string IPetSettingsHost.PetAnimation(int index) => SlotAnimation(index);
-        // Like the menu (characterRows): a still image / GIF has no sprite rows to act out. Not loaded yet: assumed to animate.
+        // A still image / GIF has no sprite rows to act out. Not loaded yet: assumed to animate.
         bool IPetSettingsHost.PetAnimates(int index) => index < 0 || index >= slotCharacters.Count || slotCharacters[index].Rows > 0;
         System.Collections.Generic.IReadOnlyList<(string Key, string Label)> IPetSettingsHost.PetAnimationOptions(int index) =>
             AnimationOptions(index >= 0 && index < slotCharacters.Count ? slotCharacters[index] : null);
@@ -5476,7 +5307,7 @@ namespace ScheduleWidget
             SetSlotAnimation(index, key);
             changed?.Invoke();
             PostToPage(JsonConvert.SerializeObject(new { action = "animation", index, state = key }));
-            UpdateAnimationButtons();
+            UpdateActivePetState();
         }
         void IPetSettingsHost.ChangePet(int index) { if (!IsPet(index)) return; activeSlot = index; OpenCharacterPicker(); }
         void IPetSettingsHost.AddPet()
@@ -5517,7 +5348,7 @@ namespace ScheduleWidget
             for (int i = 0; i < SlotCount; i++)
                 PostToPage(JsonConvert.SerializeObject(new { action = "animation", index = i, state = "idle" }));
             SendPetFlips();
-            UpdateAnimationButtons();
+            UpdateActivePetState();
             SaveSoon();
         }
 
@@ -5559,9 +5390,8 @@ namespace ScheduleWidget
         {
             if (closed) return;
             CloseDayPopup();
-            ActionsPopup.IsOpen = false;
             activeSlot = Math.Max(0, Math.Min(SlotCount - 1, pet));
-            UpdateAnimationButtons();
+            UpdateActivePetState();
             if (CharacterSettingsRequested != null) { CharacterSettingsRequested(activeSlot); return; }
             if (petSettings != null) { petSettings.Select(activeSlot); petSettings.Activate(); return; }
             petSettings = new PetSettingsWindow(this, activeSlot) { Owner = this };

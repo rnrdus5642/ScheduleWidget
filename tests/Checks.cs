@@ -7,6 +7,8 @@ using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
 using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Media;
 using Newtonsoft.Json;
 
 namespace ScheduleWidget.Checks
@@ -284,9 +286,70 @@ namespace ScheduleWidget.Checks
                 var clickMini = new MiniWindow(clickData, () => true, () => { });
                 windows.Add(clickMini);
                 Run("Character double-click selects its settings without opening the picker", () => PetClickRouting(clickMini, clickData));
+                Run("Compact calendar shows multiple schedules and scrolls every day independently", CalendarDayLists);
                 Run("Unified settings navigation, save, cancel and content lifecycle", () => UnifiedSettingsFlow(main, mini, data));
             }
             finally { app.Shutdown(); }
+        }
+
+        private static void CalendarDayLists()
+        {
+            var data = new AppData { MiniCharacterVisible = false, MiniPlayerVisible = false };
+            DateTime monday = new DateTime(2026, 10, 5);
+            for (int day = 0; day < 2; day++)
+                for (int i = 0; i < 12; i++)
+                    data.Schedules.Add(new ScheduleItem { Title = "Task " + i.ToString("00"), Period = monday.AddDays(day).ToString("yyyy-MM-dd") });
+            for (int i = 0; i < 12; i++)
+                data.Schedules.Add(new ScheduleItem { Title = "Next " + i.ToString("00"), Period = monday.AddDays(7).ToString("yyyy-MM-dd") });
+            var mini = new MiniWindow(data, () => true, () => { });
+            try
+            {
+                mini.ShowRangeFrom(monday);
+                var content = (FrameworkElement)mini.Content;
+                content.Measure(new Size(800, 220));
+                content.Arrange(new Rect(0, 0, 800, 220));
+                content.UpdateLayout();
+                var days = (ItemsControl)mini.FindName("WeekDays");
+                var firstDay = (FrameworkElement)days.ItemContainerGenerator.ContainerFromIndex(0);
+                var nextDay = (FrameworkElement)days.ItemContainerGenerator.ContainerFromIndex(1);
+                var firstList = VisualDescendants<ItemsControl>(firstDay).Single(c => c.Name == "DaySchedules");
+                var nextList = VisualDescendants<ItemsControl>(nextDay).Single(c => c.Name == "DaySchedules");
+                var scroll = VisualDescendants<ScrollViewer>(firstList).Single();
+                var nextScroll = VisualDescendants<ScrollViewer>(nextList).Single();
+                Require(firstList.Items.Count == 12 && nextList.Items.Count == 12, "A small calendar dropped schedules.");
+                var second = (FrameworkElement)firstList.ItemContainerGenerator.ContainerFromIndex(1);
+                Require(second != null, "The second schedule was not rendered.");
+                var secondBounds = second.TransformToAncestor(scroll).TransformBounds(new Rect(second.RenderSize));
+                Require(secondBounds.Bottom <= scroll.ViewportHeight + 1, "Only one schedule fits in a compact day cell.");
+                Require(scroll.ScrollableHeight > 0, "Overflow schedules cannot be scrolled.");
+                scroll.ScrollToEnd();
+                content.UpdateLayout();
+                var last = (FrameworkElement)firstList.ItemContainerGenerator.ContainerFromIndex(11);
+                Require(last != null && scroll.VerticalOffset > 0, "The final schedule is unreachable.");
+                var lastBounds = last.TransformToAncestor(scroll).TransformBounds(new Rect(last.RenderSize));
+                Require(lastBounds.Top >= -1 && lastBounds.Bottom <= scroll.ViewportHeight + 1, "The final schedule is clipped after scrolling.");
+                Require(nextScroll.VerticalOffset == 0, "Scrolling one date also scrolled another date.");
+                // A resize must preserve all items, including dates that have more than the old eight-item cap.
+                content.Measure(new Size(800, 190));
+                content.Arrange(new Rect(0, 0, 800, 190));
+                content.UpdateLayout();
+                Require(firstList.Items.Count == 12, "Resizing hid schedules again.");
+                mini.ShowRangeFrom(monday.AddDays(7));
+                content.UpdateLayout();
+                Require(scroll.VerticalOffset == 0, "A different week inherited the previous date's scroll position.");
+                Require(mini.FindName("ActionsPopup") == null && !mini.IsVisible, "The removed settings menu remains or a check displayed a window.");
+            }
+            finally { mini.Close(); }
+        }
+
+        private static IEnumerable<T> VisualDescendants<T>(DependencyObject root) where T : DependencyObject
+        {
+            for (int i = 0; i < VisualTreeHelper.GetChildrenCount(root); i++)
+            {
+                var child = VisualTreeHelper.GetChild(root, i);
+                if (child is T match) yield return match;
+                foreach (var descendant in VisualDescendants<T>(child)) yield return descendant;
+            }
         }
 
         private static void ListPlacement()

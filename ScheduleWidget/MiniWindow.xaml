@@ -220,7 +220,6 @@
         </Border>
         <!-- Illustrated paper, with no rectangular window surface behind it. -->
         <Grid x:Name="WeekCalendar" Grid.Column="2" Margin="0,4,2,8" SizeChanged="WeekCalendar_SizeChanged"
-              MouseRightButtonUp="Calendar_RightClick"
               PreviewMouseLeftButtonDown="Calendar_PreviewMouseDown" PreviewMouseMove="Calendar_PreviewMouseMove">
             <Border Margin="0,8,0,0" CornerRadius="8" Background="{DynamicResource MiniPaperBrush}" BorderBrush="{DynamicResource MiniFrameBrush}" BorderThickness="2.5">
                 <Grid>
@@ -270,7 +269,7 @@
                             <Button Style="{StaticResource DayButton}" Tag="{Binding Date}" Click="Day_Click"
                                     ToolTip="{Binding Hint}" ToolTipService.InitialShowDelay="250" AutomationProperties.Name="{Binding Hint}">
                                 <Grid>
-                                    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                                    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
                                     <StackPanel VerticalAlignment="Top">
                                         <TextBlock Text="{Binding Weekday}" HorizontalAlignment="Center" FontSize="10" Foreground="{Binding Ink}"/>
                                         <TextBlock Text="{Binding Day}" HorizontalAlignment="Center" FontSize="18" FontWeight="SemiBold" Foreground="{Binding DayInk}" Margin="0,1,0,0"/>
@@ -281,17 +280,27 @@
                                             </Style.Triggers></Style></TextBlock.Style>
                                         </TextBlock>
                                     </StackPanel>
-                                    <ItemsControl Grid.Row="1" ItemsSource="{Binding TaskPreviews}" Margin="0,8,0,0" VerticalAlignment="Top">
+                                    <ItemsControl x:Name="DaySchedules" Grid.Row="1" ItemsSource="{Binding TaskBlocks}" Margin="0,5,0,0"
+                                                  Tag="{Binding Date, NotifyOnTargetUpdated=True}" TargetUpdated="DaySchedules_DateChanged"
+                                                  VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling"
+                                                  VirtualizingPanel.ScrollUnit="Pixel" ScrollViewer.CanContentScroll="True">
+                                        <ItemsControl.Template><ControlTemplate TargetType="ItemsControl">
+                                            <ScrollViewer x:Name="DayScheduleScroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                                                          CanContentScroll="True" PanningMode="VerticalOnly" Focusable="False">
+                                                <ItemsPresenter/>
+                                            </ScrollViewer>
+                                        </ControlTemplate></ItemsControl.Template>
+                                        <ItemsControl.ItemsPanel><ItemsPanelTemplate><VirtualizingStackPanel/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
                                         <ItemsControl.ItemTemplate><DataTemplate>
                                             <!-- Each block: left click falls through to the day button (opens the day bubble); right click opens 수정/완료/삭제. -->
-                                            <Border Background="{Binding BlockColor}" CornerRadius="2" Padding="5,4" Margin="0,0,0,5"
+                                            <Border Background="{Binding BlockColor}" CornerRadius="2" Padding="4,3" Margin="0,0,0,3"
                                                     MouseRightButtonUp="Block_RightClick" ToolTip="{Binding Hint}">
                                                 <Border.Style><Style TargetType="Border"><Style.Triggers>
                                                     <DataTrigger Binding="{Binding IsCompleted}" Value="True"><Setter Property="Opacity" Value="0.6"/></DataTrigger>
                                                 </Style.Triggers></Style></Border.Style>
                                                 <StackPanel>
                                                     <!-- Top line: time (if any) on the left, D-day on the right. -->
-                                                    <Grid Margin="0,0,0,2">
+                                                    <Grid Margin="0,0,0,1">
                                                         <Grid.Style><Style TargetType="Grid"><Style.Triggers>
                                                             <DataTrigger Binding="{Binding ShowTopLine}" Value="False"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger>
                                                         </Style.Triggers></Style></Grid.Style>
@@ -299,8 +308,8 @@
                                                         <TextBlock Text="{Binding Time}" Foreground="{Binding BlockInk}" FontSize="10" TextTrimming="CharacterEllipsis"/>
                                                         <TextBlock Grid.Column="1" Text="{Binding DDay}" Foreground="{Binding BlockInk}" FontSize="10" FontWeight="Bold" Margin="4,0,0,0"/>
                                                     </Grid>
-                                                    <TextBlock Text="{Binding Title, Converter={StaticResource KeepAll}}" Foreground="{Binding BlockInk}" FontSize="11" LineHeight="14"
-                                                               TextWrapping="Wrap" TextTrimming="CharacterEllipsis" MaxHeight="{Binding TitleMaxHeight}">
+                                                    <TextBlock Text="{Binding Title, Converter={StaticResource KeepAll}}" Foreground="{Binding BlockInk}" FontSize="11" LineHeight="14" LineStackingStrategy="BlockLineHeight"
+                                                               TextWrapping="Wrap" TextTrimming="CharacterEllipsis" MaxHeight="28">
                                                         <TextBlock.Style><Style TargetType="TextBlock"><Style.Triggers>
                                                             <DataTrigger Binding="{Binding IsCompleted}" Value="True"><Setter Property="TextDecorations" Value="Strikethrough"/></DataTrigger>
                                                         </Style.Triggers></Style></TextBlock.Style>
@@ -309,11 +318,6 @@
                                             </Border>
                                         </DataTemplate></ItemsControl.ItemTemplate>
                                     </ItemsControl>
-                                    <TextBlock Grid.Row="2" Text="{Binding MoreLabel}" FontSize="10" Foreground="{DynamicResource MiniInkBrush}" Margin="0,3,0,0">
-                                        <TextBlock.Style><Style TargetType="TextBlock"><Style.Triggers>
-                                            <DataTrigger Binding="{Binding MoreLabel}" Value=""><Setter Property="Visibility" Value="Collapsed"/></DataTrigger>
-                                        </Style.Triggers></Style></TextBlock.Style>
-                                    </TextBlock>
                                 </Grid>
                             </Button>
                         </DataTemplate></ItemsControl.ItemTemplate>
@@ -348,66 +352,7 @@
                 </Style></Thumb.Style>
             </Thumb>
         </Grid>
-        <Popup x:Name="ActionsPopup" PlacementTarget="{Binding ElementName=CharacterView}" Placement="Top"
-               AllowsTransparency="True" StaysOpen="False" PopupAnimation="Fade">
-            <Border Background="{DynamicResource AuxSurfaceBrush}" BorderBrush="{DynamicResource AuxHairlineBrush}"
-                    BorderThickness="1" CornerRadius="8" Padding="14" Width="268">
-                <StackPanel>
-                    <!-- 캐릭터 동작 moved to the 캐릭터 설정 window (right-click a pet); kept hidden here. -->
-                    <TextBlock x:Name="AnimationTitle" Visibility="Collapsed" Text="캐릭터 동작" Style="{StaticResource AuxSectionTitle}" Margin="0,0,0,8" TextTrimming="CharacterEllipsis"/>
-                    <ItemsControl x:Name="AnimationButtons" Visibility="Collapsed">
-                        <ItemsControl.ItemsPanel><ItemsPanelTemplate><UniformGrid Columns="3"/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
-                        <ItemsControl.ItemTemplate><DataTemplate>
-                            <Button Content="{Binding Name}" Tag="{Binding Key}" ToolTip="{Binding Tip}" Click="Animation_Click" Height="30" Margin="2" Padding="3,0">
-                                <Button.Style><Style TargetType="Button" BasedOn="{StaticResource AuxCompactButton}">
-                                    <Style.Triggers><DataTrigger Binding="{Binding Selected}" Value="True">
-                                        <Setter Property="Background" Value="{DynamicResource AuxActionBrush}"/><Setter Property="Foreground" Value="White"/>
-                                    </DataTrigger></Style.Triggers>
-                                </Style></Button.Style>
-                            </Button>
-                        </DataTemplate></ItemsControl.ItemTemplate>
-                    </ItemsControl>
-                    <TextBlock x:Name="AnimationHint" Visibility="Collapsed" TextWrapping="Wrap" Style="{StaticResource AuxCaption}" Margin="2,7,0,10"/>
-                    <CheckBox x:Name="PlayerVisibleToggle" Content="달력 아래 음악 막대 표시" Style="{StaticResource AuxCheckBox}" Margin="2,0,0,6"
-                              Click="PlayerVisible_Click"/>
-                    <CheckBox x:Name="CharacterVisibleToggle" Content="캐릭터 표시" Style="{StaticResource AuxCheckBox}" Margin="2,0,0,8"
-                              Click="CharacterVisible_Click"
-                              ToolTip="끄면 달력만 표시합니다. 달력을 우클릭하면 이 메뉴가, 달력 위쪽 띠를 끌면 창이 이동합니다."/>
-                    <Grid Margin="2,0,2,2">
-                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                        <TextBlock x:Name="CharacterScaleLabel" Text="캐릭터 크기" Style="{StaticResource AuxCaption}" FontWeight="SemiBold" Foreground="{DynamicResource AuxInkBrush}"/>
-                        <TextBlock x:Name="CharacterScaleText" Grid.Column="1" Text="100%" Style="{StaticResource AuxCaption}" Foreground="{DynamicResource AuxInkBrush}"/>
-                    </Grid>
-                    <Slider x:Name="CharacterScaleSlider" Minimum="50" Maximum="300" TickFrequency="10" IsSnapToTickEnabled="True"
-                            IsMoveToPointEnabled="True" Margin="0,0,0,10" ValueChanged="CharacterScale_ValueChanged"
-                            ToolTip="100% = 달력 높이의 절반" AutomationProperties.Name="캐릭터 크기"/>
-                    <Button Content="일정 목록 열기 / 닫기" Height="34" Margin="0,0,0,6" Style="{StaticResource AuxPrimaryButton}" Click="Full_Click"/>
-                    <Button Content="캐릭터 설정" Height="32" Margin="0,0,0,6" Style="{StaticResource AuxCompactButton}" Click="PetSettingsMenu_Click"/>
-                    <!-- Up to three pets side by side; the one right-clicked is the one these buttons act on. -->
-                    <UniformGrid x:Name="CharacterSlotButtons" Columns="2" Margin="0,0,0,6">
-                        <Button x:Name="AddCharacterButton" Content="캐릭터 추가" Height="32" Margin="0,0,4,0" Style="{StaticResource AuxCompactButton}" Click="AddCharacter_Click"/>
-                        <Button x:Name="RemoveCharacterButton" Content="이 캐릭터 빼기" Height="32" Margin="4,0,0,0" Style="{StaticResource AuxCompactButton}" Click="RemoveCharacter_Click"/>
-                    </UniformGrid>
-                    <UniformGrid Columns="2">
-                        <Button Content="음악" Height="32" Margin="0,0,4,0" Style="{StaticResource AuxCompactButton}" Click="Music_Click" PreviewMouseRightButtonUp="Music_RightClick" ToolTip="좌클릭: 음악 창 · 우클릭: 반복, 랜덤, 곡 선택"/>
-                        <Button Content="연락 · 알림" Height="32" Margin="4,0,0,0" Style="{StaticResource AuxCompactButton}" Click="Contacts_Click"/>
-                    </UniformGrid>
-                    <!-- Bottom row: 설정 bottom-left, 종료 bottom-right. -->
-                    <Grid Margin="0,8,0,0">
-                        <Button Content="종료" Height="30" HorizontalAlignment="Right"
-                                Style="{StaticResource AuxCompactButton}" Click="Exit_Click"/>
-                        <Button x:Name="SettingsMenuButton" Height="30" HorizontalAlignment="Left" AutomationProperties.Name="설정"
-                                Style="{StaticResource AuxCompactButton}" Click="Settings_Click">
-                            <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="⚙" FontFamily="Segoe UI Symbol" Margin="0,0,4,0" VerticalAlignment="Center"/>
-                                <TextBlock Text="설정" VerticalAlignment="Center"/>
-                            </StackPanel>
-                        </Button>
-                    </Grid>
-                </StackPanel>
-            </Border>
-        </Popup>
-        <!-- Style (theme) dropdown next to the left arrow. -->
+        <!-- Date range choices from the calendar header. -->
         <Popup x:Name="RangePopup" PlacementTarget="{Binding ElementName=RangeLabelButton}" Placement="Bottom" VerticalOffset="4"
                AllowsTransparency="True" StaysOpen="False" PopupAnimation="Fade">
             <Border Background="{DynamicResource AuxSurfaceBrush}" BorderBrush="{DynamicResource AuxHairlineBrush}"
