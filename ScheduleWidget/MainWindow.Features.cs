@@ -199,7 +199,6 @@ namespace ScheduleWidget
                 miniWindow.ScheduleListRequested += ToggleScheduleList;
                 miniWindow.CharacterSettingsRequested += index => OpenCharacterSettings(miniWindow, index);
                 if (_themeApplied && _themedPreset != appData.Appearance?.ThemePreset) miniWindow.ApplyTheme(_themedPreset, refresh: false);
-                miniWindow.ThemeChosen += () => ApplyAppearance(appData.Appearance); // style picked in the mini window header
                 miniWindow.SlotsChanged += () => petCompanion?.ReloadCharacter(); // the same pets beside the TODO window
                 // Hidden (Esc → tray): no need to poll other apps' media every 1.5 s. Only the timer pauses — the known
                 // sources stay, and showing the window again (ShowMiniWindow) restarts it with an immediate poll.

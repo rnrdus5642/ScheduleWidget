@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Globalization;
 using System.Linq;
 using System.Windows;
@@ -78,7 +78,7 @@ namespace ScheduleWidget
             UpdateCharacterVisibility();
             UpdatePlayerBar();
             if (player != null || this.musicPlaying != null) MusicWindow.PlaybackChanged += OnPlaybackChanged;
-            TrackPopupClose(PlaylistPopup, VolumePopup, RangePopup, QueuePopup, BlockPopup, ActionsPopup, DayPopup, ThemePopup);
+            TrackPopupClose(PlaylistPopup, VolumePopup, RangePopup, QueuePopup, BlockPopup, ActionsPopup, DayPopup);
             BlockPopup.CustomPopupPlacementCallback = PlaceBlockPopup;
             InitUpcomingPreview(); // › hover: a summary of the schedules after this page (MiniWindow.UpcomingPreview.cs)
             // Restore the calendar board where it was; the window then grows around it for the pets (ApplyPetLayout).
@@ -171,12 +171,6 @@ namespace ScheduleWidget
             // Pet clicks that would miss the pets' own handlers (see RescuePetClick). Before them: preview events tunnel from here.
             AddHandler(PreviewMouseLeftButtonDownEvent, new MouseButtonEventHandler((s, e) => RescuePetClick(e, right: false)), true);
             AddHandler(PreviewMouseRightButtonUpEvent, new MouseButtonEventHandler((s, e) => RescuePetClick(e, right: true)), true);
-            // The style drop-down stays open by itself (an auto-closing one lost its mouse capture and shut right after
-            // opening); a press anywhere else in the window or switching to another app closes it. Presses on the drop-down's
-            // own rows come through here too and must leave it open: closed on their mouse-down, the row never got its click
-            // when Windows animations are off (no fade keeps the drop-down up), so the chosen style was lost.
-            PreviewMouseDown += (s, e) => { if (ThemePopup.IsOpen && !ThemeButton.IsMouseOver && !IsInThemePopup(e.OriginalSource as DependencyObject)) ThemePopup.IsOpen = false; };
-            Deactivated += (s, e) => ThemePopup.IsOpen = false;
             // Hidden (Esc → tray): the music bar's moving parts rest until it shows again. Shown: catch up on a desktop
             // re-attach asked for meanwhile, and on a music source app that went away.
             IsVisibleChanged += (s, e) => OnMiniVisibleChanged((bool)e.NewValue);
@@ -423,44 +417,7 @@ namespace ScheduleWidget
                 Top("MiniHeaderBrush", next.Top ?? next.Header); Top("MiniInkBrush", next.TopInk ?? next.Ink);
                 Top("AuxInkBrush", next.TopInk ?? next.AuxInk); Top("MiniHoverBrush", next.TopHover ?? next.Hover);
             }
-            if (ThemeLabel != null) ThemeLabel.Text = preset;
             if (refresh) Refresh(); // day cells carry their ink colors as data
-        }
-
-        /// <summary>A style picked in the mini window's dropdown (the app theme is already saved in data.Appearance).</summary>
-        public event Action ThemeChosen;
-
-        private void ThemeButton_Click(object sender, RoutedEventArgs e)
-        {
-            e.Handled = true;
-            if (RecentlyDragged) return;
-            ThemeChoices.ItemsSource = MiniThemes.Select(t => new
-            {
-                Name = t.Key, Label = t.Key, Selected = t.Key == ThemeName,
-                Paper = t.Value.Paper, Frame = t.Value.Frame, Header = t.Value.Top ?? t.Value.Header
-            }).ToList();
-            TogglePopup(ThemePopup);
-        }
-
-        private void ThemeChoice_Click(object sender, RoutedEventArgs e)
-        {
-            ThemePopup.IsOpen = false;
-            string preset = (sender as FrameworkElement)?.Tag as string;
-            if (preset == null || !AppearanceSettings.Presets.ContainsKey(preset)) return;
-            if (data.Appearance == null) data.Appearance = new AppearanceSettings();
-            data.Appearance.ThemePreset = preset;
-            data.Appearance.CopyColorsFrom(AppearanceSettings.Presets[preset]);
-            ApplyTheme(preset);
-            changed?.Invoke();
-            ThemeChosen?.Invoke(); // the original window recolors too
-        }
-
-        /// <summary>A press inside the style drop-down itself (it is its own window, but its presses route through this one).</summary>
-        internal bool IsInThemePopup(DependencyObject source)
-        {
-            for (var node = source; node != null; node = node is Visual ? VisualTreeHelper.GetParent(node) : LogicalTreeHelper.GetParent(node))
-                if (node == ThemePopup.Child) return true;
-            return false;
         }
 
         // One day's schedules in the order the day shows them: not done first; 여러 날 ones (earliest first day first) before
@@ -2996,7 +2953,7 @@ namespace ScheduleWidget
             UpdateDayCountButtons();
             var infinite = new Size(double.PositiveInfinity, double.PositiveInfinity);
             RangeCalendar.Visibility = Visibility.Visible;
-            foreach (var popup in new[] { RangePopup, DayPopup, ActionsPopup, BlockPopup, ThemePopup, PlaylistPopup, VolumePopup, QueuePopup })
+            foreach (var popup in new[] { RangePopup, DayPopup, ActionsPopup, BlockPopup, PlaylistPopup, VolumePopup, QueuePopup })
             {
                 if (popup == null || popup.IsOpen || !(popup.Child is FrameworkElement content)) continue;
                 content.ApplyTemplate();
@@ -3385,8 +3342,7 @@ namespace ScheduleWidget
             CloseDayPopup();
             ActionsPopup.IsOpen = false;
             RangePopup.IsOpen = false;
-            // The style drop-down and the volume bar stay open by themselves: they would be left behind where the window was.
-            ThemePopup.IsOpen = false;
+            // The volume bar stays open by itself and would be left behind where the window was.
             CloseVolumeBar();
             // Our own drag, not DragMove: Windows' move loop never lets the WINDOW's top above the screen's top (with the pets'
             // room above the calendar — large while 드래그로 위치 설정 — the calendar stopped well below the top), and it
@@ -3850,7 +3806,6 @@ namespace ScheduleWidget
         private void HideToTray()
         {
             if (companion) return; // the TODO window handles its own Esc
-            ThemePopup.IsOpen = false; // it would otherwise stay on the desktop
             CloseDayPopup();
             petSettings?.Close();
             Hide();
@@ -3864,7 +3819,6 @@ namespace ScheduleWidget
                 if (windowDragging) { EndWindowDrag(); return; } // Esc ends a window drag where it is
                 if (placingPets) { EndPetPlacement(); return; }
                 if (CloseUpcomingPreview()) return; // the › hover summary goes first
-                if (ThemePopup.IsOpen) { ThemePopup.IsOpen = false; return; } // it stays open by itself, so Esc must close it
                 if (MiniDateInput != null && MiniDateInput.IsDropDownOpen) MiniDateInput.IsDropDownOpen = false;
                 else if (DayPopup.IsOpen) DayPopup.IsOpen = false;
                 else if (RangePopup.IsOpen) RangePopup.IsOpen = false;

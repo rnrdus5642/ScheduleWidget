@@ -228,7 +228,7 @@
                     <Grid.RowDefinitions><RowDefinition Height="30"/><RowDefinition Height="*"/></Grid.RowDefinitions>
                     <Border x:Name="CalendarHeader" Background="{DynamicResource MiniHeaderBrush}" CornerRadius="8,8,0,0" BorderBrush="{DynamicResource MiniFrameBrush}" BorderThickness="0,0,0,2"
                             MouseLeftButtonUp="CalendarHeader_Click" Cursor="Hand">
-                        <!-- Arrows at the far ends; theme dropdown beside ‹, TODO button beside ›, period label centered. -->
+                        <!-- Arrows at the far ends; today beside ‹, schedule list beside ›, period label centered. -->
                         <Grid Margin="3,2,3,0">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/>
@@ -238,17 +238,6 @@
                                 <Path Data="M7,1 L2,6 7,11" Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type Button}}}" StrokeThickness="2" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
                             </Button>
                             <StackPanel Grid.Column="1" Orientation="Horizontal">
-                            <Button x:Name="ThemeButton" Width="Auto" Padding="5,0" Margin="2,0,0,0" Style="{StaticResource WeekArrow}"
-                                    Click="ThemeButton_Click" AutomationProperties.Name="스타일 선택">
-                                <StackPanel Orientation="Horizontal">
-                                    <Border Width="10" Height="10" CornerRadius="5" Background="{DynamicResource MiniPaperBrush}"
-                                            BorderBrush="{DynamicResource MiniFrameBrush}" BorderThickness="1.5" VerticalAlignment="Center"/>
-                                    <TextBlock x:Name="ThemeLabel" Text="Light" FontSize="10" Margin="4,0,3,0" VerticalAlignment="Center"
-                                               Foreground="{DynamicResource MiniInkBrush}"/>
-                                    <Path Data="M1,1 L4,4 L7,1" Stroke="{DynamicResource MiniInkBrush}" StrokeThickness="1.3" VerticalAlignment="Center"
-                                          StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
-                                </StackPanel>
-                            </Button>
                             <!-- Back to today's page: the same as the menu's 오늘로 이동; dimmed while today is already on the page. -->
                             <Button x:Name="TodayButton" Margin="1,0,0,0" Style="{StaticResource WeekArrow}" Click="TodayButton_Click"
                                     AutomationProperties.Name="오늘로 이동">
@@ -420,36 +409,6 @@
             </Border>
         </Popup>
         <!-- Style (theme) dropdown next to the left arrow. -->
-        <Popup x:Name="ThemePopup" PlacementTarget="{Binding ElementName=ThemeButton}" Placement="Bottom" VerticalOffset="4" StaysOpen="True"
-               AllowsTransparency="True" PopupAnimation="Fade">
-            <Border Background="{DynamicResource AuxSurfaceBrush}" BorderBrush="{DynamicResource AuxHairlineBrush}"
-                    BorderThickness="1" CornerRadius="10" Padding="5" MinWidth="150">
-                <ItemsControl x:Name="ThemeChoices" AutomationProperties.Name="스타일">
-                    <ItemsControl.ItemTemplate><DataTemplate>
-                        <Button Tag="{Binding Name}" Click="ThemeChoice_Click" Cursor="Hand" AutomationProperties.Name="{Binding Name}">
-                            <Button.Template><ControlTemplate TargetType="Button">
-                                <Border x:Name="Row" Background="Transparent" CornerRadius="7" Padding="8,6">
-                                    <StackPanel Orientation="Horizontal">
-                                        <Path x:Name="Check" Data="M1,5 L4,8 L10,1" Width="14" Stroke="{DynamicResource AuxInkBrush}" StrokeThickness="1.8"
-                                              StrokeStartLineCap="Round" StrokeEndLineCap="Round" VerticalAlignment="Center" Visibility="Hidden"/>
-                                        <Border Width="26" Height="16" CornerRadius="4" Background="{Binding Paper}" BorderBrush="{Binding Frame}"
-                                                BorderThickness="2" Margin="4,0,8,0" VerticalAlignment="Center">
-                                            <Border Height="5" VerticalAlignment="Top" Background="{Binding Header}" CornerRadius="2,2,0,0"/>
-                                        </Border>
-                                        <TextBlock Text="{Binding Label}" FontSize="12" Foreground="{DynamicResource AuxInkBrush}" VerticalAlignment="Center"/>
-                                    </StackPanel>
-                                </Border>
-                                <ControlTemplate.Triggers>
-                                    <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Row" Property="Background" Value="{DynamicResource AuxCanvasBrush}"/></Trigger>
-                                    <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Row" Property="Background" Value="{DynamicResource AuxCanvasBrush}"/></Trigger>
-                                    <DataTrigger Binding="{Binding Selected}" Value="True"><Setter TargetName="Check" Property="Visibility" Value="Visible"/></DataTrigger>
-                                </ControlTemplate.Triggers>
-                            </ControlTemplate></Button.Template>
-                        </Button>
-                    </DataTemplate></ItemsControl.ItemTemplate>
-                </ItemsControl>
-            </Border>
-        </Popup>
         <Popup x:Name="RangePopup" PlacementTarget="{Binding ElementName=RangeLabelButton}" Placement="Bottom" VerticalOffset="4"
                AllowsTransparency="True" StaysOpen="False" PopupAnimation="Fade">
             <Border Background="{DynamicResource AuxSurfaceBrush}" BorderBrush="{DynamicResource AuxHairlineBrush}"
