@@ -1,0 +1,278 @@
+<!doctype html><html lang="ko"><head><meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src https:; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
+<style>
+:root{color-scheme:light dark}*{box-sizing:border-box}html,body{margin:0;background:transparent}body{font:13px 'Segoe UI',sans-serif;color:#24243a}
+#gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(126px,1fr));gap:8px;padding:4px}
+button{font:inherit;background:#f7f6ff;border:2px solid transparent;border-radius:14px;padding:8px;cursor:pointer;color:#24243a}
+button:hover{background:#eeecff}button.selected{border-color:#5b61d6}button:focus-visible{outline:2px solid #2477e6}
+button:disabled{opacity:.5;cursor:default}.sprite{width:96px;height:104px;background-repeat:no-repeat;margin:auto;image-rendering:auto}
+.sprite.photo{background-size:contain;background-position:center}small{display:block;font-size:10px;color:#6e6d84;margin-top:5px}
+.mini{overflow:hidden}.mini #gallery{display:flex;align-items:flex-end;padding:0;overflow:hidden;position:relative;width:100vw;height:100vh}.mini #gallery.placed button{position:absolute;left:0;top:0}.mini,.mini button{background:transparent}.mini button{border:0;padding:0;border-radius:0;display:block;flex:0 0 auto}.mini button:hover,.mini button:active{background:transparent}.mini button:focus-visible{outline:0}
+.mini .sprite{width:calc(100vw / var(--n,1));height:calc(108.333vw / var(--n,1))}.mini .name,.mini small{display:none}
+@media(prefers-color-scheme:dark){body{color:#f8fafc}button{background:#151d2c;color:#f8fafc}button:hover{background:#263752}small{color:#c3cddc}}
+/* The gallery has its own palette; desktop pet pixels remain unchanged. */
+body:not(.mini){background:var(--bg,#f5f5f7);color:var(--ink,#1d1d1f);font-family:Segoe UI,system-ui,sans-serif;color-scheme:light}
+body:not(.mini) #gallery{grid-template-columns:repeat(auto-fill,minmax(152px,1fr));gap:16px;padding:2px}
+body:not(.mini) button{background:transparent;color:var(--ink,#1d1d1f);border:0;border-bottom:2px solid transparent;border-radius:0;padding:20px 12px;font-size:14px}
+body:not(.mini) button.selected{border-bottom-color:var(--ink,#1d1d1f)}
+body:not(.mini) button:hover{background:transparent}
+body:not(.mini) button:focus-visible{outline:2px solid var(--ink,#1d1d1f);outline-offset:1px}
+body:not(.mini) button:active{transform:scale(.95)}
+body:not(.mini) .sprite{margin:0 auto 14px}
+body:not(.mini) small{color:var(--muted,#6e6e73);font-size:11px;margin-top:6px}
+/* Scroll bars (the character gallery list): thin Apple-like pill, invisible track, no arrow buttons; widens while hovered/dragged. */
+::-webkit-scrollbar{width:12px;height:12px;background:transparent}
+::-webkit-scrollbar-track,::-webkit-scrollbar-corner{background:transparent}
+::-webkit-scrollbar-button{display:none;width:0;height:0}
+::-webkit-scrollbar-thumb{background-color:rgba(134,134,139,.55);border:3px solid transparent;background-clip:content-box;border-radius:9px;min-height:24px;min-width:24px}
+::-webkit-scrollbar-thumb:hover,::-webkit-scrollbar-thumb:active{background-color:rgba(110,110,115,.9);border-width:1.5px}
+</style></head><body><main id="gallery" aria-label="캐릭터 목록"></main><script>
+'use strict';
+const mini=new URLSearchParams(location.search).has('mini');if(mini){document.body.classList.add('mini');if(document.documentElement&&document.documentElement.style)document.documentElement.style.overflow='hidden';}
+// The gallery (캐릭터 선택) takes the app theme's colors from the address: bg, ink, muted.
+(()=>{const q=new URLSearchParams(location.search),root=document.documentElement;if(mini||!root||!root.style||!root.style.setProperty)return;['bg','ink','muted'].forEach(k=>{const v=q.get(k);if(v&&v.length===7&&/^#[0-9a-fA-F]+/.test(v))root.style.setProperty('--'+k,v);});})();
+let generation=0,selected=-1,items=[],timers=[],animation='idle';
+const reduced=matchMedia('(prefers-reduced-motion: reduce)');
+const animations={
+  idle:{row:0,count:6,durations:[280,110,110,140,140,320].map(n=>n*6)},
+  waving:{row:3,count:4,duration:140,last:280},
+  jumping:{row:4,count:5,duration:140,last:280},
+  running:{row:7,count:6,duration:120,last:220},
+  'running-left':{row:2,count:8,duration:120,last:220},
+  'running-right':{row:1,count:8,duration:120,last:220},
+  waiting:{row:6,count:6,duration:150,last:260},
+  review:{row:8,count:6,duration:150,last:280},
+  failed:{row:5,count:8,duration:140,last:240}
+};
+const stateName=name=>Object.prototype.hasOwnProperty.call(animations,name)?name:'idle';
+const hasOwn=(obj,key)=>!!obj&&Object.prototype.hasOwnProperty.call(obj,key);
+// Modes: 'random' cycles through every action; 'music' cycles the pet's music actions while music plays
+// (or every action when the pet declares none) and idles while it doesn't; 'typing' (타이핑 반응) rests on idle and steps
+// through a typing action, one frame per key the app reports. Extra actions come from pet.json.
+const modeName=(name,extra)=>name==='random'||name==='music'||name==='typing'?name:hasOwn(extra,name)?name:stateName(name);
+const specFor=(item,name)=>hasOwn(item.extra,name)?item.extra[name]:animations[stateName(name)];
+let musicPlaying=false,layout=null;
+// Mini window: the app sends each pet's spot (px inside this view) and the cell size; pets can be dragged there.
+function applyLayout(l){
+  if(!mini||!l||!Array.isArray(l.pets))return;layout=l;const gallery=document.getElementById('gallery');if(gallery.classList)gallery.classList.add('placed');
+  // A pet the app could not read (missing) keeps its place in the list but is never shown.
+  items.forEach((it,i)=>{const p=l.pets[i];if(!p||it.missing){it.button.style.display='none';return;}it.button.style.display=p.hidden?'none':'';if(p.hidden)return;it.button.style.left=p.x+'px';it.button.style.top=p.y+'px';it.button.style.zIndex=String(i+1);it.node.style.width=(p.w||l.w)+'px';it.node.style.height=(p.h||l.h)+'px';});
+  items.forEach(useSheet); // a resized pet may now want the other sheet
+  nextPaint(()=>items.forEach(redraw)); // a moved or resized view shows the pets right away, not at the next animation step
+}
+// A sheet is 1536 × 208·rows (192 × 208 a frame): its scale (1), 0 for any other size.
+const sheetScale=(w,h,rows)=>w===1536&&h===208*rows?1:0;
+// How much larger than a frame of the original sheet (192 px wide) a pet is drawn on screen; 0 while it is not laid out.
+function drawnScale(it){
+  const r=typeof it.node.getBoundingClientRect==='function'?it.node.getBoundingClientRect():null;
+  const w=(r&&r.width)||parseFloat(it.node.style.width)||0;
+  return w*(typeof devicePixelRatio==='number'&&devicePixelRatio>0?devicePixelRatio:1)/192;
+}
+// The app's sharper 2× copy of a sheet (item.sharp: the start of its rows' addresses, row r = sharp + 2 digits + '.png';
+// Lanczos3 + a mild unsharp, made once in the background) is drawn where the pet is drawn larger than the original sheet —
+// smaller, it would only be scaled down again. One row of frames at a time (3072 × 416), the row the pet is playing: a whole
+// 2× sheet is 66 MB decoded, and the browser kept one per pet and per view. A row is drawn once it has loaded and decoded.
+// The row of the action that comes next (random/music: the next one in the bag) is loaded and decoded while the current
+// one plays, so the switch draws it at once; only those two rows are held (keepRows: about 10 MB a pet). A row still
+// decoding when it is needed (an action chosen by hand): the pet keeps its last sharp frame for that moment instead of
+// flashing the soft original (after SoftAfter ms the original shows after all); a pet's very first frame waits for it.
+// A row that cannot be loaded or has the wrong size turns the copy off for that pet without a report: the original stays.
+// A row that failed once is asked for again with ?retry=1 (it.retried), and drawn from that same address afterwards.
+const stripUrl=(it,row)=>it.sharp+String(row).padStart(2,'0')+'.png'+(it.retried&&it.retried[row]?'?retry=1':'');
+const SoftAfter=200;
+// Holds the rows in use decoded (the current action's and the next one's) and lets go of the others; a row decoded before
+// but no longer held is decoded again in the background (the browser may have dropped it) and is still drawn meanwhile.
+function keepRows(it,rows){
+  if(!it||!it.sharpOn||!it.sharp||!it.valid)return;const held={};
+  rows.forEach(row=>{if(typeof row!=='number'||held[row])return;
+    if(it.held[row]){held[row]=it.held[row];return;}
+    if(!it.strips[row]){loadStrip(it,row);held[row]=it.held[row]||true;return;}
+    if(it.strips[row]==='ready'){const image=new Image();image.src=stripUrl(it,row);if(typeof image.decode==='function')image.decode().catch(()=>{});held[row]=image;}});
+  if(it.sharp)it.held=held;
+}
+function useSheet(it){
+  if(!it||!it.valid||!it.rows||!it.source)return;
+  const scale=drawnScale(it);if(!scale)return;
+  const on=!!it.sharp&&scale>1.05;if(on===!!it.sharpOn)return;
+  it.sharpOn=on;const f=it.node.__frame;if(f)frame(it.node,f[0],f[1],f[2]);
+}
+function loadStrip(it,row){
+  if(it.strips[row])return;it.strips[row]='loading';
+  const gen=generation,sharp=it.sharp,image=new Image();it.held[row]=image;
+  const done=ok=>{if(gen!==generation||it.sharp!==sharp)return;
+    if(ok)it.strips[row]='ready';else{it.sharp=null;it.sharpOn=false;it.strips={};it.held={};it.retried={};}
+    const f=it.node.__frame;if(f&&(!ok||f[1]===row))frame(it.node,f[0],f[1],f[2]);};
+  image.onload=()=>{if(image.naturalWidth!==3072||image.naturalHeight!==416){done(false);return;}
+    if(typeof image.decode==='function')image.decode().then(()=>done(true),()=>done(true));else done(true);};
+  // A load error can be passing (the row being written, a busy file): one more try half a second later before the copy
+  // is turned off. A pet with nothing drawn yet shows the original meanwhile instead of staying empty.
+  image.onerror=()=>{if(gen!==generation||it.sharp!==sharp)return;
+    if(it.retried[row]){done(false);return;}
+    it.retried[row]=true;
+    if(!it.drawn){it.softWait=-row-1;const f=it.node.__frame;if(f&&f[1]===row)frame(it.node,f[0],f[1],f[2]);}
+    setTimeout(()=>{if(gen!==generation||it.sharp!==sharp||it.strips[row]!=='loading')return;it.strips[row]=null;loadStrip(it,row);},500);};
+  image.src=stripUrl(it,row);
+}
+// CSS url() of an address: quotes, backslashes and line breaks would end the value early.
+const cssUrl=u=>'url("'+String(u).replace(/["\\\n\r]/g,ch=>'%'+ch.charCodeAt(0).toString(16).toUpperCase().padStart(2,'0'))+'")';
+// Every action once per round in a shuffled order (a bag), never the same one twice in a row across rounds: a purely
+// random pick (only the last one left out) could skip an action for a long stretch.
+// The next round is shuffled as soon as one ends, so the action after the current one is always known (its row loads ahead).
+function shuffleBag(item,pool,sig){item.bagSig=sig;const bag=pool.slice();for(let i=bag.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));const t=bag[i];bag[i]=bag[j];bag[j]=t;}if(bag.length>1&&bag[bag.length-1]===item.lastRandom){const t=bag[0];bag[0]=bag[bag.length-1];bag[bag.length-1]=t;}item.bag=bag;}
+function randomStep(index,pool){const item=items[index];const sig=pool.join('|');if(item.bagSig!==sig||!item.bag||!item.bag.length)shuffleBag(item,pool,sig);const key=item.bag.pop();item.lastRandom=key;if(!item.bag.length)shuffleBag(item,pool,sig);animate(index,key,key==='idle'?1:2+Math.floor(Math.random()*2));}
+// What a pet's mode chooses from: random → every action; music → its music actions (every action when it has none).
+const allActions=item=>Object.keys(animations).concat(Object.keys(item.extra||{}));
+// The keyboard actions belong to 타이핑 반응: 음악 반복 leaves them out.
+const KeyboardActions=['keyboard1','keyboard2'];
+const musicActions=item=>{const own=Object.keys(item.extra||{}).filter(k=>KeyboardActions.indexOf(k)<0);return own.length?own:allActions(item);};
+// 타이핑 반응: a burst of typing plays one action — the pet's keyboard1 / keyboard2 by turns (the one it has, when only one),
+// else 당황 (failed) and 점프 (jumping) by turns. Each key the app reports shows the action's next frame (Bongo Cat: the
+// frames alternate per key); TypingRest ms without a key and the pet eases back to idle (with reduced motion: straight
+// back, no finishing frames). The app sends the keys in batches (count), at most every few tens of ms; it never says which key.
+const TypingRest=900;
+function typingPool(item){
+  const own=KeyboardActions.filter(k=>hasOwn(item.extra,k)&&item.extra[k]&&item.extra[k].row<item.rows&&item.extra[k].count>0);
+  return own.length?own:['failed','jumping'];
+}
+const typingNext=item=>{const pool=typingPool(item);return pool[(item.bursts||0)%pool.length];};
+function typingKeys(index,count){
+  const item=items[index];if(!item||!item.rows||!item.valid||item.mode!=='typing')return;
+  let t=item.typed;
+  if(!t||t.token!==item.token){ // a new burst: the idle loop (or the last burst's easing) stops here
+    clearTimeout(timers[index]);const token=(item.token||0)+1;item.token=token;item.carry=null;
+    const name=typingNext(item);item.bursts=(item.bursts||0)+1;t=item.typed={token,col:0,name,spec:specFor(item,name)};
+  }
+  const n=t.spec.count;let step=count%n;if(!step&&n>1)step=1; // a batch never leaves the paw where it was
+  t.col=(t.col+step)%n;frame(item.node,t.col,t.spec.row,item.rows);
+  clearTimeout(timers[index]);const gen=generation,token=t.token;
+  timers[index]=setTimeout(()=>{if(gen!==generation||token!==item.token)return;typingRest(index);},TypingRest);
+}
+// The burst is over: the action's remaining frames at their own pace, then idle (reduced motion: idle at once).
+function typingRest(index){
+  const item=items[index],t=item&&item.typed;if(!t||t.token!==item.token)return;
+  if(reduced.matches||t.col===0){item.typed=null;animate(index);return;}
+  const gen=generation,token=t.token;
+  const step=()=>{if(gen!==generation||token!==item.token)return;
+    t.col++;if(t.col>=t.spec.count){item.typed=null;animate(index);return;}
+    frame(item.node,t.col,t.spec.row,item.rows);
+    timers[index]=setTimeout(step,t.col===t.spec.count-1?t.spec.last:t.spec.duration);};
+  timers[index]=setTimeout(step,t.spec.duration||120);
+}
+// The action animate(index) starts when the current one ends (random/music: the next one in the bag; null: not known).
+function comingAction(item){
+  const mode=mini?item.mode:animation;
+  if(mode==='random'||(mode==='music'&&musicPlaying)){const pool=mode==='random'?allActions(item):musicActions(item);
+    return item.bagSig===pool.join('|')&&item.bag&&item.bag.length?item.bag[item.bag.length-1]:null;}
+  return mode==='music'||mode==='typing'?'idle':mode;
+}
+// The page's clock keeps frame times: a timer that fired late shortens the next wait, so the frames do not drift (none: plain waits).
+const clock=()=>typeof performance==='object'&&performance&&typeof performance.now==='function'?performance.now():null;
+const send=(type,extra={})=>chrome.webview.postMessage({type,...extra});
+// Draw now instead of on the next animation frame when the page has no requestAnimationFrame.
+const nextPaint=f=>typeof requestAnimationFrame==='function'?requestAnimationFrame(f):f();
+function frame(node,column,row,rows){node.__frame=[column,row,rows];const it=node.__item;
+  if(it&&it.sharpOn){
+    if(it.strips[row]==='ready'){it.softWait=null;const u=stripUrl(it,row);if(it.drawn!==u){it.drawn=u;node.style.backgroundImage=cssUrl(u);node.style.backgroundSize='800% 100%';}
+      node.style.backgroundPosition=(column/7*100)+'% 0%';return;}
+    loadStrip(it,row);if(it.strips[row]==='ready'||!it.drawn&&it.softWait!==-row-1)return; // (ready at once: drawn by then)
+    // A sharp frame shows: it stays while this row decodes (a moment) instead of a flash of the soft original.
+    if(it.drawn!==it.source&&it.softWait!==-row-1){
+      if(it.softWait!==row){it.softWait=row;const gen=generation;setTimeout(()=>{if(gen!==generation||it.softWait!==row)return;
+        const f=node.__frame;if(it.strips[row]==='ready'||!f||f[1]!==row){it.softWait=null;return;}it.softWait=-row-1;frame(node,f[0],f[1],f[2]);},SoftAfter);}
+      return;}
+  }
+  if(it&&it.drawn!==it.source){it.drawn=it.source;node.style.backgroundImage=cssUrl(it.source);node.style.backgroundSize='800% '+rows*100+'%';}
+  node.style.backgroundPosition=(column/7*100)+'% '+(row/(rows-1)*100)+'%';}
+// Repaint a pet as it is (its current sprite frame, and a tiny style change so the view produces a new frame): used after
+// the view was moved, resized, hidden or woke up, and with reduced motion, where no timer ever redraws it.
+function redraw(it){if(!it||!it.node)return;const f=it.node.__frame;if(f)frame(it.node,f[0],f[1],f[2]);it.node.style.opacity=it.node.style.opacity==='0.999'?'1':'0.999';}
+// 좌우 반전: the sprite node is mirrored as a whole, so every action, mode and sheet (the sharp 2× rows too) shows mirrored.
+function flipNode(it){if(it&&it.node)it.node.style.transform=it.flipped?'scaleX(-1)':'';}
+// In the mini window every pet keeps its own mode (item.mode); the gallery uses the one shared animation.
+function animate(index,name,loops=0){
+  const item=items[index];if(!item||!item.rows||!item.valid)return;
+  if(name===undefined)name=mini?item.mode:animation;
+  if(name==='random'){randomStep(index,allActions(item));return;}
+  if(name==='music'){if(!musicPlaying)name='idle';else{randomStep(index,musicActions(item));return;}}
+  // 타이핑 반응 rests on idle; the next burst's action row is loaded and decoded meanwhile (typingKeys draws it).
+  let typingRow=null;if(name==='typing'){item.typed=null;typingRow=specFor(item,typingNext(item)).row;name='idle';}
+  const current=specFor(item,name);clearTimeout(timers[index]);const token=(item.token||0)+1;item.token=token;const gen=generation;let col=0,round=0;
+  // due: when the frame being drawn was meant to start; an action that follows the previous one on its own goes on from there.
+  let due=item.carry;item.carry=null;
+  function next(){
+    if(gen!==generation||token!==item.token)return;
+    frame(item.node,col,current.row,item.rows);
+    if(reduced.matches)return;
+    const wait=current.durations?current.durations[col]:(col===current.count-1?current.last:current.duration);
+    let delay=wait;
+    const now=clock();if(now!==null){if(due==null||now-due>=wait)due=now;delay=Math.max(0,Math.round(due+wait-now));due+=wait;}
+    timers[index]=setTimeout(()=>{col++;if(col>=current.count){col=0;if(loops&&++round>=loops){item.carry=due;animate(index);return;}}next();},delay);
+  }next();
+  // This action's row and the next one's are decoded now, so the switch draws the sharp row at once.
+  if(item.sharpOn&&(typingRow!==null||!reduced.matches)){const coming=loops?comingAction(item):null;keepRows(item,[current.row,coming!=null?specFor(item,coming).row:null,typingRow]);}
+}
+function choose(index){
+  if(!items[index]?.valid)return;
+  selected=index;items.forEach((item,i)=>{item.button.classList.toggle('selected',i===index);item.button.setAttribute('aria-pressed',String(i===index));});
+  animate(index,mini?undefined:'jumping',mini?0:2);send('selected',{index});
+}
+chrome.webview.addEventListener('message',e=>{
+  const m=e.data;if(!m)return;
+  if(m.action==='animation'&&mini){const i=typeof m.index==='number'?m.index:0,it=items[i];animation=modeName(m.state,it&&it.extra);if(it){it.mode=animation;animate(i);}return;}
+  if(m.action==='animation'){animation=modeName(m.state,items[selected]&&items[selected].extra);if(mini&&selected>=0)animate(selected,animation);return;}
+  // Only a real start / stop restarts the music pets: the app also reports volume, track and list changes as "music",
+  // and restarting on each of those (a volume drag sends dozens) kept the pets jumping between actions or stuck on frame 0.
+  if(m.action==='music'){const playing=!!m.playing;if(playing===musicPlaying)return;musicPlaying=playing;if(mini)items.forEach((it,i)=>{if(it.mode==='music')animate(i);});return;}
+  if(m.action==='typing'){const n=Math.floor(Number(m.count));if(mini&&n>0)items.forEach((it,i)=>{if(it.mode==='typing')typingKeys(i,Math.min(n,64));});return;}
+  // 좌우 반전 (캐릭터 설정): only the drawing is mirrored (transform keeps the layout box: spot, size and clicks stay).
+  if(m.action==='flip'){const it=typeof m.index==='number'?items[m.index]:null;if(it){it.flipped=!!m.flipped;flipNode(it);}return;}
+  if(m.action==='layout'){applyLayout(m);return;}
+  if(m.action==='repaint'){if(layout)applyLayout(layout);else nextPaint(()=>items.forEach(redraw));return;}
+  // The same address again (a sheet reported twice) changes nothing: resetting would drop the decoded rows and stall the pet.
+  if(m.action==='sheet'){const it=typeof m.index==='number'?items[m.index]:null;if(it&&it.rows&&typeof m.image==='string'&&m.image&&m.image!==it.sharp){it.sharp=m.image;it.strips={};it.held={};it.retried={};it.softWait=null;it.sharpOn=false;useSheet(it);}return;}
+  // With reduced motion no timer ends the jump, so the pets would stay on a jumping frame: they keep their own action instead.
+  if(m.action==='celebrate'){if(reduced.matches)return;if(mini)items.forEach((it,i)=>animate(i,'jumping',2));else if(selected>=0)animate(selected,'jumping',2);return;}
+  if(m.action!=='load'||!Array.isArray(m.characters))return;
+  generation++;timers.forEach(clearTimeout);timers=[];items=[];selected=-1;musicPlaying=!!m.music;animation=modeName(m.state,m.characters[m.selected||0]&&m.characters[m.selected||0].extra);
+  const gallery=document.getElementById('gallery');gallery.replaceChildren();
+  if(mini&&document.body.style.setProperty)document.body.style.setProperty('--n',String(Math.max(1,m.characters.length)));
+  const gen=generation;
+  m.characters.forEach((c,index)=>{
+    const button=document.createElement('button'),node=document.createElement('div'),name=document.createElement('div'),group=document.createElement('small');
+    button.type='button';button.disabled=true;button.setAttribute('aria-label',c.name);node.className='sprite'+(c.rows?'':' photo');name.className='name';name.textContent=c.name;group.textContent=c.group||'';
+    button.append(node,name,group);gallery.append(button);
+    const item={button,node,rows:c.rows,extra:c.extra||{},valid:false,token:0,lastRandom:null,missing:!c.image,
+      source:null,sharp:typeof c.sharp==='string'&&c.sharp?c.sharp:null,sharpOn:false,strips:{},held:{},retried:{},drawn:null,softWait:null,carry:null,
+      mode:modeName(Array.isArray(m.states)&&m.states[index]!=null?m.states[index]:m.state,c.extra||{}),
+      flipped:Array.isArray(m.flips)&&m.flips[index]===true};items.push(item);if(item.flipped)flipNode(item);
+    if(item.missing){button.style.display='none';return;} // the app could not read this pet just now: its place is kept, nothing drawn
+    // source: the address that is loading now — after a retry the drawn background must use the one that loaded.
+    const image=new Image();let retries=0,source=c.image;image.onload=()=>{
+      if(gen!==generation)return;
+      if(image.naturalWidth*image.naturalHeight>25000000||(c.rows&&sheetScale(image.naturalWidth,image.naturalHeight,c.rows)!==1)){group.textContent='이미지 크기를 확인하세요';send('invalid',{index,reason:'size'});return;}
+      item.valid=true;button.disabled=false;item.source=source;
+      if(!c.rows){node.style.backgroundImage=cssUrl(source);item.drawn=source;}
+      // A sheet: frame() draws it (a sharper copy already made straight away, when the pet is drawn larger).
+      else{node.__item=item;item.sharpOn=!!item.sharp&&drawnScale(item)>1.05;frame(node,0,0,c.rows);}
+      if(index===m.selected||mini){choose(index);if(!mini)animate(index,animation);}
+    };
+    // A load error can be passing (the file was being written, e.g. by a sync): try once more before giving up.
+    image.onerror=()=>{if(gen!==generation)return;if(retries++<1){setTimeout(()=>{if(gen===generation){source=c.image+(c.image.indexOf('?')<0?'?':'&')+'retry=1';image.src=source;}},500);return;}
+      group.textContent='이미지를 읽을 수 없습니다';send('invalid',{index,reason:'load'});};image.src=source;
+    if(!mini){
+      button.onclick=()=>choose(index);button.onpointerenter=()=>animate(index,'jumping',2);
+      button.onpointerleave=()=>{if(index!==selected){clearTimeout(timers[index]);items[index].token++;if(c.rows)frame(node,0,0,c.rows);}};
+    }
+  });
+  // Once for all the pets (not again after each one); a reloaded page keeps the last layout until the app sends a new one.
+  if(m.layout)applyLayout(m.layout);else if(layout)applyLayout(layout);
+});
+// Windows' "show animations" switched while pets show: with reduced motion they stop on their current action's frame,
+// and they move again when it is turned back on (no timer runs while it is on, so nothing else would restart them).
+const motionChanged=()=>{if(mini)items.forEach((it,i)=>{if(it.valid)animate(i);});else if(selected>=0)animate(selected,animation);};
+if(typeof reduced.addEventListener==='function')reduced.addEventListener('change',motionChanged);
+else if(typeof reduced.addListener==='function')reduced.addListener(motionChanged);
+// 캐릭터 선택: the browser keeps Esc from the window, so the page hands it over (the window closes like 취소).
+if(!mini&&typeof document.addEventListener==='function')document.addEventListener('keydown',e=>{if(e.key==='Escape'){e.preventDefault();send('escape');}});
+send('ready');
+</script></body></html>

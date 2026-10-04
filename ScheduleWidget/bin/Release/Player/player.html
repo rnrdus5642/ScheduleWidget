@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="referrer" content="strict-origin-when-cross-origin">
+<style>html,body,#player{margin:0;width:100%;height:100%;background:#111827;overflow:hidden}#hint{color:white;font:14px sans-serif;padding:20px}</style></head>
+<body><div id="player"></div><script>
+'use strict';
+let player, pending, request = 0, playlist = false, ended = false, volume = 50, acceptsEnd = false, apiReady = false, wantPaused = false;
+let apiFailed = false; // YouTube's player script could not be loaded: every load answers with a network error
+const send = (type, extra = {}) => window.chrome.webview.postMessage({type, request, ...extra});
+function load(message) {
+  request = message.request; playlist = !!message.list; ended = false; acceptsEnd = false;
+  volume = message.volume; player.setVolume(volume);
+  wantPaused = !!message.paused;
+  // start / index: where a song goes on after the player was reloaded (0 for a new song).
+  const start = Math.max(0, Number(message.start) || 0), index = Math.max(0, Math.floor(Number(message.index) || 0));
+  if (playlist) player.loadPlaylist({list: message.list, listType: 'playlist', index, startSeconds: start});
+  else player.loadVideoById({videoId: message.video, startSeconds: start});
+}
+window.onYouTubeIframeAPIReady = function() {
+  player = new YT.Player('player', {width:'100%',height:'100%',playerVars:{origin:location.origin,playsinline:1},events:{
+    onReady() { apiReady = true; apiFailed = false; if(pending) {load(pending);pending=null;} },
+    onStateChange(e) {
+      send('state',{state:e.data});
+      ticking(e.data===1||e.data===3);
+      if(e.data===1) {acceptsEnd=true;ended=false;const data=player.getVideoData&&player.getVideoData();if(data&&data.title)send('title',{title:data.title});if(wantPaused){wantPaused=false;player.pauseVideo();return;}}
+      if(e.data!==0 || ended || !acceptsEnd) return;
+      if(playlist) {const items=player.getPlaylist()||[]; if(player.getPlaylistIndex()<items.length-1) return;}
+      ended=true;send('ended');
+    },
+    onError(e) {send('error',{code:e.data});},
+    onAutoplayBlocked() {send('blocked');}
+  }});
+};
+// The script (or the player it loads) never arrived: answer the waiting song, and every later one, with a network error.
+// The app then loads this page afresh for the next YouTube song, which tries again.
+function failApi() {
+  if (apiReady || apiFailed) return;
+  apiFailed = true;
+  if (pending) { request = pending.request; pending = null; send('error', {code: 'network'}); }
+}
+window.chrome.webview.addEventListener('message', e => {
+  const m=e.data;
+  if(!m||typeof m!=='object')return;
+  if(m.action==='load') { if(apiReady)load(m);else if(apiFailed){request=m.request;send('error',{code:'network'});}else {pending=m;request=m.request;}return; }
+  if(m.action==='pause') {if(pending)pending.paused=true;}
+  if(m.action==='resume') {wantPaused=false;if(pending)pending.paused=false;}
+  if(m.action==='stop') {pending=null;acceptsEnd=false;ticking(false);}
+  if(!apiReady)return;
+  if(m.action==='pause')player.pauseVideo();
+  if(m.action==='resume')player.playVideo();
+  if(m.action==='stop')player.stopVideo();
+  if(m.action==='volume')player.setVolume(m.volume);
+  if(m.action==='seek'&&typeof m.seconds==='number'){player.seekTo(Math.max(0,m.seconds),true);setTimeout(tick,300);}
+});
+// Report the position every 500 ms while a song plays (or buffers), and only when it changed. Paused, ended or stopped:
+// no timer at all — one last report as it stops, and one after a seek.
+let lastTime=-1,lastDuration=-1,timer=0;
+function tick(){
+  if(!apiReady||!player.getDuration)return;
+  const d=player.getDuration(),c=player.getCurrentTime();
+  if(d>0&&(c!==lastTime||d!==lastDuration)){lastTime=c;lastDuration=d;send('time',{current:c,duration:d,index:playlist&&player.getPlaylistIndex?Math.max(0,player.getPlaylistIndex()):0});}
+}
+function ticking(on){
+  if(on&&!timer)timer=setInterval(tick,500);
+  else if(!on&&timer){clearInterval(timer);timer=0;tick();}
+}
+send('ready');
+const script=document.createElement('script');script.src='https://www.youtube.com/iframe_api';
+script.onerror=failApi;
+document.head.appendChild(script);
+setTimeout(failApi,30000); // no answer at all (a stalled connection): give up waiting after 30 s
+</script></body></html>
