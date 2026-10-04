@@ -265,7 +265,7 @@
                                 <TextBlock Text="⚙" FontFamily="Segoe UI Symbol" FontSize="13" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type Button}}}"/>
                             </Button>
                             <!-- Straight back to the original TODO list window. -->
-                            <Button x:Name="TodoButton" Grid.Column="4" Margin="0,0,2,0" Style="{StaticResource WeekArrow}" Click="Full_Click" AutomationProperties.Name="원래 TODO 창으로">
+                            <Button x:Name="TodoButton" Grid.Column="4" Margin="0,0,2,0" Style="{StaticResource WeekArrow}" Click="Full_Click" ToolTip="일정 목록 열기 / 닫기" AutomationProperties.Name="일정 목록 열기 / 닫기">
                                 <Path Data="M1,2.5 L2.5,4 L5,1 M1,8.5 L2.5,10 L5,7 M7.5,2.5 L13,2.5 M7.5,8.5 L13,8.5" Width="14" Height="11"
                                       Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type Button}}}" StrokeThickness="1.6"
                                       StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"/>
@@ -393,7 +393,7 @@
                     <Slider x:Name="CharacterScaleSlider" Minimum="50" Maximum="300" TickFrequency="10" IsSnapToTickEnabled="True"
                             IsMoveToPointEnabled="True" Margin="0,0,0,10" ValueChanged="CharacterScale_ValueChanged"
                             ToolTip="100% = 달력 높이의 절반" AutomationProperties.Name="캐릭터 크기"/>
-                    <Button Content="원래 TODO 창으로" Height="34" Margin="0,0,0,6" Style="{StaticResource AuxPrimaryButton}" Click="Full_Click"/>
+                    <Button Content="일정 목록 열기 / 닫기" Height="34" Margin="0,0,0,6" Style="{StaticResource AuxPrimaryButton}" Click="Full_Click"/>
                     <Button Content="캐릭터 설정" Height="32" Margin="0,0,0,6" Style="{StaticResource AuxCompactButton}" Click="PetSettingsMenu_Click"/>
                     <!-- Up to three pets side by side; the one right-clicked is the one these buttons act on. -->
                     <UniformGrid x:Name="CharacterSlotButtons" Columns="2" Margin="0,0,0,6">

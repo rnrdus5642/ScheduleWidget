@@ -46,6 +46,7 @@ namespace ScheduleWidget.Checks
             Run("Default pet manifests and packaged assets load", PackagedAssets);
             Run("Updates reject a modified signed manifest", SignedUpdates);
             Run("Global shortcuts reject unmodified typing keys", Shortcuts);
+            Run("Schedule list stays beside the calendar and on screen", ListPlacement);
             Run("WPF resources and six window layouts construct", WindowResources);
 
             Console.WriteLine("{0} passed, {1} failed.", passed, failed);
@@ -262,8 +263,39 @@ namespace ScheduleWidget.Checks
                     content.Arrange(new Rect(0, 0, 800, 600));
                 }
                 Require(mini.FindName("WeekCalendar") != null, "Mini calendar was not constructed.");
+
+                int listRequests = 0;
+                bool calendarClosed = false;
+                mini.ScheduleListRequested += () => listRequests++;
+                mini.Closed += (sender, args) => calendarClosed = true;
+                var todoButton = (System.Windows.Controls.Button)mini.FindName("TodoButton");
+                todoButton.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
+                todoButton.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
+                Require(listRequests == 2 && !calendarClosed, "The list button closed or replaced the calendar.");
+
+                typeof(MainWindow).GetField("miniWindow", flags).SetValue(main, mini);
+                var closeList = (System.Windows.Controls.Button)main.FindName("CloseScheduleListButton");
+                closeList.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
+                Require(!calendarClosed && !(bool)typeof(MainWindow).GetField("closingApp", flags).GetValue(main), "Closing the list shut down the calendar or app.");
             }
             finally { app.Shutdown(); }
+        }
+
+        private static void ListPlacement()
+        {
+            var area = new Rect(0, 0, 1920, 1040);
+            var size = new Size(360, 500);
+            Require(ScheduleListPlacement.Beside(new Rect(100, 100, 800, 320), size, area) == new Point(912, 100), "List did not open on the right.");
+            Require(ScheduleListPlacement.Beside(new Rect(1100, 100, 800, 320), size, area) == new Point(728, 100), "List did not switch to the left near the screen edge.");
+            Require(ScheduleListPlacement.Beside(new Rect(100, 800, 800, 200), size, area).Y == 540, "List extends below the work area.");
+            var smallArea = new Rect(0, 0, 900, 650);
+            var crowded = ScheduleListPlacement.Beside(new Rect(50, 10, 800, 320), size, smallArea);
+            Require(smallArea.Contains(new Rect(crowded, size)), "List escaped a crowded work area.");
+            var leftMonitor = new Rect(-1920, -200, 1920, 1040);
+            var negative = ScheduleListPlacement.Beside(new Rect(-1700, -100, 800, 320), size, leftMonitor);
+            Require(negative == new Point(-888, -100), "Negative monitor coordinates were lost.");
+            var scaled = ScheduleListPlacement.Beside(new Rect(150, 150, 1200, 480), new Size(540, 750), new Rect(0, 0, 2880, 1560), 18);
+            Require(scaled == new Point(1368, 150), "Placement did not preserve scaled coordinates.");
         }
     }
 }

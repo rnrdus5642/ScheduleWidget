@@ -37,8 +37,8 @@ namespace ScheduleWidget
         public MonitorStateData MiniPosition { get; set; }
         // 미니 창 달력(음악 막대 포함) 영역의 화면 위치·크기. 창은 이 영역과 주변 펫을 감싸도록 맞춰집니다.
         public MonitorStateData MiniBoard { get; set; }
-        // 마지막으로 보고 있던 창(미니/원본)을 다음 실행 때 그대로 복원합니다.
-        public bool MiniMode { get; set; }
+        // Kept for older data readers. The calendar is now the primary window; the list opens beside it.
+        public bool MiniMode { get; set; } = true;
         // 미니 달력에 한 번에 보여 줄 날짜 수(1~7일).
         public int MiniDayCount { get; set; } = 7;
         // 미니 창 캐릭터 크기 배율(%). 100%는 달력 높이의 절반, 50~300%.

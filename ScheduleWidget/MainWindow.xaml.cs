@@ -64,6 +64,7 @@ namespace ScheduleWidget
         public MainWindow()
         {
             InitializeComponent();
+            Opacity = 0; // This window bootstraps the app; only the calendar is shown at startup.
             // The 종료 날짜 pickers (여러 날) open the same themed calendar as the add form's date button.
             AddEndPicker.Resources = CalendarPicker.Resources;
             InlineEditEndPicker.Resources = CalendarPicker.Resources;
@@ -119,7 +120,7 @@ namespace ScheduleWidget
         protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
         {
             e.Cancel = true;
-            if (!closingApp) Dispatcher.BeginInvoke(new Action(() => { if (!closingApp) Hide(); }));
+            if (!closingApp) Dispatcher.BeginInvoke(new Action(() => { if (!closingApp) HideScheduleList(); }));
         }
 
         private void MainWindow_Closed(object sender, EventArgs e)
@@ -301,11 +302,14 @@ namespace ScheduleWidget
             if (primaryScreen == null)
                 return;
 
-            // 미니 모드: the mini window is the one in use (and the one that gets lost off-screen); this window stays hidden.
-            if (appData?.MiniMode == true && miniWindow != null)
+            // Reset the primary calendar and keep an open list next to it.
+            if (appData != null)
             {
+                ShowMiniWindow();
+                if (miniWindow == null) return;
                 miniWindow.CenterOnPrimaryScreen(); // and saves that place (window and calendar board)
                 BringToFront(miniWindow);
+                if (IsVisible && !_startingHidden) ShowFullWindow();
                 return;
             }
 
@@ -336,7 +340,7 @@ namespace ScheduleWidget
             Closed += (s, args) => UnregisterBringToFrontHotKey();
         }
 
-        // 단축키 (default Ctrl+G, set in 설정) anywhere: bring the TODO window (or the mini calendar in mini mode) above every
+        // 단축키 (default Ctrl+G, set in 설정) anywhere: bring the calendar and any open schedule list above every
         // window once. It is not pinned: the 모든 창 위에 표시 setting is kept, so clicking another app covers it again.
         private const int BringToFrontHotKeyId = 0x5347;
         private bool _bringToFrontHotKey;
@@ -413,15 +417,12 @@ namespace ScheduleWidget
 
         private void MainWindow_Loaded(object sender, RoutedEventArgs e)
         {
+            if (StartupCompleted) return; // Reopening the list must not reload data or restart application services.
             if (!LoadAppData()) return; // could not read the schedules: the app closes without saving anything
 
-            // Last closed in mini mode: the mini window opens instead, so keep this window invisible until it is hidden
-            // (no flash of it, and no card list or pets built for it now).
-            if (appData.MiniMode)
-            {
-                _startingHidden = true;
-                Opacity = 0;
-            }
+            // The calendar is always primary, including when loading an older file that selected the TODO window.
+            _startingHidden = true;
+            Opacity = 0;
             string loadedPlacement = PlacementSignature();
 
             ApplyStartupPreferenceOnLoad();
@@ -466,19 +467,21 @@ namespace ScheduleWidget
             if (PlacementSignature() != loadedPlacement)
                 SaveCurrentState();
 
-            // 마지막으로 미니 창 상태에서 종료했다면 미니 창으로 다시 엽니다.
-            if (appData.MiniMode)
-                Dispatcher.BeginInvoke(new Action(() =>
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                try
                 {
-                    try { ShowMiniWindow(); }
-                    finally
-                    {
-                        // Hidden by now; visible again the next time it is shown (or right away if the mini window failed).
-                        _startingHidden = false;
-                        Opacity = 1;
-                        if (IsVisible) { RefreshScheduleList(); UpdatePetCompanion(); }
-                    }
-                }), DispatcherPriority.Loaded);
+                    ShowMiniWindow();
+                    Hide();
+                }
+                finally
+                {
+                    // If calendar startup failed, leave a usable list as a fallback.
+                    _startingHidden = false;
+                    Opacity = 1;
+                    if (IsVisible) { RefreshScheduleList(); UpdatePetCompanion(); }
+                }
+            }), DispatcherPriority.Loaded);
 
             // 제목이 "YouTube · 영상ID"로 남아 있는 곡은 실제 영상 제목으로 채웁니다(인터넷 필요, 백그라운드).
             Dispatcher.BeginInvoke(new Action(async () => await FillYouTubeTitlesAsync()), DispatcherPriority.ApplicationIdle);

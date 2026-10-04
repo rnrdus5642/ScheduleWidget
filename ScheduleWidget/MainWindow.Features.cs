@@ -20,7 +20,7 @@ namespace ScheduleWidget
         private readonly Dictionary<string, DateTime> reminderRetries = new Dictionary<string, DateTime>();
         private readonly CommunicationService communicationService = new CommunicationService();
 
-        private void MiniButton_Click(object sender, RoutedEventArgs e) => ShowMiniWindow();
+        private void MiniButton_Click(object sender, RoutedEventArgs e) => OpenLastWindow();
         private void MusicButton_Click(object sender, RoutedEventArgs e) => ShowMusic();
         private void MusicButton_RightClick(object sender, MouseButtonEventArgs e)
         {
@@ -103,7 +103,7 @@ namespace ScheduleWidget
         }
 
         // Esc in the TODO window: close whatever panel is open first; with nothing open, hide the window.
-        // The app keeps running in the tray, and the tray icon (열기) brings the window back.
+        // The calendar stays open; its checklist button brings the list back.
         private void MainWindow_PreviewKeyDown(object sender, KeyEventArgs e)
         {
             if (e.Key != Key.Escape) return;
@@ -113,24 +113,16 @@ namespace ScheduleWidget
             else if (InlineEditPanel.Visibility == Visibility.Visible) CloseInlineEdit();
             else if (MonitorPanel.Visibility == Visibility.Visible) CloseMonitorPanel();
             else if (InlineSettingsPanel.Visibility == Visibility.Visible && settingsHost == null) CloseInlineSettings(false);
-            else Hide();
+            else HideScheduleList();
         }
 
-        // Tray "열기" / double-click: bring back the window that was in use last.
-        // If that window is already open but covered by other apps, it is raised to the front — never closed.
+        // Tray / global shortcut: the calendar is always the main window. Keep an open list beside it.
         public void OpenLastWindow()
         {
-            if (appData?.MiniMode == true)
-            {
-                ShowMiniWindow();
-                if (miniWindow != null) BringToFront(miniWindow);
-                if (settingsHost != null) BringToFront(settingsHost); // its 설정 (still open) stays on top of it
-            }
-            else
-            {
-                ShowFullWindow();
-                BringToFront(this);
-            }
+            ShowMiniWindow();
+            if (miniWindow != null) BringToFront(miniWindow);
+            if (IsVisible && !_startingHidden) BringToFront(this);
+            if (settingsHost != null) BringToFront(settingsHost);
         }
 
         // Activate() alone can be ignored when another app owns the foreground; briefly making the window topmost
@@ -147,16 +139,62 @@ namespace ScheduleWidget
 
         public void ShowFullWindow()
         {
-            Show();
-            miniWindow?.Close();
-            Activate();
+            if (appData == null || closingApp) return;
+            if (miniWindow == null || !miniWindow.IsVisible) ShowMiniWindow();
+            if (miniWindow == null) return;
+
+            _isRestoringState = true;
+            try
+            {
+                WindowStartupLocation = WindowStartupLocation.Manual;
+                PlaceScheduleListBesideCalendar();
+                Opacity = 1;
+                Show();
+                // Showing on a different monitor can change this window's DPI.
+                PlaceScheduleListBesideCalendar();
+            }
+            finally { _isRestoringState = false; }
+            RefreshScheduleList();
+            UpdatePetCompanion();
+            SaveCurrentState();
+            BringToFront(this);
+        }
+
+        private void ToggleScheduleList()
+        {
+            if (IsVisible && !_startingHidden) HideScheduleList();
+            else ShowFullWindow();
+        }
+
+        private void HideScheduleList()
+        {
+            if (settingsHost == null) CloseInlineSettings(false);
+            Hide();
+        }
+
+        private void CloseScheduleList_Click(object sender, RoutedEventArgs e) => HideScheduleList();
+
+        private void PlaceScheduleListBesideCalendar()
+        {
+            if (miniWindow == null || !miniWindow.TryGetWorkspaceScreenBounds(out Rect calendar)) return;
+            var screen = System.Windows.Forms.Screen.FromPoint(new System.Drawing.Point(
+                (int)Math.Round(calendar.Left + calendar.Width / 2), (int)Math.Round(calendar.Top + calendar.Height / 2)));
+            var area = new Rect(screen.WorkingArea.Left, screen.WorkingArea.Top, screen.WorkingArea.Width, screen.WorkingArea.Height);
+            for (int pass = 0; pass < 2; pass++)
+            {
+                var dpi = System.Windows.Media.VisualTreeHelper.GetDpi(this);
+                EnsureWindowSizeWithin(GetWorkAreaInDips(screen));
+                Point at = ScheduleListPlacement.Beside(calendar, new Size(Width * dpi.DpiScaleX, Height * dpi.DpiScaleY), area, 12 * dpi.DpiScaleX);
+                Left = at.X / dpi.DpiScaleX;
+                Top = at.Y / dpi.DpiScaleY;
+                var after = System.Windows.Media.VisualTreeHelper.GetDpi(this);
+                if (after.DpiScaleX == dpi.DpiScaleX && after.DpiScaleY == dpi.DpiScaleY) break;
+            }
         }
 
         public void ShowMiniWindow()
         {
-            if (appData == null) return;
-            // Settings open in this window are cancelled; settings in their own window (opened from the mini window) stay.
-            if (settingsHost == null) CloseInlineSettings(false);
+            if (appData == null || closingApp) return;
             if (miniWindow == null)
             {
                 miniWindow = new MiniWindow(appData, () =>
@@ -165,21 +203,26 @@ namespace ScheduleWidget
                     RefreshScheduleList(); // while this window is hidden that only refreshes the mini window
                     return saved;
                 }, ShowMusic, ShowContacts, ShowMusicMenu, ExitApplication, this, OpenSettingsFromMini);
+                miniWindow.ScheduleListRequested += ToggleScheduleList;
                 if (_themeApplied && _themedPreset != appData.Appearance?.ThemePreset) miniWindow.ApplyTheme(_themedPreset, refresh: false);
                 miniWindow.ThemeChosen += () => ApplyAppearance(appData.Appearance); // style picked in the mini window header
                 miniWindow.SlotsChanged += () => petCompanion?.ReloadCharacter(); // the same pets beside the TODO window
                 // Hidden (Esc → tray): no need to poll other apps' media every 1.5 s. Only the timer pauses — the known
                 // sources stay, and showing the window again (ShowMiniWindow) restarts it with an immediate poll.
-                miniWindow.IsVisibleChanged += (s, e) => { if (!(bool)e.NewValue) externalMediaTimer?.Stop(); };
+                miniWindow.IsVisibleChanged += (s, e) =>
+                {
+                    if (!(bool)e.NewValue)
+                    {
+                        externalMediaTimer?.Stop();
+                        if (!closingApp) HideScheduleList();
+                    }
+                };
                 miniWindow.Closed += (s, e) =>
                 {
                     miniWindow = null;
                     StopExternalMediaWatch();
-                    // 앱 종료로 닫힐 때는 미니 모드 기록을 유지해 다음 실행에서 미니 창으로 복원합니다.
                     if (closingApp || Dispatcher.HasShutdownStarted) return;
-                    appData.MiniMode = false;
-                    SaveDataSafely(false);
-                    Show();
+                    HideScheduleList(); // Alt+F4 hides the workspace; the tray reopens the calendar.
                 };
             }
             if (!appData.MiniMode)
@@ -190,7 +233,6 @@ namespace ScheduleWidget
             miniWindow.Show();
             miniWindow.Activate();
             StartExternalMediaWatch();
-            Hide();
         }
 
         // Mini window menu → 설정: the mini window stays open and the same settings panel opens in its own window,

@@ -2,6 +2,7 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:local="clr-namespace:ScheduleWidget"
+        Title="일정 목록"
         Height="500" Width="360" MinWidth="300" MinHeight="380"
         WindowStyle="None"
         AllowsTransparency="True"
@@ -210,15 +211,15 @@
                                 Click="MainPetsButton_Click">
                             <TextBlock Text="👤" FontFamily="Segoe UI Emoji" FontSize="15" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Button>
-                        <Button Grid.Column="6"
+                        <Button x:Name="CloseScheduleListButton" Grid.Column="6"
                                 Style="{StaticResource WidgetIconButton}"
                                 Width="32"
                                 Height="32"
-                                ToolTip="종료"
-                                AutomationProperties.Name="종료"
+                                ToolTip="일정 목록 닫기"
+                                AutomationProperties.Name="일정 목록 닫기"
                                 HorizontalAlignment="Center"
                                 VerticalAlignment="Center"
-                                Click="ExitApplication_Click">
+                                Click="CloseScheduleList_Click">
                             <Path Data="M4,4 L14,14 M14,4 L4,14"
                                   Width="14"
                                   Height="14"
@@ -233,7 +234,7 @@
 
                 <!-- schedule list -->
                 <UniformGrid Grid.Row="1" Columns="3" Margin="13,0,13,0">
-                    <Button Content="미니 창" Style="{StaticResource WidgetSecondaryButton}" Margin="0,0,4,0" Click="MiniButton_Click"/>
+                    <Button Content="달력" ToolTip="달력 앞으로 가져오기" Style="{StaticResource WidgetSecondaryButton}" Margin="0,0,4,0" Click="MiniButton_Click"/>
                     <Button x:Name="ContactButton" Content="연락 · 알림" Style="{StaticResource WidgetSecondaryButton}" Margin="0,0,4,0" Click="ContactButton_Click"/>
                     <Button Content="음악" Style="{StaticResource WidgetSecondaryButton}" Click="MusicButton_Click" PreviewMouseRightButtonUp="MusicButton_RightClick" ToolTip="좌클릭: 음악 창 · 우클릭: 재생 설정"/>
                 </UniformGrid>

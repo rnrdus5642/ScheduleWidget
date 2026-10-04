@@ -87,6 +87,7 @@
     </ApplicationDefinition>
     <Compile Include="Services\DataManager.cs" />
     <Compile Include="Services\IAppDataStore.cs" />
+    <Compile Include="Services\ScheduleListPlacement.cs" />
     <Compile Include="Services\NativeMethods.cs" />
     <Compile Include="Services\StartupService.cs" />
     <Compile Include="Services\SliderInteraction.cs" />

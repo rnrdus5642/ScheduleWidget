@@ -31,6 +31,17 @@ namespace ScheduleWidget
         private bool miniDateInvalid;
         private bool keepDayPopupState;
 
+        public event Action ScheduleListRequested;
+
+        // The visible calendar and its pets, in device pixels for placement on monitors with different DPI.
+        internal bool TryGetWorkspaceScreenBounds(out Rect bounds)
+        {
+            var content = BoardRect;
+            if (PetsShown)
+                foreach (var pet in PetRects()) if (pet.Width > 0 && pet.Height > 0) content.Union(pet);
+            return TryDeviceRect(content, out bounds);
+        }
+
         /// <param name="musicPlaying">Whether music plays, for pets in 음악 반복 when there is no <paramref name="player"/>
         /// (the TODO window's pets: no music bar, but they still dance to the music).</param>
         public MiniWindow(AppData data, Func<bool> changed, Action music, Action contacts = null,
@@ -3161,7 +3172,13 @@ namespace ScheduleWidget
         }
 
         private static double Clamp(double value, double min, double max) => Math.Max(min, Math.Min(Math.Max(min, max), value));
-        private void Full_Click(object sender, RoutedEventArgs e) { if (RecentlyDragged) return; CloseDayPopup(); ActionsPopup.IsOpen = false; Close(); }
+        private void Full_Click(object sender, RoutedEventArgs e)
+        {
+            if (RecentlyDragged) return;
+            CloseDayPopup();
+            ActionsPopup.IsOpen = false;
+            ScheduleListRequested?.Invoke();
+        }
         private void Music_Click(object sender, RoutedEventArgs e) { CloseDayPopup(); ActionsPopup.IsOpen = false; music(); }
         private void Contacts_Click(object sender, RoutedEventArgs e) { CloseDayPopup(); ActionsPopup.IsOpen = false; contacts?.Invoke(); }
         private void Exit_Click(object sender, RoutedEventArgs e) { CloseDayPopup(); ActionsPopup.IsOpen = false; exit?.Invoke(); }
