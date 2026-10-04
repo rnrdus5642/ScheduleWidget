@@ -24,6 +24,9 @@ namespace ScheduleWidget
         private bool closed;
         private string characterPayload;
         private Point? pressPoint;
+        private int pressedPetSlot = -1;
+        private int pressedPetClickCount;
+        private int previousPetClickSlot = -1;
         private DateTime weekStart;
         private int previewCount = 3;
         private Guid? miniEditId;
@@ -3189,8 +3192,10 @@ namespace ScheduleWidget
         {
             if (e.LeftButton != MouseButtonState.Pressed) return;
             CloseDayPopup();
-            if (placingPets) { BeginPetDrag(e); return; } // while placing, presses only drag
+            if (placingPets) { previousPetClickSlot = -1; BeginPetDrag(e); return; } // while placing, presses only drag
             pressPoint = e.GetPosition(this);
+            pressedPetSlot = SlotAt(e.GetPosition(CharacterHost));
+            pressedPetClickCount = e.ClickCount;
             CharacterHost.CaptureMouse();
             e.Handled = true;
         }
@@ -3207,7 +3212,7 @@ namespace ScheduleWidget
 
         /// <summary>
         /// A press on a pet that moved past the drag distance (window coordinates) ends there: true when it did. It is then
-        /// not a click (no 캐릭터 선택), and the window stays put — only the calendar's top band moves it (unless that band is
+        /// not a click (no character settings), and the window stays put — only the calendar's top band moves it (unless that band is
         /// off screen: then PetDragged moves the window). Pets are dragged
         /// into place with 드래그로 위치 설정. (Also the tests' way in: the pointer and the button are handed in.)
         /// </summary>
@@ -3217,25 +3222,43 @@ namespace ScheduleWidget
             if (Math.Abs(current.X - pressPoint.Value.X) < SystemParameters.MinimumHorizontalDragDistance &&
                 Math.Abs(current.Y - pressPoint.Value.Y) < SystemParameters.MinimumVerticalDragDistance) return false;
             pressPoint = null;
+            previousPetClickSlot = -1;
             CharacterHost.ReleaseMouseCapture();
             return true;
         }
 
-        // Pet clicks: left = 캐릭터 선택 (the picker), right = 캐릭터 설정. A press that moves is neither.
+        // A single click does nothing; a completed double-click opens the clicked pet's settings.
+        // Wait for mouse-up so a drag or a press released over another pet does not open a window.
         private void Character_MouseUp(object sender, MouseButtonEventArgs e)
         {
             if (draggingPet >= 0) { EndPetDrag(e); return; }
             if (!pressPoint.HasValue) return;
+            int pet = SlotAt(e.GetPosition(CharacterHost));
+            int pressed = pressedPetSlot, clicks = pressedPetClickCount;
             pressPoint = null;
+            pressedPetSlot = -1;
+            pressedPetClickCount = 0;
             CharacterHost.ReleaseMouseCapture(); // a press must never leave the mouse captured (it swallowed later clicks)
             e.Handled = true;
-            if (RecentlyDragged) return;
-            activeSlot = SlotAt(e.GetPosition(CharacterHost)); // a plain click (no drag) opens 캐릭터 선택 for that pet
-            Dispatcher.BeginInvoke(new Action(OpenCharacterPicker)); // after this press has finished
+            if (RecentlyDragged || pet != pressed) { previousPetClickSlot = -1; return; }
+            Dispatcher.BeginInvoke(new Action(() => HandlePetClick(pet, clicks))); // after this press has finished
+        }
+
+        internal void HandlePetClick(int pet, int clicks)
+        {
+            if (closed || placingPets || RecentlyDragged || !PetsShown || !IsPet(pet) || PetHidden(pet))
+            {
+                previousPetClickSlot = -1;
+                return;
+            }
+            bool openSettings = clicks == 2 && previousPetClickSlot == pet;
+            previousPetClickSlot = clicks == 1 ? pet : -1;
+            if (openSettings) OpenPetSettings(pet);
         }
 
         private void Character_RightClick(object sender, MouseButtonEventArgs e)
         {
+            previousPetClickSlot = -1;
             e.Handled = true;
             if (placingPets) { EndPetPlacement(); return; } // right-click ends the drag placement
             if (RecentlyDragged) return;
@@ -4456,7 +4479,7 @@ namespace ScheduleWidget
             undrawnPets.Add(pet);
             string name = pet >= 0 && pet < slotCharacters.Count ? slotCharacters[pet].Name + ": " : "";
             ShowCharacterError(name + (reason == "size" ? "이미지 크기가 캐릭터 형식과 맞지 않습니다." : "이미지를 읽지 못했습니다.") +
-                " 클릭해서 캐릭터를 다시 선택해 주세요.", pet);
+                " 더블클릭해 설정에서 캐릭터를 다시 선택해 주세요.", pet);
         }
 
         // At the pet it is about; when that pet is hidden (보이기 off), at the first pet that shows.
@@ -4567,7 +4590,7 @@ namespace ScheduleWidget
                 });
                 undrawnPets.UnionWith(unreadablePets);
                 undrawnPets.UnionWith(emptyPets);
-                if (unreadablePets.Count > 0) ShowCharacterError("캐릭터 파일을 읽지 못했습니다. 클릭해서 캐릭터를 다시 선택해 주세요.", unreadablePets.Min());
+                if (unreadablePets.Count > 0) ShowCharacterError("캐릭터 파일을 읽지 못했습니다. 더블클릭해 설정에서 다시 선택해 주세요.", unreadablePets.Min());
                 else CharacterError.Visibility = Visibility.Collapsed;
                 ScheduleReadRetry(passing, unreadablePets.Count > 0);
                 AnimationHint.Text = characterRows > 0
@@ -4586,7 +4609,7 @@ namespace ScheduleWidget
                 // old ones: no sheet may be sent by index to that page (it would draw another character's frames), and no
                 // stale load handed to it. The next reload builds both again.
                 characterPayload = null;
-                ShowCharacterError("클릭해서 캐릭터를 다시 선택해 주세요.");
+                ShowCharacterError("더블클릭해 설정에서 캐릭터를 다시 선택해 주세요.");
             }
             // The view's browser process is gone (Navigate / the folder mapping throw): build a new view instead of crashing
             // the app — this runs from clicks (바꾸기, 추가, 빼기) that can come before the ProcessFailed recovery has run.
@@ -4680,7 +4703,7 @@ namespace ScheduleWidget
 
         private void OpenCharacterPicker()
         {
-            if (closed) return; // a click's picker comes a moment later (BeginInvoke): the window may be gone by then
+            if (closed) return; // picking a replacement is an explicit action in character settings
             if (pickerOverride != null) { pickerOverride(); return; }
             CloseDayPopup();
             ActionsPopup.IsOpen = false;

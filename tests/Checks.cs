@@ -278,6 +278,12 @@ namespace ScheduleWidget.Checks
                 var closeList = (System.Windows.Controls.Button)main.FindName("CloseScheduleListButton");
                 closeList.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
                 Require(!calendarClosed && !(bool)typeof(MainWindow).GetField("closingApp", flags).GetValue(main), "Closing the list shut down the calendar or app.");
+                var clickData = Data();
+                clickData.MiniExtraCharacters.Add(new MiniCharacterSlot { Manifest = "DefaultPets/mochi-blue/pet.json" });
+                clickData.MiniExtraCharacters.Add(new MiniCharacterSlot { Manifest = "DefaultPets/mochi-red/pet.json" });
+                var clickMini = new MiniWindow(clickData, () => true, () => { });
+                windows.Add(clickMini);
+                Run("Character double-click selects its settings without opening the picker", () => PetClickRouting(clickMini, clickData));
                 Run("Unified settings navigation, save, cancel and content lifecycle", () => UnifiedSettingsFlow(main, mini, data));
             }
             finally { app.Shutdown(); }
@@ -298,6 +304,35 @@ namespace ScheduleWidget.Checks
             Require(negative == new Point(-888, -100), "Negative monitor coordinates were lost.");
             var scaled = ScheduleListPlacement.Beside(new Rect(150, 150, 1200, 480), new Size(540, 750), new Rect(0, 0, 2880, 1560), 18);
             Require(scaled == new Point(1368, 150), "Placement did not preserve scaled coordinates.");
+        }
+
+        private static void PetClickRouting(MiniWindow mini, AppData data)
+        {
+            var requests = new List<int>();
+            int pickerRequests = 0;
+            mini.CharacterSettingsRequested += requests.Add;
+            SetField(mini, "pickerOverride", (Action)(() => pickerRequests++));
+            Call(mini, "HandlePetClick", 1, 1);
+            Require(requests.Count == 0 && pickerRequests == 0, "The first click opened a window.");
+            Call(mini, "HandlePetClick", 1, 2);
+            Require(requests.SequenceEqual(new[] { 1 }), "Double-click did not target the second character.");
+            Call(mini, "HandlePetClick", 2, 1);
+            Call(mini, "HandlePetClick", 2, 2);
+            Require(requests.SequenceEqual(new[] { 1, 2 }), "Double-click did not target the third character.");
+            Call(mini, "HandlePetClick", 0, 1);
+            Call(mini, "HandlePetClick", 1, 2);
+            Require(requests.Count == 2, "Clicks on different characters became a double-click.");
+            Call(mini, "HandlePetClick", 0, 1);
+            SetField(mini, "pressPoint", (Point?)new Point(0, 0));
+            Call(mini, "PetPressMoved", new Point(100, 100), true);
+            Call(mini, "HandlePetClick", 0, 2);
+            Require(requests.Count == 2, "Dragging a character opened settings.");
+            data.MiniExtraCharacters[1].Hidden = true;
+            Call(mini, "HandlePetClick", 2, 1);
+            Call(mini, "HandlePetClick", 2, 2);
+            Require(requests.Count == 2 && pickerRequests == 0, "A hidden character or a double-click opened the picker.");
+            ((IPetSettingsHost)mini).ChangePet(1);
+            Require(pickerRequests == 1, "The explicit change-character action no longer opens the picker.");
         }
 
         private static object Field(object owner, string name) => owner.GetType().GetField(name, BindingFlags.NonPublic | BindingFlags.Instance).GetValue(owner);
