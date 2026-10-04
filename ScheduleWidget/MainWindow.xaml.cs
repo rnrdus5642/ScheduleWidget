@@ -299,14 +299,13 @@ namespace ScheduleWidget
             if (primaryScreen == null)
                 return;
 
-            // Reset the primary calendar and keep an open list next to it.
+            // The full agenda is part of the calendar and moves with it.
             if (appData != null)
             {
                 ShowMiniWindow();
                 if (miniWindow == null) return;
                 miniWindow.CenterOnPrimaryScreen(); // and saves that place (window and calendar board)
                 BringToFront(miniWindow);
-                if (IsVisible && !_startingHidden) ShowFullWindow();
                 return;
             }
 

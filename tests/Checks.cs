@@ -49,7 +49,6 @@ namespace ScheduleWidget.Checks
             Run("Default pet manifests and packaged assets load", PackagedAssets);
             Run("Updates reject a modified signed manifest", SignedUpdates);
             Run("Global shortcuts reject unmodified typing keys", Shortcuts);
-            Run("Schedule list stays beside the calendar and on screen", ListPlacement);
             Run("WPF resources and six window layouts construct", WindowResources);
 
             Console.WriteLine("{0} passed, {1} failed.", passed, failed);
@@ -267,19 +266,16 @@ namespace ScheduleWidget.Checks
                 }
                 Require(mini.FindName("WeekCalendar") != null, "Mini calendar was not constructed.");
 
-                int listRequests = 0;
                 bool calendarClosed = false;
-                mini.ScheduleListRequested += () => listRequests++;
                 mini.Closed += (sender, args) => calendarClosed = true;
                 var todoButton = (System.Windows.Controls.Button)mini.FindName("TodoButton");
+                int windowCount = app.Windows.Count;
                 todoButton.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
+                Require(mini.IsAllSchedulesOpen && app.Windows.Count == windowCount && !main.IsVisible, "The agenda opened a separate window.");
                 todoButton.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
-                Require(listRequests == 2 && !calendarClosed, "The list button closed or replaced the calendar.");
+                Require(!mini.IsAllSchedulesOpen && !calendarClosed, "The list button did not fold the agenda back into the calendar.");
 
                 typeof(MainWindow).GetField("miniWindow", flags).SetValue(main, mini);
-                var closeList = (System.Windows.Controls.Button)main.FindName("CloseScheduleListButton");
-                closeList.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
-                Require(!calendarClosed && !(bool)typeof(MainWindow).GetField("closingApp", flags).GetValue(main), "Closing the list shut down the calendar or app.");
                 var clickData = Data();
                 clickData.MiniExtraCharacters.Add(new MiniCharacterSlot { Manifest = "DefaultPets/mochi-blue/pet.json" });
                 clickData.MiniExtraCharacters.Add(new MiniCharacterSlot { Manifest = "DefaultPets/mochi-red/pet.json" });
@@ -287,6 +283,7 @@ namespace ScheduleWidget.Checks
                 windows.Add(clickMini);
                 Run("Character double-click selects its settings without opening the picker", () => PetClickRouting(clickMini, clickData));
                 Run("Compact calendar shows multiple schedules and scrolls every day independently", CalendarDayLists);
+                Run("Embedded agenda lists distant schedules, resizes and reuses schedule editing", AllSchedulesPanel);
                 Run("Unified settings navigation, save, cancel and content lifecycle", () => UnifiedSettingsFlow(main, mini, data));
             }
             finally { app.Shutdown(); }
@@ -342,6 +339,67 @@ namespace ScheduleWidget.Checks
             finally { mini.Close(); }
         }
 
+        private static void AllSchedulesPanel()
+        {
+            var data = new AppData { MiniCharacterVisible = false, MiniPlayerVisible = false };
+            var earlier = new ScheduleItem { Title = "Earlier", Period = DateTime.Today.AddDays(-2).ToString("yyyy-MM-dd") };
+            var distant = new ScheduleItem { Title = "Next year", Period = DateTime.Today.AddYears(1).ToString("yyyy-MM-dd"),
+                EndPeriod = DateTime.Today.AddYears(1).AddDays(2).ToString("yyyy-MM-dd"), Time = "14:30", Color = "#336699" };
+            data.Schedules.Add(distant);
+            data.Schedules.Add(earlier);
+            int saves = 0;
+            var mini = new MiniWindow(data, () => { saves++; return true; }, () => { });
+            try
+            {
+                var content = (FrameworkElement)mini.Content;
+                void Layout(double width)
+                {
+                    mini.Width = width;
+                    content.Measure(new Size(width, 260));
+                    content.Arrange(new Rect(0, 0, width, 260));
+                    content.UpdateLayout();
+                }
+                Layout(800);
+                mini.SetAllSchedulesOpen(true);
+                Layout(800);
+                var panel = (FrameworkElement)mini.FindName("AllSchedulesPanel");
+                var list = (ItemsControl)mini.FindName("AllSchedulesList");
+                ScheduleItem ItemAt(int index) => (ScheduleItem)list.Items[index].GetType().GetProperty("Item").GetValue(list.Items[index]);
+                Require(list.Items.Count == 2 && ItemAt(0) == earlier && ItemAt(1) == distant, "The full agenda omitted or misordered distant schedules.");
+                Require((string)list.Items[1].GetType().GetProperty("Detail").GetValue(list.Items[1]) is string detail &&
+                    detail.Contains(DateTime.Today.AddYears(1).Year.ToString()) && detail.Contains("14:30"), "The agenda lost the year or time.");
+                Require(Window.GetWindow(panel) == mini && Grid.GetColumn(panel) == 1, "The agenda is not inside the calendar.");
+                var sheet = (FrameworkElement)mini.FindName("CalendarSheet");
+                Require(panel.TransformToAncestor(sheet).TransformBounds(new Rect(panel.RenderSize)).Right <= sheet.ActualWidth + 1, "The agenda extends outside the calendar.");
+                Layout(360);
+                Require(Grid.GetColumn(panel) == 0 && panel.ActualWidth <= sheet.ActualWidth, "The narrow calendar clips its agenda.");
+                Call(mini, "PrepareAllScheduleEditor", distant);
+                Require(((TextBox)mini.FindName("MiniTitleInput")).Text == distant.Title &&
+                    ((DatePicker)mini.FindName("MiniDateInput")).SelectedDate == distant.StartDate &&
+                    ((CheckBox)mini.FindName("MiniRangeToggle")).IsChecked == true, "Editing a distant multi-day schedule lost its values.");
+                ((TextBox)mini.FindName("MiniTitleInput")).Text = "Updated next year";
+                Call(mini, "SaveMiniSchedule_Click", mini, new RoutedEventArgs(Button.ClickEvent));
+                Require(saves == 1 && distant.Title == "Updated next year" && ItemAt(1) == distant, "Agenda edits did not save and refresh.");
+                SetField(mini, "blockItem", distant);
+                Call(mini, "BlockDone_Click", mini, new RoutedEventArgs(Button.ClickEvent));
+                Require(distant.IsCompleted && saves == 2, "Agenda completion did not use the existing save flow.");
+                Call(mini, "BlockDelete_Click", mini, new RoutedEventArgs(Button.ClickEvent));
+                Require(data.Schedules.Contains(distant), "The first delete press removed a schedule.");
+                Call(mini, "BlockDelete_Click", mini, new RoutedEventArgs(Button.ClickEvent));
+                Require(!data.Schedules.Contains(distant) && list.Items.Count == 1 && saves == 3, "Confirmed deletion did not refresh the agenda.");
+                Call(mini, "PrepareAllScheduleEditor", new object[] { null });
+                ((TextBox)mini.FindName("MiniTitleInput")).Text = "New from agenda";
+                Call(mini, "SaveMiniSchedule_Click", mini, new RoutedEventArgs(Button.ClickEvent));
+                Require(list.Items.Count == 2 && data.Schedules.Any(s => s.Title == "New from agenda") && saves == 4, "Adding through the agenda failed.");
+                ((Button)mini.FindName("AllSchedulesClose")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                Require(!mini.IsAllSchedulesOpen && !mini.IsVisible, "Closing the agenda opened or closed a desktop window.");
+                data.Schedules.Clear();
+                mini.SetAllSchedulesOpen(true);
+                Require(list.Items.Count == 0 && ((FrameworkElement)mini.FindName("AllSchedulesEmpty")).Visibility == Visibility.Visible, "The empty agenda did not refresh.");
+            }
+            finally { mini.Close(); }
+        }
+
         private static IEnumerable<T> VisualDescendants<T>(DependencyObject root) where T : DependencyObject
         {
             for (int i = 0; i < VisualTreeHelper.GetChildrenCount(root); i++)
@@ -350,23 +408,6 @@ namespace ScheduleWidget.Checks
                 if (child is T match) yield return match;
                 foreach (var descendant in VisualDescendants<T>(child)) yield return descendant;
             }
-        }
-
-        private static void ListPlacement()
-        {
-            var area = new Rect(0, 0, 1920, 1040);
-            var size = new Size(360, 500);
-            Require(ScheduleListPlacement.Beside(new Rect(100, 100, 800, 320), size, area) == new Point(912, 100), "List did not open on the right.");
-            Require(ScheduleListPlacement.Beside(new Rect(1100, 100, 800, 320), size, area) == new Point(728, 100), "List did not switch to the left near the screen edge.");
-            Require(ScheduleListPlacement.Beside(new Rect(100, 800, 800, 200), size, area).Y == 540, "List extends below the work area.");
-            var smallArea = new Rect(0, 0, 900, 650);
-            var crowded = ScheduleListPlacement.Beside(new Rect(50, 10, 800, 320), size, smallArea);
-            Require(smallArea.Contains(new Rect(crowded, size)), "List escaped a crowded work area.");
-            var leftMonitor = new Rect(-1920, -200, 1920, 1040);
-            var negative = ScheduleListPlacement.Beside(new Rect(-1700, -100, 800, 320), size, leftMonitor);
-            Require(negative == new Point(-888, -100), "Negative monitor coordinates were lost.");
-            var scaled = ScheduleListPlacement.Beside(new Rect(150, 150, 1200, 480), new Size(540, 750), new Rect(0, 0, 2880, 1560), 18);
-            Require(scaled == new Point(1368, 150), "Placement did not preserve scaled coordinates.");
         }
 
         private static void PetClickRouting(MiniWindow mini, AppData data)

@@ -222,9 +222,10 @@
         <Grid x:Name="WeekCalendar" Grid.Column="2" Margin="0,4,2,8" SizeChanged="WeekCalendar_SizeChanged"
               PreviewMouseLeftButtonDown="Calendar_PreviewMouseDown" PreviewMouseMove="Calendar_PreviewMouseMove">
             <Border Margin="0,8,0,0" CornerRadius="8" Background="{DynamicResource MiniPaperBrush}" BorderBrush="{DynamicResource MiniFrameBrush}" BorderThickness="2.5">
-                <Grid>
+                <Grid x:Name="CalendarSheet" SizeChanged="CalendarSheet_SizeChanged">
                     <Grid.RowDefinitions><RowDefinition Height="30"/><RowDefinition Height="*"/></Grid.RowDefinitions>
-                    <Border x:Name="CalendarHeader" Background="{DynamicResource MiniHeaderBrush}" CornerRadius="8,8,0,0" BorderBrush="{DynamicResource MiniFrameBrush}" BorderThickness="0,0,0,2"
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                    <Border x:Name="CalendarHeader" Grid.ColumnSpan="2" Background="{DynamicResource MiniHeaderBrush}" CornerRadius="8,8,0,0" BorderBrush="{DynamicResource MiniFrameBrush}" BorderThickness="0,0,0,2"
                             MouseLeftButtonUp="CalendarHeader_Click" Cursor="Hand">
                         <!-- Arrows at the far ends; today beside ‹, schedule list beside ›, period label centered. -->
                         <Grid Margin="3,2,3,0">
@@ -251,8 +252,8 @@
                             <Button x:Name="HeaderSettingsButton" Grid.Column="3" Margin="0,0,1,0" Style="{StaticResource WeekArrow}" Click="Settings_Click" AutomationProperties.Name="설정">
                                 <TextBlock Text="⚙" FontFamily="Segoe UI Symbol" FontSize="13" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type Button}}}"/>
                             </Button>
-                            <!-- Straight back to the original TODO list window. -->
-                            <Button x:Name="TodoButton" Grid.Column="4" Margin="0,0,2,0" Style="{StaticResource WeekArrow}" Click="Full_Click" ToolTip="일정 목록 열기 / 닫기" AutomationProperties.Name="일정 목록 열기 / 닫기">
+                            <!-- The full agenda expands inside the calendar. -->
+                            <Button x:Name="TodoButton" Grid.Column="4" Margin="0,0,2,0" Style="{StaticResource WeekArrow}" Click="ToggleAllSchedules_Click" ToolTip="전체 일정 펼치기" AutomationProperties.Name="전체 일정 펼치기">
                                 <Path Data="M1,2.5 L2.5,4 L5,1 M1,8.5 L2.5,10 L5,7 M7.5,2.5 L13,2.5 M7.5,8.5 L13,8.5" Width="14" Height="11"
                                       Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type Button}}}" StrokeThickness="1.6"
                                       StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"/>
@@ -322,6 +323,67 @@
                             </Button>
                         </DataTemplate></ItemsControl.ItemTemplate>
                     </ItemsControl>
+                    <Border x:Name="AllSchedulesPanel" Grid.Row="1" Grid.Column="1" Visibility="Collapsed" Width="290" Margin="0,4,8,10"
+                            Background="{DynamicResource MiniPaperBrush}" BorderBrush="{DynamicResource MiniFrameBrush}"
+                            BorderThickness="1" CornerRadius="6" Padding="9,6" ClipToBounds="True">
+                        <Grid>
+                            <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+                            <Grid Margin="0,0,0,6">
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                    <TextBlock Text="전체 일정" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource MiniInkBrush}"/>
+                                    <TextBlock x:Name="AllSchedulesCount" FontSize="10" Foreground="{DynamicResource MiniMutedBrush}" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                                </StackPanel>
+                                <Button x:Name="AllSchedulesAdd" Grid.Column="1" Style="{StaticResource WeekArrow}" Margin="4,0,2,0" Click="AllSchedulesAdd_Click"
+                                        ToolTip="새 일정" AutomationProperties.Name="전체 일정에서 새 일정 추가">
+                                    <Path Data="M1,6 L11,6 M6,1 L6,11" Width="12" Height="12" Stroke="{DynamicResource MiniInkBrush}" StrokeThickness="1.5"/>
+                                </Button>
+                                <Button x:Name="AllSchedulesClose" Grid.Column="2" Style="{StaticResource WeekArrow}" Click="AllSchedulesClose_Click"
+                                        ToolTip="전체 일정 접기" AutomationProperties.Name="전체 일정 접기">
+                                    <Path Data="M1,1 L11,11 M11,1 L1,11" Width="12" Height="12" Stroke="{DynamicResource MiniInkBrush}" StrokeThickness="1.5"/>
+                                </Button>
+                            </Grid>
+                            <ItemsControl x:Name="AllSchedulesList" Grid.Row="1" VirtualizingPanel.IsVirtualizing="True"
+                                          VirtualizingPanel.VirtualizationMode="Recycling" VirtualizingPanel.ScrollUnit="Pixel" ScrollViewer.CanContentScroll="True">
+                                <ItemsControl.Template><ControlTemplate TargetType="ItemsControl">
+                                    <ScrollViewer x:Name="AllSchedulesScroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                                                  CanContentScroll="True" PanningMode="VerticalOnly" Focusable="False"><ItemsPresenter/></ScrollViewer>
+                                </ControlTemplate></ItemsControl.Template>
+                                <ItemsControl.ItemsPanel><ItemsPanelTemplate><VirtualizingStackPanel/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate><DataTemplate>
+                                    <Button Click="AllScheduleEdit_Click" MouseRightButtonUp="Block_RightClick" Margin="0,0,0,5" Padding="8,6"
+                                            Background="{Binding Background}" Foreground="{Binding Ink}" HorizontalContentAlignment="Stretch"
+                                            ToolTip="{Binding Hint}" AutomationProperties.Name="{Binding Hint}">
+                                        <Button.Template><ControlTemplate TargetType="Button">
+                                            <Border x:Name="ScheduleRow" CornerRadius="5" Background="{TemplateBinding Background}"
+                                                    BorderBrush="Transparent" BorderThickness="1" Padding="{TemplateBinding Padding}">
+                                                <ContentPresenter HorizontalAlignment="Stretch"/>
+                                            </Border>
+                                            <ControlTemplate.Triggers>
+                                                <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="ScheduleRow" Property="BorderBrush" Value="{DynamicResource MiniFrameBrush}"/></Trigger>
+                                                <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="ScheduleRow" Property="BorderBrush" Value="{DynamicResource MiniFrameBrush}"/></Trigger>
+                                                <Trigger Property="IsPressed" Value="True"><Setter TargetName="ScheduleRow" Property="Opacity" Value="0.8"/></Trigger>
+                                            </ControlTemplate.Triggers>
+                                        </ControlTemplate></Button.Template>
+                                        <Grid>
+                                            <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                            <TextBlock Text="{Binding Title}" FontSize="12" TextTrimming="CharacterEllipsis" Margin="0,0,8,0">
+                                                <TextBlock.Style><Style TargetType="TextBlock"><Style.Triggers>
+                                                    <DataTrigger Binding="{Binding IsCompleted}" Value="True"><Setter Property="TextDecorations" Value="Strikethrough"/><Setter Property="Opacity" Value="0.65"/></DataTrigger>
+                                                </Style.Triggers></Style></TextBlock.Style>
+                                            </TextBlock>
+                                            <TextBlock Grid.Column="1" Text="{Binding DDay}" FontSize="10" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                            <TextBlock Grid.Row="1" Grid.ColumnSpan="2" Text="{Binding Detail}" FontSize="10" Opacity="0.78" Margin="0,3,0,0" TextTrimming="CharacterEllipsis"/>
+                                        </Grid>
+                                    </Button>
+                                </DataTemplate></ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <TextBlock x:Name="AllSchedulesEmpty" Grid.Row="1" Text="등록된 일정이 없습니다.&#x0a;+ 버튼으로 일정을 추가하세요."
+                                       Foreground="{DynamicResource MiniMutedBrush}" FontSize="11" TextAlignment="Center" TextWrapping="Wrap"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center" Margin="4"/>
+                        </Grid>
+                    </Border>
                 </Grid>
             </Border>
             <!-- Two binder rings at 30% / 70% of the band, clear of the buttons at both ends. -->

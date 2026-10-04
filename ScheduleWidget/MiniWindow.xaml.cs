@@ -30,7 +30,6 @@ namespace ScheduleWidget
         private bool miniDateInvalid;
         private bool keepDayPopupState;
 
-        public event Action ScheduleListRequested;
         public event Action<int> CharacterSettingsRequested;
 
         // The visible calendar and its pets, in device pixels for placement on monitors with different DPI.
@@ -281,6 +280,7 @@ namespace ScheduleWidget
                 };
             }).ToList();
             SyncDayCells(cells);
+            RefreshAllSchedules();
             if (selectedDay.HasValue && DayPopup != null && DayPopup.IsOpen) RefreshDaySchedules();
         }
 
@@ -553,6 +553,11 @@ namespace ScheduleWidget
             var item = blockItem;
             BlockPopup.IsOpen = false;
             if (item == null || !data.Schedules.Contains(item)) return;
+            if ((BlockPopup.PlacementTarget as FrameworkElement)?.DataContext is AllScheduleRow)
+            {
+                OpenAllScheduleEditor(item);
+                return;
+            }
             if (!DateTime.TryParseExact(item.Period, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out DateTime day)) return;
             var dayButton = FindDayButton(day.Date);
             // 여러 날 begun before this page: the first day of it the page shows.
@@ -781,15 +786,20 @@ namespace ScheduleWidget
             ResetMiniEditor(selectedDay.Value);
             MiniEditorPanel.Visibility = Visibility.Collapsed;
             RefreshDaySchedules();
+            OpenDayPopupAt(button);
+            e.Handled = true;
+        }
+
+        private void OpenDayPopupAt(FrameworkElement anchor)
+        {
             DayPopup.PlacementTarget = WeekCalendar;
-            double center = button.TranslatePoint(new Point(button.ActualWidth / 2, 0), WeekCalendar).X;
+            double center = anchor.TranslatePoint(new Point(anchor.ActualWidth / 2, 0), WeekCalendar).X;
             DayPopup.HorizontalOffset = Math.Max(0, Math.Min(center - DayBubble.Width / 2, WeekCalendar.ActualWidth - DayBubble.Width));
             DayBubbleTail.Margin = new Thickness(Math.Max(16, Math.Min(center - DayPopup.HorizontalOffset - 12, DayBubble.Width - 40)), 0, 0, 0);
             DayPopup.StaysOpen = false;
             RemeasurePopup(DayPopup);
             DayPopup.IsOpen = true;
             CloseDayBubble.Focus();
-            e.Handled = true;
         }
 
         private DateTime? dayPopupDay; // day of the bubble last opened (kept after it closes, for the toggle above)
@@ -1173,6 +1183,7 @@ namespace ScheduleWidget
         private const uint SwpNoSize = 0x0001, SwpNoMove = 0x0002, SwpNoZOrder = 0x0004, SwpNoOwnerZOrder = 0x0200;
 
         private bool WeekFlipAnimates =>
+            !IsAllSchedulesOpen && // keep the agenda stationary while its calendar changes weeks
             data.MiniFlipEffect != 0 && // 애니메이션 없음: the week changes at once (and no page window is ever made)
             (weekFlipAnimationsOverride ?? SystemParameters.ClientAreaAnimation) && !companion && !closed && IsLoaded && IsVisible &&
             PresentationSource.FromVisual(this) != null && WeekDays.Parent is FrameworkElement host && host.ActualWidth >= 2 &&
@@ -3070,12 +3081,6 @@ namespace ScheduleWidget
         }
 
         private static double Clamp(double value, double min, double max) => Math.Max(min, Math.Min(Math.Max(min, max), value));
-        private void Full_Click(object sender, RoutedEventArgs e)
-        {
-            if (RecentlyDragged) return;
-            CloseDayPopup();
-            ScheduleListRequested?.Invoke();
-        }
         private void Settings_Click(object sender, RoutedEventArgs e) { if (RecentlyDragged) return; CloseDayPopup(); settings?.Invoke(); }
 
         public void SetReminderWarning(string message) => HeaderSettingsButton.ToolTip = string.IsNullOrWhiteSpace(message) ? "설정" : message;
@@ -3717,6 +3722,7 @@ namespace ScheduleWidget
                 else if (VolumePopup.IsOpen) VolumePopup.IsOpen = false;
                 else if (PlaylistPopup.IsOpen) PlaylistPopup.IsOpen = false;
                 else if (BlockPopup.IsOpen) BlockPopup.IsOpen = false;
+                else if (IsAllSchedulesOpen) SetAllSchedulesOpen(false);
                 else HideToTray(); // nothing open: hide the widget; the tray icon (열기) brings it back
                 return;
             }

@@ -97,12 +97,11 @@ namespace ScheduleWidget
             else HideScheduleList();
         }
 
-        // Tray / global shortcut: the calendar is always the main window. Keep an open list beside it.
+        // Tray / global shortcut: the calendar and its embedded agenda are one window.
         public void OpenLastWindow()
         {
             ShowMiniWindow();
             if (miniWindow != null) BringToFront(miniWindow);
-            if (IsVisible && !_startingHidden) BringToFront(this);
             if (settingsHost != null) BringToFront(settingsHost);
         }
 
@@ -118,35 +117,6 @@ namespace ScheduleWidget
             NativeMethods.RaiseAboveOtherApps(window); // desktop-owned: make sure it ends up above other apps
         }
 
-        public void ShowFullWindow()
-        {
-            if (appData == null || closingApp) return;
-            if (miniWindow == null || !miniWindow.IsVisible) ShowMiniWindow();
-            if (miniWindow == null) return;
-
-            _isRestoringState = true;
-            try
-            {
-                WindowStartupLocation = WindowStartupLocation.Manual;
-                PlaceScheduleListBesideCalendar();
-                Opacity = 1;
-                Show();
-                // Showing on a different monitor can change this window's DPI.
-                PlaceScheduleListBesideCalendar();
-            }
-            finally { _isRestoringState = false; }
-            RefreshScheduleList();
-            UpdatePetCompanion();
-            SaveCurrentState();
-            BringToFront(this);
-        }
-
-        private void ToggleScheduleList()
-        {
-            if (IsVisible && !_startingHidden) HideScheduleList();
-            else ShowFullWindow();
-        }
-
         private void HideScheduleList()
         {
             if (settingsHost == null) CloseInlineSettings(false);
@@ -154,24 +124,6 @@ namespace ScheduleWidget
         }
 
         private void CloseScheduleList_Click(object sender, RoutedEventArgs e) => HideScheduleList();
-
-        private void PlaceScheduleListBesideCalendar()
-        {
-            if (miniWindow == null || !miniWindow.TryGetWorkspaceScreenBounds(out Rect calendar)) return;
-            var screen = System.Windows.Forms.Screen.FromPoint(new System.Drawing.Point(
-                (int)Math.Round(calendar.Left + calendar.Width / 2), (int)Math.Round(calendar.Top + calendar.Height / 2)));
-            var area = new Rect(screen.WorkingArea.Left, screen.WorkingArea.Top, screen.WorkingArea.Width, screen.WorkingArea.Height);
-            for (int pass = 0; pass < 2; pass++)
-            {
-                var dpi = System.Windows.Media.VisualTreeHelper.GetDpi(this);
-                EnsureWindowSizeWithin(GetWorkAreaInDips(screen));
-                Point at = ScheduleListPlacement.Beside(calendar, new Size(Width * dpi.DpiScaleX, Height * dpi.DpiScaleY), area, 12 * dpi.DpiScaleX);
-                Left = at.X / dpi.DpiScaleX;
-                Top = at.Y / dpi.DpiScaleY;
-                var after = System.Windows.Media.VisualTreeHelper.GetDpi(this);
-                if (after.DpiScaleX == dpi.DpiScaleX && after.DpiScaleY == dpi.DpiScaleY) break;
-            }
-        }
 
         public void ShowMiniWindow()
         {
@@ -184,7 +136,6 @@ namespace ScheduleWidget
                     RefreshScheduleList(); // while this window is hidden that only refreshes the mini window
                     return saved;
                 }, ShowMusic, player: this, settings: OpenSettingsFromMini);
-                miniWindow.ScheduleListRequested += ToggleScheduleList;
                 miniWindow.SetReminderWarning(reminderErrorMessage);
                 miniWindow.CharacterSettingsRequested += index => OpenCharacterSettings(miniWindow, index);
                 if (_themeApplied && _themedPreset != appData.Appearance?.ThemePreset) miniWindow.ApplyTheme(_themedPreset, refresh: false);

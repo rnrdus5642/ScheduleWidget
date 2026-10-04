@@ -87,7 +87,6 @@
     </ApplicationDefinition>
     <Compile Include="Services\DataManager.cs" />
     <Compile Include="Services\IAppDataStore.cs" />
-    <Compile Include="Services\ScheduleListPlacement.cs" />
     <Compile Include="Services\SettingsContentLease.cs" />
     <Compile Include="Services\NativeMethods.cs" />
     <Compile Include="Services\StartupService.cs" />
@@ -129,6 +128,7 @@
     <Page Include="MiniWindow.xaml"><Generator>MSBuild:Compile</Generator></Page>
     <Compile Include="MiniWindow.xaml.cs"><DependentUpon>MiniWindow.xaml</DependentUpon></Compile>
     <Compile Include="MiniWindow.UpcomingPreview.cs"><DependentUpon>MiniWindow.xaml</DependentUpon></Compile>
+    <Compile Include="MiniWindow.AllSchedules.cs"><DependentUpon>MiniWindow.xaml</DependentUpon></Compile>
     <Page Include="ContactWindow.xaml"><Generator>MSBuild:Compile</Generator></Page>
     <Compile Include="ContactWindow.xaml.cs"><DependentUpon>ContactWindow.xaml</DependentUpon></Compile>
     <Page Include="MusicWindow.xaml"><Generator>MSBuild:Compile</Generator></Page>
