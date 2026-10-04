@@ -31,6 +31,8 @@ namespace ScheduleWidget
         private bool keepDayPopupState;
 
         public event Action<int> CharacterSettingsRequested;
+        public event Action<ScheduleItem> ScheduleColorRequested;
+        public event Action<ScheduleItem> ScheduleMessageRequested;
 
         // The visible calendar and its pets, in device pixels for placement on monitors with different DPI.
         internal bool TryGetWorkspaceScreenBounds(out Rect bounds)
@@ -63,7 +65,7 @@ namespace ScheduleWidget
                 PlayerBar.Visibility = Visibility.Collapsed;
                 ShowActivated = false;
             }
-            ApplyTheme(data.Appearance?.ThemePreset, refresh: false);
+            ApplyAppearance(data.Appearance, refresh: false);
             weekStart = DefaultRangeStart();
             // The pets are sized from the board minus the music bar's room: know whether the bar shows before the first sizing
             // (it used to be counted as shown here and the pets jumped in size right after opening when it is hidden).
@@ -404,6 +406,11 @@ namespace ScheduleWidget
                 Top("MiniHeaderBrush", next.Top ?? next.Header); Top("MiniInkBrush", next.TopInk ?? next.Ink);
                 Top("AuxInkBrush", next.TopInk ?? next.AuxInk); Top("MiniHoverBrush", next.TopHover ?? next.Hover);
             }
+            // Theme-only callers also get matching agenda colors. ApplyAppearance may then supply custom colors.
+            var agenda = new AppearanceSettings { ThemePreset = preset, Opacity = scheduleAppearance.Opacity,
+                TitleFontSize = scheduleAppearance.TitleFontSize, DDayFontSize = scheduleAppearance.DDayFontSize };
+            agenda.CopyColorsFrom(AppearanceSettings.Presets[preset]);
+            ApplyAppearance(agenda, refresh: false);
             if (refresh) Refresh(); // day cells carry their ink colors as data
         }
 
@@ -519,6 +526,31 @@ namespace ScheduleWidget
             if (item == null || !data.Schedules.Contains(item)) return;
             item.IsCompleted = !item.IsCompleted;
             SaveBlockChange();
+        }
+
+        private void BlockColor_Click(object sender, RoutedEventArgs e)
+        {
+            e.Handled = true;
+            BlockPopup.IsOpen = false;
+            if (blockItem != null && data.Schedules.Contains(blockItem)) ScheduleColorRequested?.Invoke(blockItem);
+        }
+
+        private void BlockDefaultColor_Click(object sender, RoutedEventArgs e)
+        {
+            e.Handled = true;
+            BlockPopup.IsOpen = false;
+            var item = blockItem;
+            if (item == null || !data.Schedules.Contains(item)) return;
+            string previous = item.Color;
+            item.Color = null;
+            if (!SaveAndRefresh()) { item.Color = previous; Refresh(); }
+        }
+
+        private void BlockMessage_Click(object sender, RoutedEventArgs e)
+        {
+            e.Handled = true;
+            BlockPopup.IsOpen = false;
+            if (blockItem != null && data.Schedules.Contains(blockItem)) ScheduleMessageRequested?.Invoke(blockItem);
         }
 
         // First press arms ("정말 삭제", darker red), second press deletes — same as the day bubble.
@@ -1398,7 +1430,7 @@ namespace ScheduleWidget
                     WindowStyle = WindowStyle.None, AllowsTransparency = true, Background = Brushes.Transparent, ShowInTaskbar = false,
                     ShowActivated = false, Topmost = false, ResizeMode = ResizeMode.NoResize, Focusable = false, IsHitTestVisible = false,
                     WindowStartupLocation = WindowStartupLocation.Manual, SizeToContent = SizeToContent.Manual,
-                    Left = -32000, Top = -32000, Width = 1, Height = 1, Title = "", Owner = this, Content = content
+                    Left = -32000, Top = -32000, Width = 1, Height = 1, Title = "", Owner = this, Content = content, Opacity = MiniRoot.Opacity
                 };
                 var handle = new WindowInteropHelper(flipWindow).EnsureHandle();
                 // Click-through, never activated, not in Alt+Tab.
@@ -2948,7 +2980,7 @@ namespace ScheduleWidget
             e.Handled = true;
         }
 
-        public void SetDayCount(int count)
+        public void SetDayCount(int count, bool persist = true)
         {
             RangePopup.IsOpen = false;
             EndRush(); // the new day count lays out its own page, even mid-오늘로 이동
@@ -2956,7 +2988,7 @@ namespace ScheduleWidget
             bool countChanged = count != data.MiniDayCount;
             data.MiniDayCount = count;
             weekStart = DefaultRangeStart(); // before the save, whose refresh then shows the new range right away
-            if (countChanged) SaveAndRefresh();
+            if (countChanged && persist) SaveAndRefresh();
             else Refresh();
         }
 

@@ -71,7 +71,7 @@ namespace ScheduleWidget
                 petCompanion.SlotsChanged += () => miniWindow?.ReloadCharacter(); // the same pets in the mini window
                 petCompanion.CharacterSettingsRequested += index => OpenCharacterSettings(petCompanion, index);
                 petCompanion.Closed += (s, e) => { if (ReferenceEquals(petCompanion, s)) petCompanion = null; };
-                if (_themeApplied) petCompanion.ApplyTheme(_themedPreset, refresh: false); // a theme being previewed in 설정
+                if (_themeApplied) petCompanion.ApplyAppearance(_inlineSettingsDraft ?? appData.Appearance, refresh: false);
             }
             FollowPetCompanion();
             petCompanion.Show();
@@ -136,9 +136,10 @@ namespace ScheduleWidget
                     RefreshScheduleList(); // while this window is hidden that only refreshes the mini window
                     return saved;
                 }, ShowMusic, player: this, settings: OpenSettingsFromMini);
+                ConnectScheduleActions(miniWindow);
                 miniWindow.SetReminderWarning(reminderErrorMessage);
                 miniWindow.CharacterSettingsRequested += index => OpenCharacterSettings(miniWindow, index);
-                if (_themeApplied && _themedPreset != appData.Appearance?.ThemePreset) miniWindow.ApplyTheme(_themedPreset, refresh: false);
+                if (_themeApplied) miniWindow.ApplyAppearance(_inlineSettingsDraft ?? appData.Appearance);
                 miniWindow.SlotsChanged += () => petCompanion?.ReloadCharacter(); // the same pets beside the TODO window
                 // Hidden (Esc → tray): no need to poll other apps' media every 1.5 s. Only the timer pauses — the known
                 // sources stay, and showing the window again (ShowMiniWindow) restarts it with an immediate poll.
@@ -798,7 +799,19 @@ namespace ScheduleWidget
         private void ShareSchedule_Click(object sender, RoutedEventArgs e)
         {
             var item = GetScheduleItemFromContextMenu(sender);
-            if (item != null) OpenContacts(item.Title + "\n마감: " + item.PeriodText + " (" + item.DDay + ")");
+            ShareSchedule(item);
+        }
+
+        private void ConnectScheduleActions(MiniWindow window)
+        {
+            window.ScheduleColorRequested += ChangeScheduleColor;
+            window.ScheduleMessageRequested += ShareSchedule;
+        }
+
+        private void ShareSchedule(ScheduleItem item)
+        {
+            if (item == null || !appData.Schedules.Contains(item)) return;
+            OpenContacts(item.Title + "\n마감: " + item.PeriodText + " (" + item.DDay + ")");
         }
 
         private void CompleteSchedule_Click(object sender, RoutedEventArgs e)
@@ -810,24 +823,40 @@ namespace ScheduleWidget
             RefreshScheduleList();
         }
 
-        private static string PickColor(string current)
+#pragma warning disable CS0649 // supplied by the headless checks instead of opening a color dialog
+        private Func<string, string> colorPickerOverride;
+#pragma warning restore CS0649
+
+        private sealed class ColorDialogOwner : System.Windows.Forms.IWin32Window
         {
+            public IntPtr Handle { get; }
+            public ColorDialogOwner(Window window) { Handle = new System.Windows.Interop.WindowInteropHelper(window).Handle; }
+        }
+
+        private string PickColor(string current)
+        {
+            if (colorPickerOverride != null) return colorPickerOverride(current);
             using (var picker = new System.Windows.Forms.ColorDialog { FullOpen = true })
             {
                 if (FeatureRules.IsColor(current)) picker.Color = System.Drawing.ColorTranslator.FromHtml("#" + current.Substring(current.Length - 6));
-                return picker.ShowDialog() == System.Windows.Forms.DialogResult.OK
+                return picker.ShowDialog(new ColorDialogOwner(settingsHost ?? (Window)miniWindow ?? this)) == System.Windows.Forms.DialogResult.OK
                     ? string.Format("#{0:X2}{1:X2}{2:X2}", picker.Color.R, picker.Color.G, picker.Color.B) : null;
             }
         }
 
         private void ScheduleColor_Click(object sender, RoutedEventArgs e)
         {
-            var item = GetScheduleItemFromContextMenu(sender);
-            if (item == null) return;
+            ChangeScheduleColor(GetScheduleItemFromContextMenu(sender));
+        }
+
+        private void ChangeScheduleColor(ScheduleItem item)
+        {
+            if (item == null || !appData.Schedules.Contains(item)) return;
             string color = PickColor(item.Color ?? appData.Appearance.CardColor);
             if (color == null) return;
+            string previous = item.Color;
             item.Color = color;
-            SaveDataSafely();
+            if (!SaveDataSafely()) item.Color = previous;
             RefreshScheduleList();
         }
 
@@ -835,8 +864,9 @@ namespace ScheduleWidget
         {
             var item = GetScheduleItemFromContextMenu(sender);
             if (item == null) return;
+            string previous = item.Color;
             item.Color = null;
-            SaveDataSafely();
+            if (!SaveDataSafely()) item.Color = previous;
             RefreshScheduleList();
         }
 

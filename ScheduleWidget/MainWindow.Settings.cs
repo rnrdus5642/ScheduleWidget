@@ -132,7 +132,7 @@ namespace ScheduleWidget
                 TakeSettingsControl(SettingsThemeCard),
                 SettingsCard("달력", dayLabel, settingsDayCount, TakeSettingsControl(SettingsCalendarDdayRow), TakeSettingsControl(SettingsFlipLabel), TakeSettingsControl(InlineFlipEffectCombo)),
                 TakeSettingsControl(SettingsOpacityCard), TakeSettingsControl(SettingsFontCard),
-                SettingsCard("일정 색상", TakeSettingsControl(SettingsColorButtons), TakeSettingsControl(SettingsColorHint)))));
+                SettingsCard("전체 일정 색상", TakeSettingsControl(SettingsColorButtons), TakeSettingsControl(SettingsColorHint)))));
 
             settingsCharacterContent = new ContentControl();
             var characters = new Grid();

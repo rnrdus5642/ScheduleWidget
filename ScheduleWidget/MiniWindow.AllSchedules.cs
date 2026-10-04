@@ -75,8 +75,10 @@ namespace ScheduleWidget
                 if (s.EndDate.HasValue) detail += " ~ " + s.EndDate.Value.ToString("yyyy.MM.dd", CultureInfo.InvariantCulture);
                 if (!string.IsNullOrWhiteSpace(s.Time)) detail += " · " + s.Time;
                 bool customColor = FeatureRules.IsColor(s.Color);
-                return new AllScheduleRow { Item = s, Detail = detail, Background = customColor ? s.Color : theme.Day,
-                    Ink = customColor ? FeatureRules.ReadableText(s.Color) : theme.Ink };
+                return new AllScheduleRow { Item = s, Detail = detail,
+                    Background = customColor ? s.Color : AgendaColor(scheduleAppearance.CardColor, theme.Day),
+                    Ink = customColor ? FeatureRules.ReadableText(s.Color) : AgendaColor(scheduleAppearance.TextColor, theme.Ink),
+                    DDayInk = AgendaStatusInk(s) };
             }).ToList();
             AllSchedulesList.ItemsSource = allScheduleRows;
             if (offset > 0) scroll?.ScrollToVerticalOffset(offset);
@@ -94,7 +96,8 @@ namespace ScheduleWidget
             public string Detail { get; set; }
             public string Background { get; set; }
             public string Ink { get; set; }
-            public string Hint => Title + "\n" + Detail + " · " + DDay + "\n클릭: 수정 · 우클릭: 완료 / 삭제";
+            public string DDayInk { get; set; }
+            public string Hint => Title + "\n" + Detail + " · " + DDay + "\n클릭: 수정 · 우클릭: 완료 / 색상 / 메시지 작성 / 삭제";
         }
 
         private void AllScheduleEdit_Click(object sender, RoutedEventArgs e)

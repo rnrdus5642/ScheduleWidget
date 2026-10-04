@@ -99,8 +99,11 @@ namespace ScheduleWidget
         private string UpdatedSecret(PasswordBox box, string loaded, string current) =>
             box.Password == loaded ? current : SecretStore.Protect(box.Password);
 
-        public bool SaveSettings()
+        // Validation is separate from persistence so the unified dialog can save every deferred page together.
+        public bool TryBuildSettings(out CommunicationSettings settings, out ReminderSettings reminderSettings)
         {
+            settings = null;
+            reminderSettings = null;
             try
             {
                 if (!int.TryParse(DaysBefore.Text, out int days) || days < 0 || days > 30 ||
@@ -131,25 +134,39 @@ namespace ScheduleWidget
                 if (reminders.Enabled && reminders.Kakao &&
                     (string.IsNullOrWhiteSpace(current.ProtectedKakaoToken) || !Uri.TryCreate(current.KakaoLinkUrl, UriKind.Absolute, out Uri link) || link.Scheme != "https"))
                     throw new InvalidOperationException("카카오 토큰과 등록한 HTTPS 웹 링크를 먼저 입력해 주세요.");
-                var oldReminders = data.Reminders;
-                data.Communication = current;
-                data.Reminders = reminders;
-                if (!save())
-                {
-                    data.Communication = old;
-                    data.Reminders = oldReminders;
-                    ReportStatus("설정을 저장하지 못했습니다. 저장 경로를 확인해 주세요.");
-                    return false;
-                }
-                loadedTelegram = TelegramToken.Password;
-                loadedKakao = KakaoToken.Password;
-                loadedRefresh = KakaoRefresh.Password;
-                loadedSecret = KakaoSecret.Password;
-                HasPendingChanges = false;
+                settings = current;
+                reminderSettings = reminders;
                 return true;
             }
             catch (Exception ex) when (ex is InvalidOperationException || ex is CryptographicException)
             { ReportStatus(ex.Message); return false; }
+        }
+
+        public bool SaveSettings()
+        {
+            if (!TryBuildSettings(out CommunicationSettings settings, out ReminderSettings reminders)) return false;
+            var oldSettings = data.Communication;
+            var oldReminders = data.Reminders;
+            data.Communication = settings;
+            data.Reminders = reminders;
+            if (!save())
+            {
+                data.Communication = oldSettings;
+                data.Reminders = oldReminders;
+                ReportStatus("설정을 저장하지 못했습니다. 저장 경로를 확인해 주세요.");
+                return false;
+            }
+            AcceptSavedSettings();
+            return true;
+        }
+
+        public void AcceptSavedSettings()
+        {
+            loadedTelegram = TelegramToken.Password;
+            loadedKakao = KakaoToken.Password;
+            loadedRefresh = KakaoRefresh.Password;
+            loadedSecret = KakaoSecret.Password;
+            HasPendingChanges = false;
         }
 
         // 알림 설정 초기화 → 정말 초기화 → the reminder controls go back to the defaults (saved with 설정 저장).

@@ -13,7 +13,7 @@ using Newtonsoft.Json;
 
 namespace ScheduleWidget.Checks
 {
-    internal static class Checks
+    internal static partial class Checks
     {
         private static string root;
         private static int passed, failed;
@@ -285,6 +285,7 @@ namespace ScheduleWidget.Checks
                 Run("Compact calendar shows multiple schedules and scrolls every day independently", CalendarDayLists);
                 Run("Embedded agenda lists distant schedules, resizes and reuses schedule editing", AllSchedulesPanel);
                 Run("Unified settings navigation, save, cancel and content lifecycle", () => UnifiedSettingsFlow(main, mini, data));
+                SettingsAudit();
             }
             finally { app.Shutdown(); }
         }

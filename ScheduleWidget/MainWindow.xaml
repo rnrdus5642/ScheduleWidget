@@ -584,7 +584,7 @@
                                          code reads them as CheckBox; the switch style fits any ToggleButton.) -->
                                     <Grid x:Name="SettingsTopmostRow" Margin="0,10,0,0">
                                         <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                                        <TextBlock Text="모든 창 위에 표시 (일정·달력)" Foreground="{DynamicResource AuxInkBrush}" FontSize="14" VerticalAlignment="Center"
+                                        <TextBlock Text="달력을 모든 창 위에 표시" Foreground="{DynamicResource AuxInkBrush}" FontSize="14" VerticalAlignment="Center"
                                                    TextWrapping="Wrap" ToolTip="끄면(기본) 일반 앱처럼 클릭하면 앞으로 올라오고, 다른 앱을 쓰면 뒤로 갑니다."/>
                                         <CheckBox x:Name="InlineAlwaysOnTopToggle" Grid.Column="1" Margin="10,0,0,0" Style="{StaticResource AuxOnOffSwitch}" VerticalAlignment="Center"
                                                   AutomationProperties.Name="모든 창 위에 표시 켜기/끄기"
@@ -612,9 +612,9 @@
                                     <Grid x:Name="SettingsHotkeyToggleRow" Margin="0,10,0,0">
                                         <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                                         <TextBlock Text="단축키로 맨 앞에 띄우기" Foreground="{DynamicResource AuxInkBrush}" FontSize="14" VerticalAlignment="Center"
-                                                   TextWrapping="Wrap" ToolTip="어느 앱을 쓰고 있든 단축키를 누르면 일정 창(미니 모드면 달력)이 모든 창 위로 한 번 올라옵니다. 위에 고정되지는 않습니다."/>
+                                                   TextWrapping="Wrap" ToolTip="어느 앱을 쓰고 있든 단축키를 누르면 달력이 모든 창 위로 한 번 올라옵니다. 위에 고정되지는 않습니다."/>
                                         <CheckBox x:Name="InlineHotKeyToggle" Grid.Column="1" Margin="10,0,0,0" Style="{StaticResource AuxOnOffSwitch}" VerticalAlignment="Center"
-                                                  Click="InlineHotKeyToggle_Click" AutomationProperties.Name="단축키로 맨 앞에 띄우기 켜기/끄기" ToolTip="어느 앱을 쓰고 있든 단축키를 누르면 일정 창(미니 모드면 달력)이 모든 창 위로 한 번 올라옵니다. 위에 고정되지는 않습니다."/>
+                                                  Click="InlineHotKeyToggle_Click" AutomationProperties.Name="단축키로 맨 앞에 띄우기 켜기/끄기" ToolTip="어느 앱을 쓰고 있든 단축키를 누르면 달력이 모든 창 위로 한 번 올라옵니다. 위에 고정되지는 않습니다."/>
                                     </Grid>
                                     <Grid x:Name="SettingsHotkeyInputRow" Margin="0,6,0,0">
                                         <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
@@ -648,7 +648,7 @@
                                 <Button Content="예정 D-day" Tag="FutureColor" Height="36" Margin="2" Style="{StaticResource AuxUtilityButton}" Click="AppearanceColor_Click"/>
                                 <Button Content="지난 D-day" Tag="PastColor" Height="36" Margin="2" Style="{StaticResource AuxUtilityButton}" Click="AppearanceColor_Click"/>
                             </UniformGrid>
-                            <TextBlock x:Name="SettingsColorHint" Text="각 할 일의 색상은 카드를 우클릭해 바꿀 수 있습니다." TextWrapping="Wrap" Style="{StaticResource AuxCaption}" Margin="6,0,6,12"/>
+                            <TextBlock x:Name="SettingsColorHint" Text="위 색상은 전체 일정 목록에 적용됩니다. 개별 일정은 우클릭 → 색상에서 바꾸며, 글자는 배경에 맞춰 자동으로 정해집니다." TextWrapping="Wrap" Style="{StaticResource AuxCaption}" Margin="6,0,6,12"/>
                             <Border x:Name="SettingsOpacityCard" Style="{StaticResource AuxRoundSection}" Padding="14,12" Margin="0,0,0,10">
                                 <StackPanel>
                                     <Grid Margin="0,0,0,7">
@@ -656,7 +656,7 @@
                                             <ColumnDefinition Width="*"/>
                                             <ColumnDefinition Width="Auto"/>
                                         </Grid.ColumnDefinitions>
-                                        <TextBlock Text="투명도"
+                                        <TextBlock Text="달력·음악 막대 투명도"
                                                     Foreground="{DynamicResource AuxInkBrush}"
                                                    FontWeight="SemiBold"/>
                                         <TextBlock x:Name="InlineOpacityValueText"
@@ -707,7 +707,7 @@
 
                             <Border x:Name="SettingsFontCard" Style="{StaticResource AuxRoundSection}" Padding="14,12">
                                 <StackPanel>
-                                    <TextBlock Text="폰트 크기"
+                                    <TextBlock Text="전체 일정 글자 크기"
                                                Style="{StaticResource AuxSectionTitle}"
                                                FontSize="17"
                                                Margin="0,0,0,10"/>

@@ -1622,84 +1622,87 @@ namespace ScheduleWidget
 
         private void InlineSettingsApplyButton_Click(object sender, RoutedEventArgs e)
         {
-            if (_inlineSettingsDraft == null)
-                return;
-            if (contactWindow?.HasPendingChanges == true && !contactWindow.SaveSettings()) return;
+            if (_inlineSettingsDraft == null || appData == null) return;
+            // Music, pets and Google actions already save immediately. Commit the deferred pages in one write.
+            var communication = appData.Communication;
+            var reminders = appData.Reminders;
+            bool contactsEdited = contactWindow?.HasPendingChanges == true;
+            if (contactsEdited && !contactWindow.TryBuildSettings(out communication, out reminders)) return;
 
-            string startupError;
-            bool startupApplied = _inlineStartupDraft
-                ? startupService.TryEnableStartup(out startupError)
-                : startupService.TryDisableStartup(out startupError);
-            if (!startupApplied)
+            if (!startupService.IsStartupEnabled(out bool startupWasEnabled, out string startupError))
             {
-                System.Windows.MessageBox.Show(
-                    settingsHost ?? this,
-                    startupError,
-                    "자동 시작 설정",
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Warning);
+                UnifiedSettings?.ShowStatus(startupError);
                 return;
+            }
+            bool startupChanged = startupWasEnabled != _inlineStartupDraft;
+            bool SetStartup(bool enabled, out string error) => enabled
+                ? startupService.TryEnableStartup(out error) : startupService.TryDisableStartup(out error);
+            if (startupChanged && !SetStartup(_inlineStartupDraft, out startupError))
+            {
+                SetStartup(startupWasEnabled, out _);
+                UnifiedSettings?.ShowStatus(startupError);
+                return;
+            }
+
+            var before = new
+            {
+                appData.Appearance, appData.StartupEnabled, appData.AlwaysOnTop,
+                appData.BringToFrontHotKeyEnabled, appData.BringToFrontHotKey,
+                appData.MiniBlockDDayVisible, appData.MiniFlipEffect, appData.MiniDayCount,
+                appData.Communication, appData.Reminders
+            };
+            void RestoreDeferredSettings()
+            {
+                appData.Appearance = before.Appearance;
+                appData.StartupEnabled = before.StartupEnabled;
+                appData.AlwaysOnTop = before.AlwaysOnTop;
+                appData.BringToFrontHotKeyEnabled = before.BringToFrontHotKeyEnabled;
+                appData.BringToFrontHotKey = before.BringToFrontHotKey;
+                appData.MiniBlockDDayVisible = before.MiniBlockDDayVisible;
+                appData.MiniFlipEffect = before.MiniFlipEffect;
+                appData.MiniDayCount = before.MiniDayCount;
+                appData.Communication = before.Communication;
+                appData.Reminders = before.Reminders;
+            }
+            void Failed(string message)
+            {
+                RestoreDeferredSettings();
+                ApplyBringToFrontHotKey();
+                if (startupChanged && !SetStartup(startupWasEnabled, out string rollbackError))
+                    message += "\n자동 시작 설정을 복원하지 못했습니다: " + rollbackError;
+                UnifiedSettings?.ShowStatus(message);
             }
 
             appData.Appearance = CloneAppearance(_inlineSettingsDraft);
             appData.StartupEnabled = _inlineStartupDraft;
-            if (_inlineCharacterScaleTouched && !previewScaleConflict)
-            {
-                // 미니 창 캐릭터 크기 = every pet the same size (otherwise each pet keeps its own).
-                appData.MiniCharacterScale = Math.Max(50, Math.Min(300, _inlineCharacterScaleDraft));
-                if (appData.MiniExtraCharacters != null) foreach (var slot in appData.MiniExtraCharacters) slot.Scale = null;
-            }
             appData.AlwaysOnTop = InlineAlwaysOnTopToggle.IsChecked == true;
-            bool blockDDay = InlineBlockDDaySwitch.IsChecked == true;
-            if (appData.MiniBlockDDayVisible != blockDDay) { appData.MiniBlockDDayVisible = blockDDay; miniWindow?.Refresh(); }
-            appData.MiniFlipEffect = DraftFlipEffect; // the mini window reads it when a flip starts: nothing to refresh
-            if (settingsDayCount != null && settingsDayCount.SelectedIndex + 1 != appData.MiniDayCount)
-            {
-                if (miniWindow != null) miniWindow.SetDayCount(settingsDayCount.SelectedIndex + 1);
-                else appData.MiniDayCount = settingsDayCount.SelectedIndex + 1;
-            }
+            appData.MiniBlockDDayVisible = InlineBlockDDaySwitch.IsChecked == true;
+            appData.MiniFlipEffect = DraftFlipEffect;
+            appData.MiniDayCount = settingsDayCount == null ? before.MiniDayCount : settingsDayCount.SelectedIndex + 1;
             appData.BringToFrontHotKeyEnabled = InlineHotKeyToggle.IsChecked == true;
             appData.BringToFrontHotKey = _inlineHotKeyDraft.ToString();
+            appData.Communication = communication;
+            appData.Reminders = reminders;
             if (!ApplyBringToFrontHotKey())
-                System.Windows.MessageBox.Show(settingsHost ?? this,
-                    $"{appData.BringToFrontHotKey}는 다른 프로그램이 이미 쓰고 있어 등록하지 못했습니다. 설정에서 다른 단축키로 바꿔 주세요.",
-                    "단축키 설정", MessageBoxButton.OK, MessageBoxImage.Warning);
-            if (_inlinePetSpotsReset)
             {
-                // 초기화 then 저장: dragged pets go back to their default spots.
-                if (miniWindow != null)
-                {
-                    if (!previewSpotsConflict) miniWindow.RestorePetSpots(new List<MiniPetSpot>());
-                }
-                else
-                {
-                    if (!previewSpotsConflict)
-                    {
-                        appData.MiniPetSpots?.Clear();
-                        // The characters on the calendar forget their remembered spots too (a second copy's "#2" as well; others keep theirs).
-                        MiniWindow.RememberMiniSpots(appData);
-                    }
-                }
-                _inlinePetSpotsReset = false;
+                Failed(_inlineHotKeyDraft + "는 다른 프로그램이 사용 중입니다. 다른 단축키를 선택해 주세요.");
+                return;
             }
-            ApplyCharacterPlacementSetting();
+            if (!SaveDataSafely(showError: false))
+            {
+                Failed("설정을 저장하지 못했습니다. 입력 내용은 유지됩니다. 저장 경로를 확인한 뒤 다시 저장해 주세요.");
+                return;
+            }
+
+            if (contactsEdited) contactWindow.AcceptSavedSettings();
             NativeMethods.SetWidgetStacking(this, appData.AlwaysOnTop);
-            if (miniWindow != null) NativeMethods.SetWidgetStacking(miniWindow, appData.AlwaysOnTop);
-            bool showCharacter = InlineCharacterVisibleToggle.IsChecked == true;
-            miniWindow?.UpdateCharacterSize();
-            if (!_inlineCharacterVisibleTouched || previewVisibleConflict) { } // not clicked here: keep whatever the pets show now
-            else if (miniWindow != null)
-                miniWindow.SetCharacterVisible(showCharacter);
-            else if (showCharacter != appData.MiniCharacterVisible)
+            if (miniWindow != null)
             {
-                // The calendar board keeps its saved place; the window is fitted around it (and the pets) when it opens.
-                appData.MiniBoard = MiniWindow.SavedBoard(appData);
-                appData.MiniCharacterVisible = showCharacter;
+                NativeMethods.SetWidgetStacking(miniWindow, appData.AlwaysOnTop);
+                if (before.MiniDayCount != appData.MiniDayCount) miniWindow.SetDayCount(appData.MiniDayCount, persist: false);
+                else miniWindow.Refresh();
             }
-            petCompanion?.UpdateCharacterSize(); // sizes / placement changed in the panel
-            petCompanion?.UpdateCharacterVisibility();
             ApplyAppearance(appData.Appearance);
-            SaveDataSafely();
             CloseInlineSettings(true);
         }
 
@@ -1883,13 +1886,13 @@ namespace ScheduleWidget
             res["DDayFontSize"] = settings.DDayFontSize;
 
             MainBorder.Opacity = settings.Opacity;
+            miniWindow?.ApplyAppearance(settings);
+            petCompanion?.ApplyAppearance(settings);
             // The other windows only need recoloring when the theme itself changes, not on every opacity / font / color tick
             // (the mini window and the pets build themselves in the current theme when they open).
             if (_themeApplied && settings.ThemePreset == _themedPreset) return;
             _themeApplied = true;
             _themedPreset = settings.ThemePreset;
-            miniWindow?.ApplyTheme(settings.ThemePreset); // live preview on the mini window too
-            petCompanion?.ApplyTheme(settings.ThemePreset);
             AuxTheme.SetTheme(settings.ThemePreset); // 설정, 캐릭터 설정·선택, 연락 · 알림, 음악 follow the theme too
             AuxTheme.ApplyTo(InlineSettingsPanel);    // the panel merges AuxiliaryStyles itself, so it needs its own override
         }

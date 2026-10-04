@@ -33,6 +33,7 @@
       <Name>ScheduleWidget</Name>
     </ProjectReference>
     <Compile Include="Checks.cs" />
+    <Compile Include="SettingsChecks.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>
