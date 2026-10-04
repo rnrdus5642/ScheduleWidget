@@ -14,6 +14,11 @@ ScheduleWidget/obj/
 
 # NuGet
 packages/
+.work/
+dist/
+ScheduleWidget/bin/Release/FeatureChecks.exe*
+Updater/bin/Debug/
+Updater/obj/
 
 # OS files
 .DS_Store
@@ -22,3 +27,6 @@ Thumbs.db
 # Text files
 *.txt
 
+# Google OAuth client (plain JSON must never be committed; google_client.bin is the embedded, encrypted copy)
+ScheduleWidget/google_client.json
+client_secret_*.json

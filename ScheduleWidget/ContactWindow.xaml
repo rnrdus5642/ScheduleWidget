@@ -1,0 +1,149 @@
+<Window x:Class="ScheduleWidget.ContactWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="연락 · 마감 알림" Width="680" Height="820" MinWidth="560" MinHeight="680" WindowStartupLocation="CenterScreen"
+        Background="{DynamicResource AuxCanvasBrush}" Foreground="{DynamicResource AuxInkBrush}" FontFamily="Segoe UI">
+    <Window.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="Styles/AuxiliaryStyles.xaml"/>
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </Window.Resources>
+    <Grid Margin="28">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <StackPanel Grid.Row="0" Margin="0,0,0,24">
+            <TextBlock Text="연락과 알림" Style="{StaticResource AuxTitle}"/>
+            <TextBlock Text="연동 정보를 저장하고 필요한 곳으로 메시지를 보내세요." Style="{StaticResource AuxCaption}" Margin="0,8,0,0"/>
+        </StackPanel>
+
+        <TabControl Grid.Row="1" Style="{StaticResource AuxTabs}" Background="Transparent">
+            <TabItem Header="텔레그램" Style="{StaticResource AuxTabItem}">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="0,18,0,0">
+                    <StackPanel>
+                        <TextBlock Text="BotFather에서 만든 봇 토큰을 넣고, 받을 사람이 먼저 봇에게 /start를 보내 주세요."
+                                   TextWrapping="Wrap" FontSize="17" LineHeight="25" Margin="0,0,0,24"/>
+                        <TextBlock Text="봇 토큰" Style="{StaticResource AuxCaption}"/>
+                        <PasswordBox x:Name="TelegramToken" Style="{StaticResource AuxPasswordBox}" AutomationProperties.Name="텔레그램 봇 토큰"/>
+                        <TextBlock Text="받는 대화 Chat ID" Style="{StaticResource AuxCaption}"/>
+                        <TextBox x:Name="TelegramChat" Style="{StaticResource AuxTextBox}" AutomationProperties.Name="텔레그램 Chat ID"/>
+                        <TextBlock Text="개인 대화의 숫자 ID, 그룹 ID 또는 채널 @이름을 입력합니다. 마감 알림도 이 대화로 보냅니다."
+                                   TextWrapping="Wrap" Style="{StaticResource AuxCaption}" Margin="0,0,0,18"/>
+                        <Button Content="설정 안내 열기" Tag="https://core.telegram.org/bots/tutorial" Click="Help_Click"
+                                Style="{StaticResource AuxSecondaryButton}" HorizontalAlignment="Left"/>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+            <TabItem Header="카카오톡" Style="{StaticResource AuxTabItem}">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="0,18,0,0">
+                    <StackPanel>
+                        <TextBlock Text="카카오 개발자 앱과 talk_message 동의가 필요합니다. 알림은 ‘나와의 채팅’으로 보냅니다."
+                                   TextWrapping="Wrap" FontSize="17" LineHeight="25" Margin="0,0,0,24"/>
+                        <TextBlock Text="액세스 토큰" Style="{StaticResource AuxCaption}"/>
+                        <PasswordBox x:Name="KakaoToken" Style="{StaticResource AuxPasswordBox}" AutomationProperties.Name="카카오 액세스 토큰"/>
+                        <TextBlock Text="등록한 웹 링크 (HTTPS)" Style="{StaticResource AuxCaption}"/>
+                        <TextBox x:Name="KakaoLink" Style="{StaticResource AuxTextBox}" AutomationProperties.Name="카카오 메시지 웹 링크"/>
+                        <TextBlock Text="친구 UUID (친구에게 보낼 때만)" Style="{StaticResource AuxCaption}"/>
+                        <TextBox x:Name="KakaoFriend" Style="{StaticResource AuxTextBox}" AutomationProperties.Name="카카오 친구 UUID"/>
+                        <TextBlock Text="친구 전송에는 별도 권한과 수신자의 앱 연결이 필요합니다. 전화번호만으로는 전송할 수 없습니다."
+                                   TextWrapping="Wrap" Style="{StaticResource AuxCaption}" Margin="0,0,0,18"/>
+                        <Expander Header="토큰 자동 갱신 설정 (선택)" Foreground="{DynamicResource AuxInkBrush}"
+                                  Background="{DynamicResource AuxSurfaceBrush}" BorderBrush="{DynamicResource AuxHairlineBrush}"
+                                  BorderThickness="1" Padding="14">
+                            <StackPanel Margin="0,14,0,0">
+                                <TextBlock Text="REST API 키" Style="{StaticResource AuxCaption}"/>
+                                <TextBox x:Name="KakaoAppKey" Style="{StaticResource AuxTextBox}" AutomationProperties.Name="카카오 REST API 키"/>
+                                <TextBlock Text="리프레시 토큰" Style="{StaticResource AuxCaption}"/>
+                                <PasswordBox x:Name="KakaoRefresh" Style="{StaticResource AuxPasswordBox}" AutomationProperties.Name="카카오 리프레시 토큰"/>
+                                <TextBlock Text="Client Secret (활성화한 경우)" Style="{StaticResource AuxCaption}"/>
+                                <PasswordBox x:Name="KakaoSecret" Style="{StaticResource AuxPasswordBox}" AutomationProperties.Name="카카오 Client Secret"/>
+                            </StackPanel>
+                        </Expander>
+                        <Button Content="카카오 설정 안내 열기" Tag="https://developers.kakao.com/docs/ko/kakaotalk-message/rest-api" Click="Help_Click"
+                                Style="{StaticResource AuxSecondaryButton}" HorizontalAlignment="Left" Margin="0,18,0,0"/>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+            <TabItem Header="휴대폰" Style="{StaticResource AuxTabItem}">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="0,18,0,0">
+                    <StackPanel>
+                        <TextBlock Text="Windows ‘휴대폰과 연결’에서 휴대폰을 페어링하면 문자와 통화를 사용할 수 있습니다."
+                                   TextWrapping="Wrap" FontSize="17" LineHeight="25" Margin="0,0,0,24"/>
+                        <TextBlock Text="전화번호" Style="{StaticResource AuxCaption}"/>
+                        <TextBox x:Name="PhoneNumber" Style="{StaticResource AuxTextBox}" AutomationProperties.Name="전화번호"/>
+                        <UniformGrid Columns="2" Margin="0,6,0,0">
+                            <Button Content="휴대폰 연결 열기" MinHeight="44" Margin="0,0,6,0" Style="{StaticResource AuxSecondaryButton}" Click="PhoneLink_Click"/>
+                            <Button Content="전화 앱 열기" MinHeight="44" Margin="6,0,0,0" Style="{StaticResource AuxPrimaryButton}" Click="Call_Click"/>
+                        </UniformGrid>
+                        <TextBlock Text="문자는 아래에서 내용을 작성한 뒤 ‘휴대폰 문자’를 선택하세요. 내용을 복사하고 연결 앱을 엽니다. 받는 사람과 내용을 확인한 후 연결 앱에서 전송합니다."
+                                   TextWrapping="Wrap" Style="{StaticResource AuxCaption}" Margin="0,20,0,0"/>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+            <TabItem Header="마감 알림" Style="{StaticResource AuxTabItem}">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="0,18,0,0">
+                    <StackPanel>
+                        <CheckBox x:Name="RemindersEnabled" Content="마감 알림 사용" Style="{StaticResource AuxCheckBox}" Margin="0,0,0,22"/>
+                        <TextBlock Text="알릴 시점 (0 = 당일, 최대 30일 전)" Style="{StaticResource AuxCaption}" Margin="0,0,0,8"/>
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,0,18">
+                            <TextBox x:Name="DaysBefore" Width="64" Style="{StaticResource AuxTextBox}" AutomationProperties.Name="마감 며칠 전"/>
+                            <TextBlock Text="일 전" VerticalAlignment="Center" Margin="8,0,18,0"/>
+                            <TextBox x:Name="Hour" Width="64" Style="{StaticResource AuxTextBox}" AutomationProperties.Name="알림 시"/>
+                            <TextBlock Text=":" VerticalAlignment="Center" Margin="8,0"/>
+                            <TextBox x:Name="Minute" Width="64" Style="{StaticResource AuxTextBox}" AutomationProperties.Name="알림 분"/>
+                        </StackPanel>
+                        <CheckBox x:Name="DesktopReminder" Content="이 PC에 알림 표시" Style="{StaticResource AuxCheckBox}"/>
+                        <CheckBox x:Name="TelegramReminder" Content="설정한 텔레그램 대화로 보내기" Style="{StaticResource AuxCheckBox}"/>
+                        <CheckBox x:Name="KakaoReminder" Content="카카오톡 나와의 채팅으로 보내기" Style="{StaticResource AuxCheckBox}"/>
+                        <TextBlock Text="시간을 지정한 일정은 그 시각에, 날짜만 있는 일정은 위 시각에 알립니다. PC와 위젯이 실행 중일 때 전송하며, 놓친 알림은 마감일이 지나지 않았다면 다시 실행할 때 보냅니다. 완료한 할 일은 제외합니다."
+                                   TextWrapping="Wrap" Style="{StaticResource AuxCaption}" Margin="0,10,0,0"/>
+                        <!-- 초기화 (two presses): only these 마감 알림 options; 설정 저장 applies it. -->
+                        <Button x:Name="ReminderResetButton" Content="알림 설정 초기화" Height="32" Padding="14,0" Margin="0,18,0,0" HorizontalAlignment="Left"
+                                Style="{StaticResource AuxCompactButton}" Click="ReminderReset_Click" AutomationProperties.Name="마감 알림 설정 초기화"/>
+                        <TextBlock Text="알림 끄기, 당일 09:00, 이 PC에만 알림으로 되돌립니다(설정 저장을 눌러야 적용). 봇 토큰·카카오 토큰·REST API 키·Client Secret·Chat ID·친구 UUID 같은 연동 정보는 지우지 않습니다."
+                                   TextWrapping="Wrap" Style="{StaticResource AuxCaption}" Margin="0,6,0,0"/>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+        </TabControl>
+
+        <Border Grid.Row="2" BorderBrush="{DynamicResource AuxHairlineBrush}"
+                BorderThickness="0,1,0,0" Padding="0,16,0,0" Margin="0,20,0,20">
+            <DockPanel>
+                <Button Content="설정 저장" DockPanel.Dock="Right" MinWidth="112" MinHeight="40" Click="Save_Click" Style="{StaticResource AuxSaveButton}"/>
+                <TextBlock Text="토큰은 현재 Windows 계정으로 암호화해 저장합니다." TextWrapping="Wrap" VerticalAlignment="Center"
+                           Style="{StaticResource AuxCaption}" Margin="0,0,16,0"/>
+            </DockPanel>
+        </Border>
+
+        <Border Grid.Row="3" BorderBrush="{DynamicResource AuxHairlineBrush}"
+                BorderThickness="0,1,0,0" Padding="0,16,0,0" Margin="0,0,0,16">
+            <Expander x:Name="MessageComposer" Header="메시지 작성" FontSize="17" Foreground="{DynamicResource AuxInkBrush}" IsExpanded="False">
+            <StackPanel>
+                <TextBox x:Name="MessageInput" Height="118" AcceptsReturn="True" TextWrapping="Wrap" VerticalContentAlignment="Top"
+                         VerticalScrollBarVisibility="Auto" MaxLength="4096" Padding="12" Margin="0,12,0,14"
+                         Style="{StaticResource AuxTextBox}" AutomationProperties.Name="보낼 메시지"/>
+                <DockPanel LastChildFill="True">
+                    <Button x:Name="SendButton" Content="보내기" Width="110" MinHeight="40" DockPanel.Dock="Right" Margin="12,0,0,0"
+                            Click="Send_Click" Style="{StaticResource AuxPrimaryButton}"/>
+                    <ComboBox x:Name="SendChannel" SelectedIndex="0" Style="{StaticResource AuxComboBox}"
+                              SelectionChanged="ChannelChanged" AutomationProperties.Name="메시지 전송 서비스">
+                        <ComboBoxItem Content="텔레그램"/><ComboBoxItem Content="카카오톡 · 나에게"/>
+                        <ComboBoxItem Content="카카오톡 · 친구에게"/><ComboBoxItem Content="휴대폰 문자 · 복사 후 열기"/>
+                    </ComboBox>
+                </DockPanel>
+            </StackPanel>
+            </Expander>
+        </Border>
+
+        <TextBlock x:Name="StatusText" Grid.Row="4" TextWrapping="Wrap" Style="{StaticResource AuxCaption}"
+                   Foreground="{DynamicResource AuxActionBrush}" AutomationProperties.LiveSetting="Polite"/>
+    </Grid>
+</Window>

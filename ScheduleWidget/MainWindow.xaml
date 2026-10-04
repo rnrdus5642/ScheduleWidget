@@ -2,13 +2,13 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:local="clr-namespace:ScheduleWidget"
-        Height="500" Width="360"
+        Height="500" Width="360" MinWidth="300" MinHeight="380"
         WindowStyle="None"
         AllowsTransparency="True"
         Background="Transparent"
         ResizeMode="NoResize"
         WindowStartupLocation="CenterScreen"
-        ShowInTaskbar="False"
+        ShowInTaskbar="False" PreviewKeyDown="MainWindow_PreviewKeyDown"
         SnapsToDevicePixels="True"
         UseLayoutRounding="True"
         TextOptions.TextFormattingMode="Display">
@@ -24,8 +24,21 @@
             <Setter Property="FontWeight" Value="SemiBold"/>
             <Setter Property="HorizontalContentAlignment" Value="Center"/>
         </Style>
+        <!-- One menu for every card instead of one per card. The card that opened it is its PlacementTarget, whose item
+             the handlers act on (GetScheduleItemFromContextMenu). -->
+        <ContextMenu x:Key="TodoCardMenu" DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}">
+            <MenuItem Header="수정" Click="EditSchedule_Click"/>
+            <MenuItem Header="완료 / 미완료" Click="CompleteSchedule_Click"/>
+            <MenuItem Header="카드 색상 선택" Click="ScheduleColor_Click"/>
+            <MenuItem Header="기본 색상으로" Click="ResetScheduleColor_Click"/>
+            <MenuItem Header="이 일정 보내기" Click="ShareSchedule_Click"/>
+            <MenuItem Header="삭제" Click="RemoveSchedule_Click"/>
+            <Separator/>
+            <MenuItem Header="종료" Click="ExitApplication_Click"/>
+        </ContextMenu>
     </Window.Resources>
 
+    <!-- No drop shadow: the border fills the window (clipped), so a shadow only cost a blur pass on every repaint. -->
     <Border x:Name="MainBorder"
             CornerRadius="20"
             ClipToBounds="True"
@@ -33,9 +46,6 @@
             BorderBrush="{DynamicResource BorderBrush}"
             BorderThickness="1"
             Padding="1">
-        <Border.Effect>
-            <DropShadowEffect BlurRadius="24" ShadowDepth="5" Opacity="0.2"/>
-        </Border.Effect>
 
         <Grid x:Name="WidgetContent"
               ClipToBounds="True"
@@ -43,8 +53,10 @@
             <Grid>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="60"/>
+                    <RowDefinition Height="36"/>
                     <RowDefinition Height="*"/>
-                    <RowDefinition Height="114"/>
+                    <!-- Auto (at least 144, set on the add form): taller only while 여러 날 shows its 종료 날짜 row. -->
+                    <RowDefinition Height="Auto"/>
                 </Grid.RowDefinitions>
 
                 <!-- compact header -->
@@ -57,6 +69,8 @@
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="32"/>
                             <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="32"/>
+                            <ColumnDefinition Width="32"/>
                             <ColumnDefinition Width="32"/>
                             <ColumnDefinition Width="32"/>
                             <ColumnDefinition Width="32"/>
@@ -89,6 +103,7 @@
                                       Grid.Column="2"
                                       Style="{StaticResource WidgetModeButton}"
                                       ToolTip="이동/크기 조절"
+                                      AutomationProperties.Name="이동/크기 조절"
                                       HorizontalAlignment="Center"
                                       VerticalAlignment="Center"
                                       Checked="ModeToggle_Checked"
@@ -101,27 +116,13 @@
                                       Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type ToggleButton}}}"/>
                             </ToggleButton.Content>
                         </ToggleButton>
-                        <Button Grid.Column="3"
-                                Style="{StaticResource WidgetIconButton}"
-                                Width="32"
-                                Height="32"
-                                ToolTip="설정"
-                                HorizontalAlignment="Center"
-                                VerticalAlignment="Center"
-                                Click="SettingsButton_Click"
-                                Visibility="Collapsed">
-                            <Path Data="M19.43,12.98C19.47,12.66 19.5,12.33 19.43,11.02L21.54,9.37C21.73,9.22 21.78,8.95 21.66,8.73L19.66,5.27C19.54,5.05 19.27,4.96 19.05,5.05L16.56,6.05C16.04,5.66 15.5,5.32 14.87,5.07L14.5,2.42C14.46,2.18 14.25,2 14,2H10C9.75,2 9.54,2.18 9.5,2.42L9.13,5.07C8.5,5.32 7.96,5.66 7.44,6.05L4.95,5.05C4.73,4.97 4.46,5.05 4.34,5.27L2.34,8.73C2.21,8.95 2.27,9.22 2.46,9.37L4.57,11.02C4.53,11.34 4.5,11.67 4.57,12.98L2.46,14.63C2.27,14.78 2.22,15.05 2.34,15.27L4.34,18.73C4.46,18.95 4.73,19.04 4.95,18.95L7.44,17.95C7.96,18.34 8.5,18.68 9.13,18.93L9.5,21.58C9.54,21.82 9.75,21.82 9.5,21.58L14.87,18.93C15.5,18.68 16.04,18.34 16.56,17.95L19.05,18.95C19.27,19.03 19.54,18.95 19.66,18.73L21.66,15.27C21.78,15.05 21.73,14.78 21.54,14.63L19.43,12.98ZM12,15.5C10.07,15.5 8.5,13.93 8.5,12C8.5,10.07 10.07,8.5 12,8.5C13.93,8.5 15.5,10.07 15.5,15.5Z"
-                                  Width="16"
-                                  Height="16"
-                                  Stretch="Fill"
-                                  Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type Button}}}"/>
-                        </Button>
                         <Button x:Name="MonitorButton"
                                 Grid.Column="3"
                                 Style="{StaticResource WidgetIconButton}"
                                 Width="32"
                                 Height="32"
                                 ToolTip="모니터 선택"
+                                AutomationProperties.Name="모니터 선택"
                                 HorizontalAlignment="Center"
                                 VerticalAlignment="Center"
                                 Click="MonitorButton_Click">
@@ -140,6 +141,7 @@
                                 Width="32"
                                 Height="32"
                                 ToolTip="설정"
+                                AutomationProperties.Name="설정"
                                 HorizontalAlignment="Center"
                                 VerticalAlignment="Center"
                                 Click="SettingsButton_Click">
@@ -196,92 +198,125 @@
                                          VerticalAlignment="Center"/>
                             </Grid>
                         </Button>
+                        <!-- 👤: show / hide the pets beside this window (same pets and clicks as the mini window). -->
+                        <Button x:Name="MainPetsButton" Grid.Column="5"
+                                Style="{StaticResource WidgetIconButton}"
+                                Width="32"
+                                Height="32"
+                                ToolTip="캐릭터 켜기 / 끄기"
+                                AutomationProperties.Name="캐릭터 켜기 / 끄기"
+                                HorizontalAlignment="Center"
+                                VerticalAlignment="Center"
+                                Click="MainPetsButton_Click">
+                            <TextBlock Text="👤" FontFamily="Segoe UI Emoji" FontSize="15" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Button>
+                        <Button Grid.Column="6"
+                                Style="{StaticResource WidgetIconButton}"
+                                Width="32"
+                                Height="32"
+                                ToolTip="종료"
+                                AutomationProperties.Name="종료"
+                                HorizontalAlignment="Center"
+                                VerticalAlignment="Center"
+                                Click="ExitApplication_Click">
+                            <Path Data="M4,4 L14,14 M14,4 L4,14"
+                                  Width="14"
+                                  Height="14"
+                                  Stretch="Fill"
+                                  Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type Button}}}"
+                                  StrokeThickness="1.8"
+                                  StrokeStartLineCap="Round"
+                                  StrokeEndLineCap="Round"/>
+                        </Button>
                     </Grid>
                 </Border>
 
                 <!-- schedule list -->
-                <Border Grid.Row="1"
+                <UniformGrid Grid.Row="1" Columns="3" Margin="13,0,13,0">
+                    <Button Content="미니 창" Style="{StaticResource WidgetSecondaryButton}" Margin="0,0,4,0" Click="MiniButton_Click"/>
+                    <Button x:Name="ContactButton" Content="연락 · 알림" Style="{StaticResource WidgetSecondaryButton}" Margin="0,0,4,0" Click="ContactButton_Click"/>
+                    <Button Content="음악" Style="{StaticResource WidgetSecondaryButton}" Click="MusicButton_Click" PreviewMouseRightButtonUp="MusicButton_RightClick" ToolTip="좌클릭: 음악 창 · 우클릭: 재생 설정"/>
+                </UniformGrid>
+                <Border Grid.Row="2"
                         Background="{DynamicResource BackgroundBrush}"
                         Padding="13,13,13,3">
-                    <ScrollViewer VerticalScrollBarVisibility="Hidden"
-                                  HorizontalScrollBarVisibility="Disabled"
-                                  CanContentScroll="True"
-                                  PanningMode="VerticalOnly">
-                        <ItemsControl x:Name="ScheduleList" BorderThickness="0">
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate>
-                                    <Border Background="{DynamicResource CardBrush}"
-                                            CornerRadius="13"
-                                            Margin="0,0,0,8"
-                                            BorderBrush="{DynamicResource CardBorderBrush}"
-                                            BorderThickness="1"
-                                            ClipToBounds="True"
-                                            SnapsToDevicePixels="True">
-                                        <Border.ContextMenu>
-                                            <ContextMenu DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}">
-                                                <MenuItem Header="수정" Click="EditSchedule_Click"/>
-                                                <MenuItem Header="제거" Click="RemoveSchedule_Click"/>
-                                            </ContextMenu>
-                                        </Border.ContextMenu>
+                    <!-- Virtualized: only the cards in view are built (a Google import can bring hundreds), scrolled by pixels. -->
+                    <ItemsControl x:Name="ScheduleList" BorderThickness="0"
+                                  VirtualizingPanel.IsVirtualizing="True"
+                                  VirtualizingPanel.ScrollUnit="Pixel"
+                                  ScrollViewer.CanContentScroll="True">
+                        <ItemsControl.Template>
+                            <ControlTemplate TargetType="{x:Type ItemsControl}">
+                                <ScrollViewer x:Name="ScheduleScroll"
+                                              VerticalScrollBarVisibility="Hidden"
+                                              HorizontalScrollBarVisibility="Disabled"
+                                              CanContentScroll="True"
+                                              PanningMode="VerticalOnly">
+                                    <ItemsPresenter/>
+                                </ScrollViewer>
+                            </ControlTemplate>
+                        </ItemsControl.Template>
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <VirtualizingStackPanel/>
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border Style="{StaticResource TodoCard}"
+                                        CornerRadius="13"
+                                        Margin="0,0,0,8"
+                                        BorderBrush="{DynamicResource CardBorderBrush}"
+                                        BorderThickness="1"
+                                        ClipToBounds="True"
+                                        SnapsToDevicePixels="True"
+                                        ContextMenu="{StaticResource TodoCardMenu}">
 
-                                        <Grid>
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="*"/>
-                                                <ColumnDefinition Width="Auto"/>
-                                            </Grid.ColumnDefinitions>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
 
-                                            <StackPanel Grid.Column="0"
-                                                        VerticalAlignment="Center"
-                                                        Margin="14,11,8,11">
-                                                <TextBlock Text="{Binding Title}"
-                                                           Foreground="{DynamicResource TextBrush}"
-                                                           FontSize="{DynamicResource TitleFontSize}"
-                                                           FontWeight="SemiBold"
-                                                           TextWrapping="Wrap"
-                                                           TextTrimming="CharacterEllipsis"/>
-                                                <TextBlock Text="{Binding DateString}"
-                                                           Foreground="{DynamicResource SubTextBrush}"
-                                                           FontSize="10"
-                                                           Margin="0,5,0,0"/>
-                                            </StackPanel>
+                                        <StackPanel Grid.Column="0"
+                                                    VerticalAlignment="Center"
+                                                    Margin="14,11,8,11">
+                                            <TextBlock Text="{Binding Title}"
+                                                       Style="{StaticResource TodoTitle}"
+                                                       FontSize="{DynamicResource TitleFontSize}"
+                                                       FontWeight="SemiBold"
+                                                       TextWrapping="Wrap"
+                                                       TextTrimming="CharacterEllipsis"/>
+                                            <TextBlock Text="{Binding DateString}"
+                                                       Style="{StaticResource TodoDate}"
+                                                       FontSize="10"
+                                                       Margin="0,5,0,0"/>
+                                        </StackPanel>
 
-                                            <Border Grid.Column="1"
-                                                    Background="{DynamicResource ControlHoverBrush}"
-                                                    CornerRadius="9"
-                                                    Padding="8,5"
-                                                    MinWidth="52"
-                                                    Margin="0,10,10,10"
-                                                    VerticalAlignment="Center">
-                                                <TextBlock Text="{Binding DDay}"
-                                                           FontSize="{DynamicResource DDayFontSize}"
-                                                           FontWeight="Bold"
-                                                           HorizontalAlignment="Center"
-                                                           TextAlignment="Center">
-                                                    <TextBlock.Style>
-                                                        <Style TargetType="TextBlock">
-                                                            <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
-                                                            <Style.Triggers>
-                                                                <DataTrigger Binding="{Binding Status}" Value="Today">
-                                                                    <Setter Property="Foreground" Value="#FF3B82F6"/>
-                                                                </DataTrigger>
-                                                                <DataTrigger Binding="{Binding Status}" Value="Past">
-                                                                    <Setter Property="Foreground" Value="#FFEF4444"/>
-                                                                </DataTrigger>
-                                                            </Style.Triggers>
-                                                        </Style>
-                                                    </TextBlock.Style>
-                                                </TextBlock>
-                                            </Border>
-                                        </Grid>
-                                    </Border>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-                    </ScrollViewer>
+                                        <Border Grid.Column="1"
+                                                Background="{DynamicResource ControlHoverBrush}"
+                                                CornerRadius="9"
+                                                Padding="8,5"
+                                                MinWidth="52"
+                                                Margin="0,10,10,10"
+                                                VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding DDay}"
+                                                       Style="{StaticResource TodoStatus}"
+                                                       FontSize="{DynamicResource DDayFontSize}"
+                                                       FontWeight="Bold"
+                                                       HorizontalAlignment="Center"
+                                                       TextAlignment="Center"/>
+                                        </Border>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
                 </Border>
 
                 <!-- add schedule -->
-                <Border Grid.Row="2"
+                <Border Grid.Row="3"
+                        MinHeight="144"
                         Background="{DynamicResource BottomBarBrush}"
                         CornerRadius="0,0,0,19"
                         Padding="13,11,13,12"
@@ -289,20 +324,22 @@
                         BorderThickness="0,1,0,0">
                     <Grid>
                         <Grid.RowDefinitions>
-                            <RowDefinition Height="36"/>
-                            <RowDefinition Height="44"/>
+                            <RowDefinition Height="34"/>
+                            <RowDefinition Height="42"/>
+                            <RowDefinition Height="42"/>
+                            <RowDefinition Height="Auto"/>
                         </Grid.RowDefinitions>
 
                         <TextBox x:Name="TitleInput"
                                  Grid.Row="0"
-                                 Height="36"
+                                 Height="34"
                                  Style="{StaticResource WidgetTextBox}"
                                  FontSize="12"
                                  ToolTip="일정 제목"
                                  KeyDown="TitleInput_KeyDown"/>
 
                         <Grid Grid.Row="1"
-                              Margin="0,8,0,0">
+                              Margin="0,6,0,0">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="Auto"/>
@@ -346,7 +383,8 @@
                                               HorizontalAlignment="Center"
                                               VerticalAlignment="Center"/>
                                     </Border>
-                                    <DatePicker x:Name="CalendarPicker"
+                                    <!-- SafeDatePicker: a DatePicker that screen readers / UI Automation can't crash. -->
+                                    <local:SafeDatePicker x:Name="CalendarPicker"
                                                 Width="28"
                                                 Height="28"
                                                 Opacity="0"
@@ -358,7 +396,7 @@
                                                 Focusable="False"
                                                 IsTabStop="False"
                                                 VerticalAlignment="Center">
-                                        <DatePicker.Resources>
+                                        <local:SafeDatePicker.Resources>
                                             <Style TargetType="DatePickerTextBox">
                                                 <Setter Property="Visibility" Value="Collapsed"/>
                                             </Style>
@@ -447,8 +485,8 @@
                                                 <Setter Property="CalendarDayButtonStyle" Value="{StaticResource WidgetCalendarDayButton}"/>
                                                 <Setter Property="CalendarButtonStyle" Value="{StaticResource WidgetCalendarButton}"/>
                                             </Style>
-                                        </DatePicker.Resources>
-                                    </DatePicker>
+                                        </local:SafeDatePicker.Resources>
+                                    </local:SafeDatePicker>
                                 </Grid>
 
                                 <ComboBox x:Name="YearCombo"
@@ -495,77 +533,103 @@
                                     Height="36"
                                     Margin="8,0,0,0"
                                     Style="{StaticResource WidgetPrimaryButton}"
-                                    Click="AddButton_Click"/>
+                                     Click="AddButton_Click"/>
                         </Grid>
+                        <Grid Grid.Row="2" Margin="0,6,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                <CheckBox x:Name="AddTimeToggle"
+                                          Content="시간 지정"
+                                          Foreground="{DynamicResource TextBrush}"
+                                          VerticalAlignment="Center"
+                                          Checked="AddTimeToggle_Changed"
+                                          Unchecked="AddTimeToggle_Changed"/>
+                                <!-- 여러 날: shows the 종료 날짜 row below (10/8 ~ 10/10). -->
+                                <CheckBox x:Name="AddRangeToggle"
+                                          Content="여러 날"
+                                          Margin="12,0,0,0"
+                                          Foreground="{DynamicResource TextBrush}"
+                                          VerticalAlignment="Center"
+                                          ToolTip="여러 날 이어지는 일정 (종료 날짜 선택)"
+                                          Checked="AddRangeToggle_Changed"
+                                          Unchecked="AddRangeToggle_Changed"/>
+                            </StackPanel>
+                            <TextBox x:Name="AddTimeInput"
+                                     Grid.Column="1"
+                                     Text="09:00"
+                                     Width="76"
+                                     Height="32"
+                                     MaxLength="5"
+                                     IsEnabled="False"
+                                     Style="{StaticResource WidgetTextBox}"
+                                     HorizontalContentAlignment="Center"
+                                     ToolTip="HH:mm"/>
+                        </Grid>
+                        <!-- 종료 날짜 (여러 날 only): the calendar button picks the range's last day. -->
+                        <Border x:Name="AddEndRow"
+                                Grid.Row="3"
+                                Visibility="Collapsed"
+                                Margin="0,6,0,0"
+                                Height="34"
+                                Background="{DynamicResource CardBrush}"
+                                BorderBrush="{DynamicResource BorderBrush}"
+                                BorderThickness="1"
+                                CornerRadius="11"
+                                Padding="5,0">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="29"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <Grid Width="28" Height="28" HorizontalAlignment="Left" VerticalAlignment="Center">
+                                    <Path Data="M2,3 H14 V14 H2 Z M5,1 V5 M11,1 V5 M2,6 H14"
+                                          Width="15" Height="15" Stretch="Fill"
+                                          Stroke="{DynamicResource AccentBrush}" StrokeThickness="1.3"
+                                          StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"
+                                          HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                    <!-- Same look as CalendarPicker (its resources are shared in code). -->
+                                    <local:SafeDatePicker x:Name="AddEndPicker"
+                                                          Width="28" Height="28" Opacity="0"
+                                                          ToolTip="달력에서 종료 날짜 선택"
+                                                          AutomationProperties.Name="종료 날짜"
+                                                          SelectedDateChanged="AddEndPicker_SelectedDateChanged"
+                                                          BorderThickness="0" Background="Transparent"
+                                                          FocusVisualStyle="{x:Null}" Focusable="False" IsTabStop="False"
+                                                          VerticalAlignment="Center"/>
+                                </Grid>
+                                <TextBlock Grid.Column="1" Text="종료 날짜" Foreground="{DynamicResource SubTextBrush}"
+                                           FontSize="10" VerticalAlignment="Center" Margin="1,0,8,0"/>
+                                <TextBlock x:Name="AddEndText" Grid.Column="2" Foreground="{DynamicResource TextBrush}"
+                                           FontSize="12" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                            </Grid>
+                        </Border>
                     </Grid>
                 </Border>
             </Grid>
 
-            <!-- thin movement/settings rail -->
-            <Border Grid.Column="1"
-                    Background="{DynamicResource BottomBarBrush}"
-                    CornerRadius="0,19,19,0"
-                    BorderBrush="{DynamicResource CardBorderBrush}"
-                    BorderThickness="1,0,0,0"
-                    Visibility="Collapsed">
-                <Grid>
-                    <Border Width="40"
-                            Height="88"
-                            Background="{DynamicResource CardBrush}"
-                            BorderBrush="{DynamicResource CardBorderBrush}"
-                            BorderThickness="1"
-                            CornerRadius="20"
-                            HorizontalAlignment="Center"
-                            VerticalAlignment="Top"
-                            Margin="0,12,0,0"
-                            Padding="4">
-                        <StackPanel HorizontalAlignment="Center"
-                                    VerticalAlignment="Center">
-                            <ToggleButton x:Name="LegacyModeToggle"
-                                          Style="{StaticResource WidgetModeButton}"
-                                          ToolTip="이동/크기 조절"
-                                          Checked="ModeToggle_Checked"
-                                          Unchecked="ModeToggle_Unchecked">
-                                <ToggleButton.Content>
-                                    <Path Data="M10,0 L14,4 L11,4 L11,9 L16,9 L16,6 L20,10 L16,14 L16,11 L11,11 L11,16 L14,16 L10,20 L6,16 L9,16 L9,11 L4,11 L4,14 L0,10 L4,6 L4,9 L9,9 L9,4 L6,4 Z"
-                                          Width="16"
-                                          Height="16"
-                                          Stretch="Fill"
-                                          Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type ToggleButton}}}"/>
-                                </ToggleButton.Content>
-                            </ToggleButton>
-                            <Border Width="18"
-                                    Height="1"
-                                    Background="{DynamicResource CardBorderBrush}"
-                                    Margin="0,4"/>
-                            <Button Style="{StaticResource WidgetIconButton}"
-                                    Width="32"
-                                    Height="32"
-                                    ToolTip="설정"
-                                    Click="SettingsButton_Click">
-                                <Path Data="M19.43,12.98C19.47,12.66 19.5,12.33 19.5,12C19.5,11.67 19.47,11.34 19.43,11.02L21.54,9.37C21.73,9.22 21.78,8.95 21.66,8.73L19.66,5.27C19.54,5.05 19.27,4.96 19.05,5.05L16.56,6.05C16.04,5.66 15.5,5.32 14.87,5.07L14.5,2.42C14.46,2.18 14.25,2 14,2H10C9.75,2 9.54,2.18 9.5,2.42L9.13,5.07C8.5,5.32 7.96,5.66 7.44,6.05L4.95,5.05C4.73,4.97 4.46,5.05 4.34,5.27L2.34,8.73C2.21,8.95 2.27,9.22 2.46,9.37L4.57,11.02C4.53,11.34 4.5,11.67 4.57,12.98L2.46,14.63C2.27,14.78 2.22,15.05 2.34,15.27L4.34,18.73C4.46,18.95 4.73,19.04 4.95,18.95L7.44,17.95C7.96,18.34 8.5,18.68 9.13,18.93L9.5,21.58C9.54,21.82 9.75,22 10,22H14C14.25,22 14.46,21.82 14.5,21.58L14.87,18.93C15.5,18.68 16.04,18.34 16.56,17.95L19.05,18.95C19.27,19.03 19.54,18.95 19.66,18.73L21.66,15.27C21.78,15.05 21.73,14.78 21.54,14.63L19.43,12.98ZM12,15.5C10.07,15.5 8.5,13.93 8.5,12C8.5,10.07 10.07,8.5 12,8.5C13.93,8.5 15.5,10.07 15.5,12C15.5,13.93 13.93,15.5 12,15.5Z"
-                                      Width="16"
-                                      Height="16"
-                                      Stretch="Fill"
-                                      Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type Button}}}"/>
-                            </Button>
-                        </StackPanel>
-                    </Border>
-                </Grid>
-            </Border>
-
             <!-- settings are shown in-place so the widget never loses context -->
             <Border x:Name="InlineSettingsPanel"
-                    Background="{DynamicResource BackgroundBrush}"
-                    BorderBrush="{DynamicResource BorderBrush}"
+                    Background="{DynamicResource AuxCanvasBrush}"
+                    BorderBrush="{DynamicResource AuxHairlineBrush}"
                     BorderThickness="1"
-                    CornerRadius="19"
-                    Padding="18,16,16,14"
+                    CornerRadius="12"
+                    Padding="14,12,12,12"
                     Panel.ZIndex="10"
                     Visibility="Collapsed">
+                <Border.Resources>
+                    <ResourceDictionary>
+                        <ResourceDictionary.MergedDictionaries>
+                            <ResourceDictionary Source="/ScheduleWidget;component/Styles/AuxiliaryStyles.xaml"/>
+                        </ResourceDictionary.MergedDictionaries>
+                    </ResourceDictionary>
+                </Border.Resources>
                 <Grid>
                     <Grid.RowDefinitions>
-                        <RowDefinition Height="34"/>
+                        <RowDefinition Height="38"/>
                         <RowDefinition Height="*"/>
                         <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
@@ -573,32 +637,32 @@
                     <Grid Grid.Row="0">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="30"/>
+                            <ColumnDefinition Width="40"/>
                         </Grid.ColumnDefinitions>
                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                             <Path Data="M19.43,12.98C19.47,12.66 19.5,12.33 19.5,12C19.5,11.67 19.47,11.34 19.43,11.02L21.54,9.37C21.73,9.22 21.78,8.95 21.66,8.73L19.66,5.27C19.54,5.05 19.27,4.96 19.05,5.05L16.56,6.05C16.04,5.66 15.5,5.32 14.87,5.07L14.5,2.42C14.46,2.18 14.25,2 14,2H10C9.75,2 9.54,2.18 9.5,2.42L9.13,5.07C8.5,5.32 7.96,5.66 7.44,6.05L4.95,5.05C4.73,4.97 4.46,5.05 4.34,5.27L2.34,8.73C2.21,8.95 2.27,9.22 2.46,9.37L4.57,11.02C4.53,11.34 4.5,11.67 4.57,12.98L2.46,14.63C2.27,14.78 2.22,15.05 2.34,15.27L4.34,18.73C4.46,18.95 4.73,19.04 4.95,18.95L7.44,17.95C7.96,18.34 8.5,18.68 9.13,18.93L9.5,21.58C9.54,21.82 9.75,22 10,22H14C14.25,22 14.46,21.82 14.5,21.58L14.87,18.93C15.5,18.68 16.04,18.34 16.56,17.95L19.05,18.95C19.27,19.03 19.54,18.95 19.66,18.73L21.66,15.27C21.78,15.05 21.73,14.78 21.54,14.63L19.43,12.98ZM12,15.5C10.07,15.5 8.5,13.93 8.5,12C8.5,10.07 10.07,8.5 12,8.5C13.93,8.5 15.5,10.07 15.5,12C15.5,13.93 13.93,15.5 12,15.5Z"
                                   Width="16"
                                   Height="16"
                                   Stretch="Fill"
-                                  Fill="{DynamicResource AccentBrush}"
+                                  Fill="{DynamicResource AuxInkBrush}"
                                   Margin="0,0,8,0"/>
                             <TextBlock Text="설정"
-                                       Foreground="{DynamicResource TextBrush}"
-                                       FontSize="17"
-                                       FontWeight="SemiBold"
+                                       Style="{StaticResource AuxTitle}"
+                                       FontSize="26"
                                        VerticalAlignment="Center"/>
                         </StackPanel>
                         <Button Grid.Column="1"
-                                Style="{StaticResource WidgetIconButton}"
-                                Width="30"
-                                Height="30"
-                                ToolTip="설정 닫기"
+                                Style="{StaticResource AuxUtilityButton}"
+                                Width="36"
+                                Height="36"
+                                ToolTip="설정 닫기" Padding="0"
+                                AutomationProperties.Name="설정 닫기"
                                 Click="InlineSettingsCloseButton_Click">
                             <Path Data="M4,4 L12,12 M12,4 L4,12"
                                   Width="13"
                                   Height="13"
                                   Stretch="Fill"
-                                  Stroke="{DynamicResource SubTextBrush}"
+                                   Stroke="{DynamicResource AuxMutedBrush}"
                                   StrokeThickness="1.5"
                                   StrokeStartLineCap="Round"
                                   StrokeEndLineCap="Round"/>
@@ -606,16 +670,131 @@
                     </Grid>
 
                     <ScrollViewer Grid.Row="1"
-                                  Margin="0,14,0,12"
-                                  VerticalScrollBarVisibility="Hidden"
+                                  Margin="0,10,0,10"
+                                  VerticalScrollBarVisibility="Auto"
                                   HorizontalScrollBarVisibility="Disabled">
                         <StackPanel>
-                            <Border Background="{DynamicResource CardBrush}"
-                                    BorderBrush="{DynamicResource CardBorderBrush}"
-                                    BorderThickness="1"
-                                    CornerRadius="12"
-                                    Padding="12,10"
-                                    Margin="0,0,0,10">
+                            <TextBlock Text="표시" Style="{StaticResource AuxSectionTitle}" FontSize="17" Margin="0,0,0,8"/>
+                            <Button Content="캐릭터 선택 / 가져오기" Height="40" Margin="0,0,0,10" Style="{StaticResource AuxPrimaryButton}" Click="ChooseCharacter_Click"/>
+                            <Border Style="{StaticResource AuxRoundSection}" Padding="14,12" Margin="0,0,0,10">
+                                <StackPanel>
+                                    <Grid Margin="0,0,0,7">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Text="미니 창 캐릭터 크기" Foreground="{DynamicResource AuxInkBrush}" FontWeight="SemiBold"/>
+                                        <TextBlock x:Name="InlineCharacterScaleText" Grid.Column="1" Text="100%"
+                                                   Foreground="{DynamicResource AuxInkBrush}" FontWeight="SemiBold"/>
+                                    </Grid>
+                                    <Slider x:Name="InlineCharacterScaleSlider"
+                                            Minimum="50"
+                                            Maximum="300"
+                                            TickFrequency="10"
+                                            IsSnapToTickEnabled="True"
+                                            Foreground="{DynamicResource AccentBrush}"
+                                            IsMoveToPointEnabled="True"
+                                            local:SliderInteraction.EnableMouseDrag="True"
+                                            ValueChanged="InlineCharacterScaleSlider_ValueChanged"
+                                            AutomationProperties.Name="미니 창 캐릭터 크기"/>
+                                    <TextBlock Text="100%는 달력 높이의 절반입니다. 달력 크기를 바꾸면 캐릭터도 함께 커지고 작아집니다."
+                                               TextWrapping="Wrap" Style="{StaticResource AuxCaption}" Margin="0,6,0,0"/>
+                                    <!-- 캐릭터 위치 (달력 기준): side, height, gap. Previewed live on the mini window. -->
+                                    <TextBlock Text="캐릭터 위치 (달력 기준)" Foreground="{DynamicResource AuxInkBrush}" FontWeight="SemiBold" Margin="0,14,0,6"/>
+                                    <ComboBox x:Name="InlineCharacterSideCombo" Height="34" Style="{StaticResource AuxComboBox}"
+                                              SelectionChanged="InlineCharacterPlacement_Changed" AutomationProperties.Name="캐릭터를 둘 쪽">
+                                        <ComboBoxItem Content="달력 왼쪽"/>
+                                        <ComboBoxItem Content="달력 오른쪽"/>
+                                    </ComboBox>
+                                    <Grid Margin="0,10,0,2">
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                        <TextBlock Text="세로 위치" Foreground="{DynamicResource AuxInkBrush}"/>
+                                        <TextBlock x:Name="InlineCharacterVerticalText" Grid.Column="1" Text="아래" Foreground="{DynamicResource AuxInkBrush}"/>
+                                    </Grid>
+                                    <Slider x:Name="InlineCharacterVerticalSlider" Minimum="0" Maximum="100" TickFrequency="5" IsSnapToTickEnabled="True"
+                                            Foreground="{DynamicResource AccentBrush}" IsMoveToPointEnabled="True" local:SliderInteraction.EnableMouseDrag="True"
+                                            ValueChanged="InlineCharacterPlacement_Changed" AutomationProperties.Name="캐릭터 세로 위치"/>
+                                    <Grid Margin="0,10,0,2">
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                        <TextBlock Text="달력과 간격" Foreground="{DynamicResource AuxInkBrush}"/>
+                                        <TextBlock x:Name="InlineCharacterGapText" Grid.Column="1" Text="8px" Foreground="{DynamicResource AuxInkBrush}"/>
+                                    </Grid>
+                                    <Slider x:Name="InlineCharacterGapSlider" Minimum="-80" Maximum="60" TickFrequency="2" IsSnapToTickEnabled="True"
+                                            Foreground="{DynamicResource AccentBrush}" IsMoveToPointEnabled="True" local:SliderInteraction.EnableMouseDrag="True"
+                                            ValueChanged="InlineCharacterPlacement_Changed" AutomationProperties.Name="캐릭터와 달력 사이 간격"/>
+                                    <TextBlock Text="간격을 0보다 작게 하면 캐릭터가 달력 위로 겹쳐 보입니다. 캐릭터는 우클릭 메뉴의 ‘캐릭터 추가’로 최대 3개까지 띄울 수 있습니다."
+                                               TextWrapping="Wrap" Style="{StaticResource AuxCaption}" Margin="0,6,0,0"/>
+                                    <!-- Every on/off setting is the same ON / OFF switch: label left, switch right. (CheckBoxes kept where the
+                                         code reads them as CheckBox; the switch style fits any ToggleButton.) -->
+                                    <Grid Margin="0,10,0,0">
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                        <TextBlock Text="모든 창 위에 표시 (일정 창·미니 창)" Foreground="{DynamicResource AuxInkBrush}" FontSize="14" VerticalAlignment="Center"
+                                                   TextWrapping="Wrap" ToolTip="끄면(기본) 일반 앱처럼 클릭하면 앞으로 올라오고, 다른 앱을 쓰면 뒤로 갑니다."/>
+                                        <CheckBox x:Name="InlineAlwaysOnTopToggle" Grid.Column="1" Margin="10,0,0,0" Style="{StaticResource AuxOnOffSwitch}" VerticalAlignment="Center"
+                                                  AutomationProperties.Name="모든 창 위에 표시 켜기/끄기"
+                                                  ToolTip="끄면(기본) 일반 앱처럼 클릭하면 앞으로 올라오고, 다른 앱을 쓰면 뒤로 갑니다."/>
+                                    </Grid>
+                                    <Grid Margin="0,10,0,0">
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                        <TextBlock Text="일정 블록에 D-day 표시 (미니 창)" Foreground="{DynamicResource AuxInkBrush}" FontSize="14" VerticalAlignment="Center"
+                                                   TextWrapping="Wrap" ToolTip="미니 달력의 일정 블록 윗줄 오른쪽에 D-3 · D-day · D+2처럼 남은 날짜를 표시합니다."/>
+                                        <ToggleButton x:Name="InlineBlockDDaySwitch" Grid.Column="1" Margin="10,0,0,0" Style="{StaticResource AuxOnOffSwitch}" VerticalAlignment="Center"
+                                                      AutomationProperties.Name="일정 블록에 D-day 표시 켜기/끄기"/>
+                                    </Grid>
+                                    <!-- How the mini calendar turns to another week (‹ / ›). Tag = the saved MiniFlipEffect value. -->
+                                    <TextBlock Text="넘김 애니메이션 (미니 창)" Foreground="{DynamicResource AuxInkBrush}" FontSize="14" Margin="0,10,0,6"
+                                               ToolTip="미니 달력에서 다른 주로 넘길 때의 움직임입니다."/>
+                                    <ComboBox x:Name="InlineFlipEffectCombo" Height="34" Style="{StaticResource AuxComboBox}" AutomationProperties.Name="넘김 애니메이션">
+                                        <ComboBoxItem Content="효과 1 · 위로 넘기기" Tag="1"/>
+                                        <ComboBoxItem Content="효과 2 · 모서리 넘기기" Tag="2"/>
+                                        <ComboBoxItem Content="효과 3 · 위로 넘기기 (뒷면 1/3)" Tag="3"/>
+                                        <ComboBoxItem Content="효과 4 · 모서리 넘기기 (뒷면 1/3)" Tag="4"/>
+                                        <ComboBoxItem Content="효과 5 · 위로 넘기기 (링 위 숨김)" Tag="5"/>
+                                        <ComboBoxItem Content="효과 6 · 모서리 넘기기 (링 위 숨김)" Tag="6"/>
+                                        <ComboBoxItem Content="애니메이션 없음" Tag="0"/>
+                                    </ComboBox>
+                                    <Grid Margin="0,10,0,0">
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                        <TextBlock Text="단축키로 맨 앞에 띄우기" Foreground="{DynamicResource AuxInkBrush}" FontSize="14" VerticalAlignment="Center"
+                                                   TextWrapping="Wrap" ToolTip="어느 앱을 쓰고 있든 단축키를 누르면 일정 창(미니 모드면 미니 창)이 모든 창 위로 한 번 올라옵니다. 위에 고정되지는 않습니다."/>
+                                        <CheckBox x:Name="InlineHotKeyToggle" Grid.Column="1" Margin="10,0,0,0" Style="{StaticResource AuxOnOffSwitch}" VerticalAlignment="Center"
+                                                  Click="InlineHotKeyToggle_Click" AutomationProperties.Name="단축키로 맨 앞에 띄우기 켜기/끄기"
+                                                  ToolTip="어느 앱을 쓰고 있든 단축키를 누르면 일정 창(미니 모드면 미니 창)이 모든 창 위로 한 번 올라옵니다. 위에 고정되지는 않습니다."/>
+                                    </Grid>
+                                    <Grid Margin="0,6,0,0">
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                        <!-- Own height and padding (not AuxTextBox's 36 px, 7 px padding and margins): the shortcut shows in full. -->
+                                        <TextBox x:Name="InlineHotKeyBox" Height="32" MinHeight="32" Margin="0" Padding="10,0" IsReadOnly="True" IsReadOnlyCaretVisible="False" Cursor="Hand"
+                                                 Style="{StaticResource AuxTextBox}" VerticalContentAlignment="Center"
+                                                 PreviewKeyDown="InlineHotKeyBox_PreviewKeyDown"
+                                                 GotKeyboardFocus="InlineHotKeyBox_GotKeyboardFocus" LostKeyboardFocus="InlineHotKeyBox_LostKeyboardFocus"
+                                                 AutomationProperties.Name="맨 앞에 띄우기 단축키"
+                                                 ToolTip="칸을 누른 뒤 새 단축키를 누르세요 (F1~F24는 단독 가능, 그 외는 Ctrl·Alt·Win 중 하나 포함)."/>
+                                        <Button x:Name="InlineHotKeyDefaultButton" Grid.Column="1" Content="Ctrl+G로" Height="32" Margin="6,0,0,0" Padding="10,0"
+                                                Style="{StaticResource AuxUtilityButton}" Click="InlineHotKeyDefault_Click"/>
+                                    </Grid>
+                                    <TextBlock x:Name="InlineHotKeyStatus" TextWrapping="Wrap" Style="{StaticResource AuxCaption}" Margin="0,6,0,0"
+                                               Text="칸을 누른 뒤 새 단축키를 누르세요. 저장하면 적용됩니다."/>
+                                    <Grid Margin="0,10,0,0">
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                        <TextBlock Text="미니 창에 캐릭터 표시" Foreground="{DynamicResource AuxInkBrush}" FontSize="14" VerticalAlignment="Center"
+                                                   TextWrapping="Wrap" ToolTip="끄면 달력만 표시합니다. 달력을 우클릭하면 메뉴가 열립니다."/>
+                                        <CheckBox x:Name="InlineCharacterVisibleToggle" Grid.Column="1" Margin="10,0,0,0" Style="{StaticResource AuxOnOffSwitch}" VerticalAlignment="Center"
+                                                  Click="InlineCharacterVisibleToggle_Click" AutomationProperties.Name="미니 창에 캐릭터 표시 켜기/끄기"
+                                                  ToolTip="끄면 달력만 표시합니다. 달력을 우클릭하면 메뉴가 열립니다."/>
+                                    </Grid>
+                                </StackPanel>
+                            </Border>
+                            <UniformGrid Columns="2" Margin="0,0,0,10">
+                                <Button Content="목록 배경" Tag="BackgroundColor" Height="36" Margin="2" Style="{StaticResource AuxUtilityButton}" Click="AppearanceColor_Click"/>
+                                <Button Content="카드 배경" Tag="CardColor" Height="36" Margin="2" Style="{StaticResource AuxUtilityButton}" Click="AppearanceColor_Click"/>
+                                <Button Content="제목 글자" Tag="TextColor" Height="36" Margin="2" Style="{StaticResource AuxUtilityButton}" Click="AppearanceColor_Click"/>
+                                <Button Content="오늘 D-day" Tag="TodayColor" Height="36" Margin="2" Style="{StaticResource AuxUtilityButton}" Click="AppearanceColor_Click"/>
+                                <Button Content="예정 D-day" Tag="FutureColor" Height="36" Margin="2" Style="{StaticResource AuxUtilityButton}" Click="AppearanceColor_Click"/>
+                                <Button Content="지난 D-day" Tag="PastColor" Height="36" Margin="2" Style="{StaticResource AuxUtilityButton}" Click="AppearanceColor_Click"/>
+                            </UniformGrid>
+                            <TextBlock Text="각 할 일의 색상은 카드를 우클릭해 바꿀 수 있습니다." TextWrapping="Wrap" Style="{StaticResource AuxCaption}" Margin="6,0,6,12"/>
+                            <Border Style="{StaticResource AuxRoundSection}" Padding="14,12" Margin="0,0,0,10">
                                 <StackPanel>
                                     <Grid Margin="0,0,0,7">
                                         <Grid.ColumnDefinitions>
@@ -623,12 +802,12 @@
                                             <ColumnDefinition Width="Auto"/>
                                         </Grid.ColumnDefinitions>
                                         <TextBlock Text="투명도"
-                                                   Foreground="{DynamicResource TextBrush}"
+                                                    Foreground="{DynamicResource AuxInkBrush}"
                                                    FontWeight="SemiBold"/>
                                         <TextBlock x:Name="InlineOpacityValueText"
                                                    Grid.Column="1"
                                                    Text="100%"
-                                                   Foreground="{DynamicResource AccentBrush}"
+                                                            Foreground="{DynamicResource AuxInkBrush}"
                                                    FontWeight="SemiBold"/>
                                     </Grid>
                                     <Slider x:Name="InlineOpacitySlider"
@@ -636,34 +815,28 @@
                                             Maximum="100"
                                             TickFrequency="5"
                                             IsSnapToTickEnabled="True"
-                                            Foreground="{DynamicResource AccentBrush}"
+                                                            Foreground="{DynamicResource AccentBrush}"
                                             IsMoveToPointEnabled="True"
                                             local:SliderInteraction.EnableMouseDrag="True"
                                             ValueChanged="InlineOpacitySlider_ValueChanged"/>
                                 </StackPanel>
                             </Border>
 
-                            <Border Background="{DynamicResource CardBrush}"
-                                    BorderBrush="{DynamicResource CardBorderBrush}"
-                                    BorderThickness="1"
-                                    CornerRadius="12"
-                                    Padding="12,10"
-                                    Margin="0,0,0,10">
+                            <Border Style="{StaticResource AuxRoundSection}" Padding="14,12" Margin="0,0,0,10">
                                 <StackPanel>
                                     <StackPanel Margin="0,0,0,8">
                                         <StackPanel>
                                             <TextBlock Text="테마"
-                                                       Foreground="{DynamicResource TextBrush}"
-                                                       FontWeight="SemiBold"/>
+                                                        Style="{StaticResource AuxSectionTitle}"
+                                                        FontSize="17"/>
                                             <TextBlock Text="위젯의 분위기를 선택하세요."
-                                                       Foreground="{DynamicResource SubTextBrush}"
-                                                       FontSize="10"
-                                                       Margin="0,3,0,0"/>
+                                                        Style="{StaticResource AuxCaption}"
+                                                        Margin="0,3,0,0"/>
                                         </StackPanel>
                                     </StackPanel>
                                     <ComboBox x:Name="InlinePresetCombo"
                                               Height="48"
-                                              Style="{StaticResource WidgetComboBox}"
+                                               Style="{StaticResource AuxComboBox}"
                                               ItemTemplate="{StaticResource ThemePresetTemplate}"
                                               ItemContainerStyle="{StaticResource ThemePresetItemStyle}"
                                               MaxDropDownHeight="240"
@@ -672,24 +845,21 @@
                                         <ComboBoxItem Content="Dark" ContentTemplate="{StaticResource ThemePresetTemplate}"/>
                                         <ComboBoxItem Content="Blue" ContentTemplate="{StaticResource ThemePresetTemplate}"/>
                                         <ComboBoxItem Content="Pink" ContentTemplate="{StaticResource ThemePresetTemplate}"/>
+                                        <ComboBoxItem Content="Modern" ContentTemplate="{StaticResource ThemePresetTemplate}"/>
                                     </ComboBox>
                                 </StackPanel>
                             </Border>
 
-                            <Border Background="{DynamicResource CardBrush}"
-                                    BorderBrush="{DynamicResource CardBorderBrush}"
-                                    BorderThickness="1"
-                                    CornerRadius="12"
-                                    Padding="12,10">
+                            <Border Style="{StaticResource AuxRoundSection}" Padding="14,12">
                                 <StackPanel>
                                     <TextBlock Text="폰트 크기"
-                                               Foreground="{DynamicResource TextBrush}"
-                                               FontWeight="SemiBold"
+                                               Style="{StaticResource AuxSectionTitle}"
+                                               FontSize="17"
                                                Margin="0,0,0,10"/>
                                     <Border Background="{DynamicResource BackgroundBrush}"
                                             BorderBrush="{DynamicResource CardBorderBrush}"
                                             BorderThickness="1"
-                                            CornerRadius="10"
+                                            CornerRadius="3"
                                             Padding="10,8"
                                             Margin="0,0,0,10">
                                         <Grid>
@@ -698,7 +868,7 @@
                                                 <ColumnDefinition Width="Auto"/>
                                             </Grid.ColumnDefinitions>
                                             <StackPanel VerticalAlignment="Center">
-                                                <TextBlock Text="청년 희망 뭐시기 알아보기"
+                                                <TextBlock Text="보고서 제출"
                                                            FontSize="{Binding Value, ElementName=InlineTitleFontSizeSlider}"
                                                            FontWeight="SemiBold"
                                                            Foreground="{DynamicResource TextBrush}"
@@ -711,15 +881,15 @@
                                             </StackPanel>
                                             <Border Grid.Column="1"
                                                     Background="{DynamicResource ControlHoverBrush}"
-                                                    CornerRadius="8"
+                                                    CornerRadius="3"
                                                     Padding="8,5"
                                                     Margin="8,0,0,0"
                                                     VerticalAlignment="Center">
                                                 <TextBlock Text="D-12"
-                                                           FontSize="{Binding Value, ElementName=InlineDDayFontSizeSlider}"
-                                                           FontWeight="Bold"
-                                                           Foreground="{DynamicResource AccentBrush}"
-                                                           HorizontalAlignment="Center"/>
+                                                            FontSize="{Binding Value, ElementName=InlineDDayFontSizeSlider}"
+                                                            FontWeight="Bold"
+                                                            Foreground="{DynamicResource AccentBrush}"
+                                                            HorizontalAlignment="Center"/>
                                             </Border>
                                         </Grid>
                                     </Border>
@@ -730,7 +900,7 @@
                                             <ColumnDefinition Width="28"/>
                                         </Grid.ColumnDefinitions>
                                         <TextBlock Text="제목"
-                                                   Foreground="{DynamicResource SubTextBrush}"
+                                                    Foreground="{DynamicResource AuxMutedBrush}"
                                                    VerticalAlignment="Center"/>
                                         <Slider x:Name="InlineTitleFontSizeSlider"
                                                 Grid.Column="1"
@@ -738,7 +908,7 @@
                                                 Maximum="24"
                                                 TickFrequency="1"
                                                 IsSnapToTickEnabled="True"
-                                                Foreground="{DynamicResource AccentBrush}"
+                                                    Foreground="{DynamicResource AuxActionBrush}"
                                                 VerticalAlignment="Center"
                                                 IsMoveToPointEnabled="True"
                                                 local:SliderInteraction.EnableMouseDrag="True"
@@ -746,7 +916,7 @@
                                         <TextBlock x:Name="InlineTitleFontSizeText"
                                                    Grid.Column="2"
                                                    TextAlignment="Right"
-                                                   Foreground="{DynamicResource AccentBrush}"
+                                                   Foreground="{DynamicResource AuxActionTextBrush}"
                                                    VerticalAlignment="Center"/>
                                     </Grid>
                                     <Grid>
@@ -756,7 +926,7 @@
                                             <ColumnDefinition Width="28"/>
                                         </Grid.ColumnDefinitions>
                                         <TextBlock Text="D-Day"
-                                                   Foreground="{DynamicResource SubTextBrush}"
+                                                    Foreground="{DynamicResource AuxMutedBrush}"
                                                    VerticalAlignment="Center"/>
                                         <Slider x:Name="InlineDDayFontSizeSlider"
                                                 Grid.Column="1"
@@ -764,7 +934,7 @@
                                                 Maximum="24"
                                                 TickFrequency="1"
                                                 IsSnapToTickEnabled="True"
-                                                Foreground="{DynamicResource AccentBrush}"
+                                                    Foreground="{DynamicResource AuxActionBrush}"
                                                 VerticalAlignment="Center"
                                                 IsMoveToPointEnabled="True"
                                                 local:SliderInteraction.EnableMouseDrag="True"
@@ -772,41 +942,98 @@
                                         <TextBlock x:Name="InlineDDayFontSizeText"
                                                    Grid.Column="2"
                                                    TextAlignment="Right"
-                                                   Foreground="{DynamicResource AccentBrush}"
+                                                   Foreground="{DynamicResource AuxActionTextBrush}"
                                                    VerticalAlignment="Center"/>
                                     </Grid>
                                 </StackPanel>
                             </Border>
 
-                            <Border Background="{DynamicResource CardBrush}"
-                                    BorderBrush="{DynamicResource CardBorderBrush}"
-                                    BorderThickness="1"
-                                    CornerRadius="12"
-                                    Padding="12,10"
-                                    Margin="0,10,0,0">
+                            <Border Style="{StaticResource AuxRoundSection}" Padding="14,12" Margin="0,10,0,0">
                                 <Grid>
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*"/>
                                         <ColumnDefinition Width="Auto"/>
                                     </Grid.ColumnDefinitions>
                                     <StackPanel VerticalAlignment="Center">
-                                        <TextBlock Text="Windows 시작"
-                                                   Foreground="{DynamicResource TextBrush}"
-                                                   FontWeight="SemiBold"/>
-                                        <TextBlock Text="로그인할 때 위젯을 자동으로 실행합니다."
-                                                   Foreground="{DynamicResource SubTextBrush}"
-                                                   FontSize="10"
-                                                   Margin="0,4,0,0"/>
+                                         <TextBlock Text="Windows 시작"
+                                                    Style="{StaticResource AuxSectionTitle}"
+                                                    FontSize="15"/>
+                                         <TextBlock Text="로그인할 때 위젯을 자동으로 실행합니다."
+                                                    Style="{StaticResource AuxCaption}"
+                                                    Margin="0,4,0,0"/>
+                                         <TextBlock Text="설정 초기화는 이 항목을 바꾸지 않습니다."
+                                                    Style="{StaticResource AuxCaption}"
+                                                    Margin="0,2,0,0"/>
                                     </StackPanel>
                                     <ToggleButton x:Name="InlineStartupToggle"
                                                   Grid.Column="1"
-                                                  Style="{StaticResource WidgetToggleButton}"
-                                                  Width="46"
-                                                  Height="24"
+                                                  Margin="10,0,0,0"
+                                                  Style="{StaticResource AuxOnOffSwitch}"
                                                   VerticalAlignment="Center"
+                                                  AutomationProperties.Name="Windows 시작 켜기/끄기"
                                                   Checked="InlineStartupToggle_Checked"
                                                   Unchecked="InlineStartupToggle_Unchecked"/>
                                 </Grid>
+                            </Border>
+
+                            <!-- 구글 연동: 구글 로그인 first; the two switches work only while signed in. Applies at once (not part of 저장/취소/초기화). -->
+                            <Border Style="{StaticResource AuxRoundSection}" Padding="14,12" Margin="0,10,0,0">
+                                <StackPanel>
+                                    <TextBlock Text="구글 연동" Style="{StaticResource AuxSectionTitle}" FontSize="15"/>
+                                    <!-- Account line and the sign-in button, both centered. -->
+                                    <TextBlock x:Name="GoogleAccountText" Style="{StaticResource AuxCaption}" TextWrapping="Wrap"
+                                               TextAlignment="Center" HorizontalAlignment="Center" Margin="0,10,0,0"/>
+                                    <Button x:Name="GoogleSignInButton" Content="구글 로그인" Height="36" MinWidth="160" Padding="18,0" Margin="0,8,0,0"
+                                            HorizontalAlignment="Center" Style="{StaticResource AuxPrimaryButton}" Click="GoogleSignIn_Click"/>
+                                    <Border Height="1" Background="{DynamicResource AuxHairlineBrush}" Margin="0,12,0,12"/>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                        <StackPanel VerticalAlignment="Center">
+                                            <TextBlock Text="구글 캘린더 연동" Style="{StaticResource AuxSectionTitle}" FontSize="14"/>
+                                            <TextBlock Text="일정을 구글 캘린더(기본 캘린더)와 양쪽으로 맞춥니다."
+                                                       Style="{StaticResource AuxCaption}" TextWrapping="Wrap" Margin="0,4,0,0"/>
+                                        </StackPanel>
+                                        <ToggleButton x:Name="GoogleCalendarSwitch" Grid.Column="1" Margin="10,0,0,0" VerticalAlignment="Center"
+                                                      Style="{StaticResource AuxOnOffSwitch}" Click="GoogleCalendarSwitch_Click"
+                                                      AutomationProperties.Name="구글 캘린더 연동 켜기/끄기"/>
+                                    </Grid>
+                                    <Grid Margin="0,8,0,0">
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                        <TextBlock x:Name="GoogleCalendarStatus" Style="{StaticResource AuxCaption}" TextWrapping="Wrap" VerticalAlignment="Center"/>
+                                        <Button x:Name="GoogleSyncNowButton" Grid.Column="1" Content="지금 동기화" Height="30" Padding="12,0" Margin="10,0,0,0"
+                                                Style="{StaticResource AuxUtilityButton}" Click="GoogleSyncNow_Click"/>
+                                    </Grid>
+                                    <Grid Margin="0,14,0,0">
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                        <StackPanel VerticalAlignment="Center">
+                                            <TextBlock Text="캐릭터도 구글 드라이브에 보관" Style="{StaticResource AuxSectionTitle}" FontSize="14"/>
+                                            <TextBlock Text="가져온 캐릭터를 드라이브에 보관하고 같은 계정의 다른 PC와 나눕니다."
+                                                       Style="{StaticResource AuxCaption}" TextWrapping="Wrap" Margin="0,4,0,0"/>
+                                        </StackPanel>
+                                        <ToggleButton x:Name="GooglePetsSwitch" Grid.Column="1" Margin="10,0,0,0" VerticalAlignment="Center"
+                                                      Style="{StaticResource AuxOnOffSwitch}" Click="GooglePetsSwitch_Click"
+                                                      AutomationProperties.Name="캐릭터 구글 드라이브 보관 켜기/끄기"/>
+                                    </Grid>
+                                    <TextBlock x:Name="GooglePetsStatus" Style="{StaticResource AuxCaption}" TextWrapping="Wrap" Margin="0,6,0,0"/>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- 업데이트: updates come from the public GitHub repository set in code (UpdateClient.GitHubRepository); nothing
+                                 here is a setting. While it is blank the 업데이트 button is disabled. Pressed: check -> a newer, verified
+                                 version is confirmed in a dialog -> download, verify, updater, the app closes. Otherwise the status line says why. -->
+                            <Border x:Name="UpdateCard" Style="{StaticResource AuxRoundSection}" Padding="14,12" Margin="0,10,0,0">
+                                <StackPanel>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                        <TextBlock Text="업데이트" Style="{StaticResource AuxSectionTitle}" FontSize="15" VerticalAlignment="Center"/>
+                                        <TextBlock x:Name="UpdateCurrentVersionText" Grid.Column="1" Style="{StaticResource AuxCaption}" VerticalAlignment="Center"
+                                                   Margin="10,0,0,0"/>
+                                    </Grid>
+                                    <Button x:Name="UpdateButton" Content="업데이트" Height="36" Margin="0,12,0,0" IsEnabled="False"
+                                            Style="{StaticResource AuxPrimaryButton}" Click="UpdateButton_Click"/>
+                                    <TextBlock x:Name="UpdateStatusText" Style="{StaticResource AuxCaption}" TextWrapping="Wrap" Margin="0,8,0,0"
+                                               Visibility="Collapsed"/>
+                                </StackPanel>
                             </Border>
                         </StackPanel>
                     </ScrollViewer>
@@ -814,16 +1041,27 @@
                     <StackPanel Grid.Row="2"
                                 Orientation="Horizontal"
                                 HorizontalAlignment="Right">
-                        <Button Content="취소"
-                                Width="70"
-                                Height="34"
-                                Margin="0,0,8,0"
-                                Style="{StaticResource WidgetSecondaryButton}"
-                                Click="InlineSettingsCancelButton_Click"/>
-                        <Button Content="저장"
-                                Width="70"
-                                Height="34"
-                                Style="{StaticResource WidgetPrimaryButton}"
+                                <!-- 초기화: two presses; only the draft changes (저장 applies, 취소 reverts). Windows 시작 is left alone. -->
+                                <Button x:Name="InlineSettingsResetButton"
+                                        Content="초기화"
+                                        MinWidth="80"
+                                        Height="40"
+                                        Padding="12,0"
+                                        Margin="0,0,8,0"
+                                        Style="{StaticResource AuxCompactButton}"
+                                        ToolTip="테마·투명도·글자 크기·할 일 색상·캐릭터 크기와 위치·창 표시·D-day 표시·넘김 애니메이션·단축키를 처음 값으로 되돌립니다 (저장해야 적용)"
+                                        AutomationProperties.Name="설정 초기화"
+                                        Click="InlineSettingsResetButton_Click"/>
+                                <Button Content="취소"
+                                        Width="80"
+                                        Height="40"
+                                        Margin="0,0,8,0"
+                                        Style="{StaticResource AuxCancelButton}"
+                                        Click="InlineSettingsCancelButton_Click"/>
+                                <Button Content="저장"
+                                        Width="80"
+                                        Height="40"
+                                        Style="{StaticResource AuxSaveButton}"
                                 Click="InlineSettingsApplyButton_Click"/>
                     </StackPanel>
                 </Grid>
@@ -881,6 +1119,7 @@
                                     Width="30"
                                     Height="30"
                                     ToolTip="모니터 선택 닫기"
+                                    AutomationProperties.Name="모니터 선택 닫기"
                                     Click="MonitorPanelCloseButton_Click">
                                 <Path Data="M4,4 L12,12 M12,4 L4,12"
                                       Width="13"
@@ -968,7 +1207,7 @@
                     Panel.ZIndex="20"
                     Visibility="Collapsed">
                 <Border Width="300"
-                        Height="270"
+                        Height="350"
                         Background="{DynamicResource CardBrush}"
                         BorderBrush="{DynamicResource CardBorderBrush}"
                         BorderThickness="1"
@@ -1013,6 +1252,7 @@
                                     Width="30"
                                     Height="30"
                                     ToolTip="수정 닫기"
+                                    AutomationProperties.Name="수정 닫기"
                                     Click="InlineEditCloseButton_Click">
                                 <Path Data="M4,4 L12,12 M12,4 L4,12"
                                       Width="13"
@@ -1025,7 +1265,7 @@
                             </Button>
                         </Grid>
 
-                        <StackPanel Grid.Row="1" Margin="0,12,0,12">
+                        <StackPanel Grid.Row="1" Margin="0,8,0,8">
                             <TextBlock Text="제목"
                                        Foreground="{DynamicResource SubTextBrush}"
                                        FontSize="10"
@@ -1037,7 +1277,7 @@
                             <TextBlock Text="날짜"
                                        Foreground="{DynamicResource SubTextBrush}"
                                        FontSize="10"
-                                       Margin="1,12,0,5"/>
+                                       Margin="1,8,0,4"/>
                             <Border Background="{DynamicResource BackgroundBrush}"
                                     BorderBrush="{DynamicResource BorderBrush}"
                                     BorderThickness="1"
@@ -1090,6 +1330,90 @@
                                                Margin="1,0,0,0"/>
                                 </Grid>
                             </Border>
+                            <!-- 여러 날: the range's last day (10/8 ~ 10/10); off = one day. -->
+                            <Grid Height="34" Margin="0,6,0,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <CheckBox x:Name="InlineEditRangeToggle"
+                                          Content="여러 날"
+                                          Foreground="{DynamicResource TextBrush}"
+                                          VerticalAlignment="Center"
+                                          ToolTip="여러 날 이어지는 일정 (종료 날짜 선택)"
+                                          Checked="InlineEditRangeToggle_Changed"
+                                          Unchecked="InlineEditRangeToggle_Changed"/>
+                                <Border x:Name="InlineEditEndBox"
+                                        Grid.Column="1"
+                                        Margin="10,0,0,0"
+                                        Height="32"
+                                        IsEnabled="False"
+                                        Background="{DynamicResource BackgroundBrush}"
+                                        BorderBrush="{DynamicResource BorderBrush}"
+                                        BorderThickness="1"
+                                        CornerRadius="10"
+                                        Padding="4,0">
+                                    <Border.Style>
+                                        <Style TargetType="Border">
+                                            <Style.Triggers>
+                                                <Trigger Property="IsEnabled" Value="False">
+                                                    <Setter Property="Opacity" Value="0.45"/>
+                                                </Trigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Border.Style>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="28"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <Grid Width="26" Height="26" VerticalAlignment="Center">
+                                            <Path Data="M2,3 H14 V14 H2 Z M5,1 V5 M11,1 V5 M2,6 H14"
+                                                  Width="14" Height="14" Stretch="Fill"
+                                                  Stroke="{DynamicResource AccentBrush}" StrokeThickness="1.3"
+                                                  StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"
+                                                  HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                            <local:SafeDatePicker x:Name="InlineEditEndPicker"
+                                                                  Width="26" Height="26" Opacity="0"
+                                                                  ToolTip="달력에서 종료 날짜 선택"
+                                                                  AutomationProperties.Name="수정 종료 날짜"
+                                                                  SelectedDateChanged="InlineEditEndPicker_SelectedDateChanged"
+                                                                  BorderThickness="0" Background="Transparent"
+                                                                  FocusVisualStyle="{x:Null}" Focusable="False" IsTabStop="False"
+                                                                  VerticalAlignment="Center"/>
+                                        </Grid>
+                                        <TextBlock x:Name="InlineEditEndText" Grid.Column="1" Text="종료 날짜"
+                                                   Foreground="{DynamicResource TextBrush}" FontSize="12"
+                                                   VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                                    </Grid>
+                                </Border>
+                            </Grid>
+                            <TextBlock Text="시간"
+                                       Foreground="{DynamicResource SubTextBrush}"
+                                       FontSize="10"
+                                       Margin="1,8,0,4"/>
+                            <Grid Height="34">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <CheckBox x:Name="InlineEditTimeToggle"
+                                          Content="시간 지정"
+                                          Foreground="{DynamicResource TextBrush}"
+                                          VerticalAlignment="Center"
+                                          Checked="InlineEditTimeToggle_Changed"
+                                          Unchecked="InlineEditTimeToggle_Changed"/>
+                                <TextBox x:Name="InlineEditTimeInput"
+                                         Grid.Column="1"
+                                         Text="09:00"
+                                         Width="76"
+                                         Height="32"
+                                         MaxLength="5"
+                                         IsEnabled="False"
+                                         Style="{StaticResource WidgetTextBox}"
+                                         HorizontalContentAlignment="Center"
+                                         ToolTip="HH:mm"/>
+                            </Grid>
                         </StackPanel>
 
                         <StackPanel Grid.Row="2"
@@ -1111,14 +1435,14 @@
                 </Border>
             </Border>
 
-            <!-- remove confirmation shown in the widget -->
+            <!-- delete confirmation shown in the widget (grows for the Google Calendar note) -->
             <Border x:Name="RemoveConfirmPanel"
                     Background="#660B1220"
                     CornerRadius="19"
                     Panel.ZIndex="30"
                     Visibility="Collapsed">
                 <Border Width="270"
-                        Height="166"
+                        MinHeight="166"
                         Background="{DynamicResource CardBrush}"
                         BorderBrush="{DynamicResource CardBorderBrush}"
                         BorderThickness="1"
@@ -1153,7 +1477,7 @@
                                       HorizontalAlignment="Center"
                                       VerticalAlignment="Center"/>
                             </Border>
-                            <TextBlock Text="일정 제거"
+                            <TextBlock Text="일정 삭제"
                                        Foreground="{DynamicResource TextBrush}"
                                        FontSize="16"
                                        FontWeight="SemiBold"
@@ -1176,7 +1500,7 @@
                                     Margin="0,0,8,0"
                                     Style="{StaticResource WidgetSecondaryButton}"
                                     Click="RemoveConfirmCancelButton_Click"/>
-                            <Button Content="제거"
+                            <Button Content="삭제"
                                     Width="70"
                                     Height="32"
                                     Style="{StaticResource WidgetDangerButton}"

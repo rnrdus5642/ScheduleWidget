@@ -17,6 +17,9 @@ namespace ScheduleWidget
         public string BorderColor { get; set; } = "#FFD9D8E8";
         public string AccentColor { get; set; } = "#FF5B61D6";
         public string ControlHoverColor { get; set; } = "#FFEFEEFF";
+        public string TodayColor { get; set; } = "#FF3B82F6";
+        public string FutureColor { get; set; } = "#FF64748B";
+        public string PastColor { get; set; } = "#FFEF4444";
 
         public double TitleFontSize { get; set; } = 14;
         public double DDayFontSize { get; set; } = 13;
@@ -78,6 +81,24 @@ namespace ScheduleWidget
                 BorderColor = "#FFE9B1C8",
                 AccentColor = "#FFD05A8A",
                 ControlHoverColor = "#FFFCE0EB"
+            },
+            // 흑백: 흰 바탕, 검정 글자·테두리·강조 (Modern).
+            ["Modern"] = new AppearanceSettings
+            {
+                ThemePreset = "Modern",
+                TopBarColor = "#FFF2F2F2",
+                BackgroundColor = "#FFFFFFFF",
+                CardColor = "#FFFFFFFF",
+                CardBorderColor = "#FFD9D9D9",
+                BottomBarColor = "#FFF2F2F2",
+                TextColor = "#FF111111",
+                SubTextColor = "#FF6B6B6B",
+                BorderColor = "#FFBDBDBD",
+                AccentColor = "#FF111111",
+                ControlHoverColor = "#FFEDEDED",
+                TodayColor = "#FF111111",
+                FutureColor = "#FF6B6B6B",
+                PastColor = "#FFD93025"
             }
         };
 
@@ -93,6 +114,9 @@ namespace ScheduleWidget
             BorderColor = other.BorderColor;
             AccentColor = other.AccentColor;
             ControlHoverColor = other.ControlHoverColor;
+            TodayColor = other.TodayColor;
+            FutureColor = other.FutureColor;
+            PastColor = other.PastColor;
         }
     }
 }

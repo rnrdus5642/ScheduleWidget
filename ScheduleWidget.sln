@@ -5,6 +5,8 @@ VisualStudioVersion = 17.13.35825.156 d17.13
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ScheduleWidget", "ScheduleWidget\ScheduleWidget.csproj", "{5913BFF5-EC75-4A28-B574-8A0F45801E0B}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ScheduleWidget.Updater", "Updater\ScheduleWidget.Updater.csproj", "{7B2E4C61-3F0A-4D8E-9C55-1A6B0E2D7F31}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -15,6 +17,10 @@ Global
 		{5913BFF5-EC75-4A28-B574-8A0F45801E0B}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{5913BFF5-EC75-4A28-B574-8A0F45801E0B}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{5913BFF5-EC75-4A28-B574-8A0F45801E0B}.Release|Any CPU.Build.0 = Release|Any CPU
+		{7B2E4C61-3F0A-4D8E-9C55-1A6B0E2D7F31}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{7B2E4C61-3F0A-4D8E-9C55-1A6B0E2D7F31}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{7B2E4C61-3F0A-4D8E-9C55-1A6B0E2D7F31}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{7B2E4C61-3F0A-4D8E-9C55-1A6B0E2D7F31}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

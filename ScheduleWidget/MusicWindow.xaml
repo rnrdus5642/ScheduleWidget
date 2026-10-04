@@ -1,0 +1,179 @@
+<Window x:Class="ScheduleWidget.MusicWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:wv="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
+        Title="내 플레이리스트" Width="880" Height="840" MinWidth="650" MinHeight="480"
+        WindowStartupLocation="CenterScreen" Background="{DynamicResource AuxCanvasBrush}"
+        Foreground="{DynamicResource AuxInkBrush}" FontFamily="Segoe UI"
+        AllowDrop="True" DragOver="Window_DragOver" Drop="Window_Drop">
+    <Window.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="Styles/AuxiliaryStyles.xaml"/>
+            </ResourceDictionary.MergedDictionaries>
+            <Style x:Key="TrackRowButton" TargetType="Button" BasedOn="{StaticResource AuxCompactButton}">
+                <Setter Property="Width" Value="30"/><Setter Property="Height" Value="28"/>
+                <Setter Property="MinHeight" Value="28"/><Setter Property="Padding" Value="0"/><Setter Property="Margin" Value="3,0,0,0"/>
+            </Style>
+        </ResourceDictionary>
+    </Window.Resources>
+    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+    <Grid Margin="28">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="320"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <StackPanel Grid.Row="0" Margin="0,0,0,24">
+            <TextBlock Text="내 플레이리스트" Style="{StaticResource AuxTitle}"/>
+            <TextBlock Text="파일과 YouTube를 한곳에서 듣고 관리하세요." Style="{StaticResource AuxCaption}" Margin="0,8,0,0"/>
+        </StackPanel>
+
+        <Border Grid.Row="1" Background="{DynamicResource AuxDarkBrush}" Padding="18" ClipToBounds="True">
+            <Grid>
+                <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+                    <TextBlock Text="NOW PLAYING" Foreground="{DynamicResource AuxOnDarkMutedBrush}" FontSize="12" FontWeight="SemiBold"
+                               HorizontalAlignment="Center"/>
+                    <TextBlock Text="파일과 YouTube를 같은 목록에" Foreground="{DynamicResource AuxOnDarkBrush}" FontSize="24"
+                               FontWeight="SemiBold" HorizontalAlignment="Center" Margin="0,10,0,0"/>
+                    <TextBlock Text="아래에서 곡을 추가하고 재생하세요." Foreground="{DynamicResource AuxOnDarkMutedBrush}"
+                               FontSize="14" HorizontalAlignment="Center" Margin="0,7,0,0"/>
+                </StackPanel>
+                <wv:WebView2 x:Name="YouTubePlayer" Visibility="Collapsed" MinWidth="480" MinHeight="270"
+                             HorizontalAlignment="Stretch" VerticalAlignment="Stretch"/>
+            </Grid>
+        </Border>
+
+        <Grid Grid.Row="2" Margin="0,0,0,20">
+            <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+            <DockPanel Grid.Row="0" LastChildFill="True" Margin="0,0,0,10">
+                <StackPanel Orientation="Horizontal" DockPanel.Dock="Right" VerticalAlignment="Center">
+                    <Slider x:Name="VolumeSlider" Width="120" Minimum="0" Maximum="1" Value="0.5" SmallChange="0.05"
+                            VerticalAlignment="Center" ValueChanged="VolumeChanged" AutomationProperties.Name="음량"/>
+                    <CheckBox x:Name="RepeatToggle" Content="반복" Style="{StaticResource AuxCheckBox}" Margin="18,0,0,0"
+                              Click="Repeat_Click"/>
+                    <CheckBox x:Name="ShuffleToggle" Content="랜덤" Style="{StaticResource AuxCheckBox}" Margin="14,0,0,0"
+                              Click="Shuffle_Click"/>
+                    <CheckBox x:Name="RepeatOneToggle" Content="한 곡 반복" Style="{StaticResource AuxCheckBox}" Margin="14,0,0,0"
+                              Click="RepeatOne_Click"/>
+                    <!-- 초기화 (two presses): 반복·랜덤·한 곡 반복 off, 음량 50 %, 재생목록 링크 펼치기 on. Playlists are not touched. -->
+                    <Button x:Name="PlayOptionsResetButton" Content="초기화" Height="28" Padding="10,0" Margin="14,0,0,0"
+                            Style="{StaticResource AuxCompactButton}" Click="PlayOptionsReset_Click"
+                            ToolTip="반복·랜덤·한 곡 반복을 끄고 음량을 50%로 되돌립니다. 플레이리스트와 곡은 그대로입니다."
+                            AutomationProperties.Name="재생 옵션 초기화"/>
+                </StackPanel>
+                <TextBlock x:Name="NowPlaying" Text="재생할 곡을 선택하세요." TextTrimming="CharacterEllipsis" FontSize="17"
+                           FontWeight="SemiBold" VerticalAlignment="Center"/>
+            </DockPanel>
+            <StackPanel Grid.Row="1" Orientation="Horizontal" VerticalAlignment="Center">
+                <Button Content="이전" Width="64" MinHeight="44" Margin="0,0,8,0" Style="{StaticResource AuxUtilityButton}" Click="Previous_Click"/>
+                <Button x:Name="PlayButton" Content="재생" Width="112" MinHeight="44" Margin="0,0,8,0" Style="{StaticResource AuxPrimaryButton}" Click="Play_Click"/>
+                <Button Content="다음" Width="64" MinHeight="44" Margin="0,0,8,0" Style="{StaticResource AuxUtilityButton}" Click="Next_Click"/>
+                <Button Content="정지" Width="64" MinHeight="44" Margin="0,0,22,0" Style="{StaticResource AuxUtilityButton}" Click="Stop_Click"/>
+            </StackPanel>
+        </Grid>
+
+        <Grid Grid.Row="3" Margin="0,0,0,20">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="236"/>
+                <ColumnDefinition Width="20"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <Border Grid.Column="0" Style="{StaticResource AuxSection}">
+                <StackPanel>
+                    <TextBlock Text="플레이리스트" Style="{StaticResource AuxSectionTitle}"/>
+                    <TextBlock Text="곡을 담을 목록을 선택하세요." Style="{StaticResource AuxCaption}" Margin="0,6,0,18"/>
+                    <DockPanel Margin="0,0,0,12">
+                        <Button Content="삭제" DockPanel.Dock="Right" Width="58" MinHeight="36" Margin="8,0,0,0"
+                                Style="{StaticResource AuxUtilityButton}" Click="DeletePlaylist_Click"/>
+                        <ComboBox x:Name="PlaylistCombo" Style="{StaticResource AuxComboBox}" SelectionChanged="PlaylistChanged"
+                                  AutomationProperties.Name="플레이리스트 선택">
+                            <ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding Name}"/></DataTemplate></ComboBox.ItemTemplate>
+                        </ComboBox>
+                    </DockPanel>
+                    <TextBox x:Name="PlaylistName" Style="{StaticResource AuxTextBox}" MaxLength="80"
+                             AutomationProperties.Name="플레이리스트 이름"/>
+                    <UniformGrid Columns="2" Margin="0,10,0,0">
+                        <Button Content="새 목록" MinHeight="36" Margin="0,0,5,0" Style="{StaticResource AuxUtilityButton}" Click="CreatePlaylist_Click"/>
+                        <Button Content="이름 변경" MinHeight="36" Margin="5,0,0,0" Style="{StaticResource AuxSecondaryButton}" Click="RenamePlaylist_Click"/>
+                    </UniformGrid>
+                </StackPanel>
+            </Border>
+
+            <Border Grid.Column="2" Style="{StaticResource AuxSection}" Padding="16">
+                <Grid>
+                    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+                    <DockPanel Margin="0,0,0,12">
+                        <TextBlock Text="끌어서 순서 변경 · 음악 파일을 끌어다 놓아 추가" DockPanel.Dock="Right" VerticalAlignment="Bottom"
+                                   Style="{StaticResource AuxCaption}" FontSize="11"/>
+                        <TextBlock Text="곡 목록" Style="{StaticResource AuxSectionTitle}"/>
+                    </DockPanel>
+                    <!-- Bounded height: a long list scrolls inside its box, so only the rows in view are built (virtualized),
+                         dragging near its top/bottom edge scrolls it, and the wheel hands over to the page at either end. -->
+                    <ListBox x:Name="TrackList" Grid.Row="1" MinHeight="150" MaxHeight="360" Background="{DynamicResource AuxSurfaceBrush}"
+                             Foreground="{DynamicResource AuxInkBrush}" BorderBrush="{DynamicResource AuxHairlineBrush}" BorderThickness="1"
+                             Padding="6" ScrollViewer.HorizontalScrollBarVisibility="Disabled" MouseDoubleClick="Track_DoubleClick"
+                             ScrollViewer.CanContentScroll="True" VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling"
+                             HorizontalContentAlignment="Stretch" AllowDrop="True"
+                             PreviewMouseLeftButtonDown="TrackList_PreviewMouseDown" PreviewMouseMove="TrackList_PreviewMouseMove"
+                             PreviewMouseWheel="TrackList_PreviewMouseWheel"
+                             DragOver="TrackList_DragOver" DragLeave="TrackList_DragLeave" Drop="TrackList_Drop"
+                             AutomationProperties.Name="곡 목록">
+                        <ListBox.ItemTemplate><DataTemplate>
+                            <Grid Margin="6,3">
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="76"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                <TextBlock Text="{Binding Kind}" Foreground="{DynamicResource AuxActionBrush}" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                <TextBlock Grid.Column="1" Text="{Binding Title}" FontSize="15" TextTrimming="CharacterEllipsis" ToolTip="{Binding Source}" VerticalAlignment="Center"/>
+                                <StackPanel Grid.Column="2" Orientation="Horizontal" Margin="8,0,0,0" VerticalAlignment="Center">
+                                    <Button Style="{StaticResource TrackRowButton}" Tag="-1" Click="RowMove_Click" ToolTip="위로" AutomationProperties.Name="곡 위로">
+                                        <Path Data="M1,7 L6,2 L11,7" Stroke="{DynamicResource AuxInkBrush}" StrokeThickness="1.6" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
+                                    </Button>
+                                    <Button Style="{StaticResource TrackRowButton}" Tag="1" Click="RowMove_Click" ToolTip="아래로" AutomationProperties.Name="곡 아래로">
+                                        <Path Data="M1,2 L6,7 L11,2" Stroke="{DynamicResource AuxInkBrush}" StrokeThickness="1.6" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
+                                    </Button>
+                                    <Button Style="{StaticResource TrackRowButton}" Click="RowRemove_Click" ToolTip="곡 삭제" AutomationProperties.Name="곡 삭제">
+                                        <Path Data="M1,1 L9,9 M9,1 L1,9" Stroke="{DynamicResource AuxActionBrush}" StrokeThickness="1.6" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
+                                    </Button>
+                                </StackPanel>
+                            </Grid>
+                        </DataTemplate></ListBox.ItemTemplate>
+                    </ListBox>
+                    <Border x:Name="DropLine" Grid.Row="1" Height="3" VerticalAlignment="Top" Margin="8,0,8,0" CornerRadius="1.5"
+                            Background="{DynamicResource AuxActionBrush}" IsHitTestVisible="False" Visibility="Collapsed"/>
+                </Grid>
+            </Border>
+        </Grid>
+
+        <Border Grid.Row="4" Style="{StaticResource AuxSection}" Padding="18" Margin="0,0,0,16">
+            <StackPanel>
+                <WrapPanel>
+                    <Button Content="음악 파일 추가" MinHeight="36" Margin="0,0,8,8" Style="{StaticResource AuxPrimaryButton}" Click="AddFiles_Click"/>
+                    <Button Content="곡 삭제" MinHeight="36" Margin="0,0,8,8" Style="{StaticResource AuxUtilityButton}" Click="RemoveTrack_Click"/>
+                    <Button Content="위로" MinHeight="36" Margin="0,0,8,8" Tag="-1" Style="{StaticResource AuxUtilityButton}" Click="MoveTrack_Click"/>
+                    <Button Content="아래로" MinHeight="36" Margin="0,0,8,8" Tag="1" Style="{StaticResource AuxUtilityButton}" Click="MoveTrack_Click"/>
+                    <Button Content="YouTube에서 열기" MinHeight="36" Margin="0,0,0,8" Style="{StaticResource AuxSecondaryButton}" Click="OpenYouTube_Click"/>
+                </WrapPanel>
+                <TextBlock Text="YouTube 영상 / 재생목록 링크 (여러 개는 한 줄에 하나씩)" Style="{StaticResource AuxCaption}" Margin="0,4,0,7"/>
+                <DockPanel LastChildFill="True">
+                    <Button x:Name="AddLinksButton" Content="링크 추가" Width="112" MinHeight="40" DockPanel.Dock="Right" Margin="10,0,0,0"
+                            Style="{StaticResource AuxPrimaryButton}" Click="AddLinks_Click"/>
+                    <TextBox x:Name="YouTubeLinks" Height="60" AcceptsReturn="True" VerticalScrollBarVisibility="Auto"
+                             Style="{StaticResource AuxTextBox}" AutomationProperties.Name="YouTube 링크"/>
+                </DockPanel>
+                <CheckBox x:Name="ExpandPlaylists" Content="재생목록 링크는 안에 있는 곡을 모두 따로 추가" IsChecked="True"
+                          Margin="0,8,0,0" Style="{StaticResource AuxCheckBox}"
+                          ToolTip="끄면 재생목록 전체를 한 항목으로 추가합니다. 자동 생성 믹스(RD…)는 곡별로 가져올 수 없습니다."/>
+            </StackPanel>
+        </Border>
+
+        <TextBlock x:Name="MusicStatus" Grid.Row="5" Text="MP3 · WAV · WMA · M4A · AAC 등 (Windows 코덱 지원 범위)"
+                   TextWrapping="Wrap" Style="{StaticResource AuxCaption}" Foreground="{DynamicResource AuxMutedBrush}"
+                   AutomationProperties.LiveSetting="Polite"/>
+    </Grid>
+    </ScrollViewer>
+</Window>

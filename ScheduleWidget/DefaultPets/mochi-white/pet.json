@@ -1,0 +1,38 @@
+{
+  "id": "mochi-white-h3-keyboard",
+  "displayName": "흰 모찌",
+  "spritesheetPath": "spritesheet.webp",
+  "spriteVersionNumber": 4,
+  "animations": {
+    "listening": {
+      "row": 9,
+      "frames": 6,
+      "duration": 150
+    },
+    "grooving": {
+      "row": 10,
+      "frames": 4,
+      "duration": 140
+    },
+    "disliking": {
+      "row": 11,
+      "frames": 8,
+      "duration": 140
+    },
+    "immersed": {
+      "row": 12,
+      "frames": 6,
+      "duration": 150
+    },
+    "keyboard1": {
+      "row": 13,
+      "frames": 8,
+      "duration": 120
+    },
+    "keyboard2": {
+      "row": 14,
+      "frames": 8,
+      "duration": 110
+    }
+  }
+}

@@ -1,0 +1,52 @@
+<Window x:Class="ScheduleWidget.CharacterWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:wv="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
+        Title="캐릭터 선택" Width="740" Height="680" MinWidth="500" MinHeight="500" WindowStartupLocation="CenterScreen"
+        Background="{DynamicResource AuxCanvasBrush}" Foreground="{DynamicResource AuxInkBrush}" FontFamily="Segoe UI"
+        PreviewKeyDown="CharacterWindow_KeyDown">
+    <Window.Resources><ResourceDictionary><ResourceDictionary.MergedDictionaries>
+        <ResourceDictionary Source="Styles/AuxiliaryStyles.xaml"/>
+    </ResourceDictionary.MergedDictionaries></ResourceDictionary></Window.Resources>
+    <Grid Margin="32">
+        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+        <StackPanel Margin="0,0,0,24">
+            <TextBlock Text="나의 캐릭터." Style="{StaticResource AuxTitle}"/>
+            <TextBlock Text="함께할 캐릭터를 골라보세요." Margin="0,8,0,0" Style="{StaticResource AuxCaption}"/>
+        </StackPanel>
+        <wv:WebView2 x:Name="Gallery" Grid.Row="1"/>
+        <TextBlock x:Name="CharacterStatus" Grid.Row="2" Margin="0,20,0,24" Style="{StaticResource AuxCaption}" FontSize="12"/>
+        <Border x:Name="CharacterActions" Grid.Row="3" BorderBrush="{DynamicResource AuxHairlineBrush}" BorderThickness="0,1,0,0" Padding="0,20,0,0">
+            <DockPanel LastChildFill="False">
+                <!-- Top: when the buttons on the right wrap onto a second row, these keep their own height. -->
+                <Button x:Name="DeleteCharacter" Content="캐릭터 삭제" IsEnabled="False" Style="{StaticResource AuxUtilityButton}"
+                        MinHeight="40" Padding="16,8" Click="Delete_Click" DockPanel.Dock="Left" VerticalAlignment="Top"/>
+                <!-- Saves the selected character as one .zip that 캐릭터 가져오기 reads back (another PC, a backup, a friend). -->
+                <Button x:Name="ExportCharacter" Content="캐릭터 내보내기" IsEnabled="False" Style="{StaticResource AuxUtilityButton}"
+                        MinHeight="40" Padding="16,8" Margin="8,0,0,0" Click="Export_Click" DockPanel.Dock="Left" VerticalAlignment="Top"/>
+                <WrapPanel DockPanel.Dock="Right">
+                    <!-- Only with pets on screen to place (opened by left-clicking a pet, 캐릭터 설정's 바꾸기 / 캐릭터 추가, or 설정
+                         while the mini window is open): the pets are then dragged into place there. -->
+                    <Button x:Name="PlacePets" Content="드래그로 위치 설정" Margin="0,0,12,8" Visibility="Collapsed" Style="{StaticResource AuxSecondaryButton}" Click="PlacePets_Click"/>
+                    <Button Content="캐릭터 가져오기" Margin="12,0,12,8" Style="{StaticResource AuxSecondaryButton}" Click="Import_Click"/>
+                    <Button x:Name="ApplyCharacter" Content="이 캐릭터 적용" Margin="0,0,0,8" IsEnabled="False" Style="{StaticResource AuxPrimaryButton}" Click="Apply_Click"/>
+                </WrapPanel>
+            </DockPanel>
+        </Border>
+        <Border x:Name="DeleteConfirmation" Grid.Row="1" Grid.RowSpan="3" Visibility="Collapsed"
+                Background="{DynamicResource AuxSurfaceBrush}" Padding="32">
+            <StackPanel MaxWidth="480" VerticalAlignment="Center">
+                <TextBlock Text="캐릭터를 삭제할까요?" Style="{StaticResource AuxTitle}" FontSize="28"/>
+                <TextBlock x:Name="DeleteName" Style="{StaticResource AuxSectionTitle}" Margin="0,24,0,8"/>
+                <TextBlock x:Name="DeleteDescription" Style="{StaticResource AuxBody}"/>
+                <TextBlock x:Name="DeleteError" Style="{StaticResource AuxCaption}" Margin="0,12,0,0"/>
+                <Border BorderBrush="{DynamicResource AuxHairlineBrush}" BorderThickness="0,1,0,0" Margin="0,32,0,0" Padding="0,20,0,0">
+                    <WrapPanel HorizontalAlignment="Right">
+                        <Button x:Name="CancelDelete" Content="취소" Style="{StaticResource AuxCancelButton}" Margin="0,0,12,8" Click="CancelDelete_Click"/>
+                        <Button Content="삭제" Style="{StaticResource AuxPrimaryButton}" Margin="0,0,0,8" Click="ConfirmDelete_Click"/>
+                    </WrapPanel>
+                </Border>
+            </StackPanel>
+        </Border>
+    </Grid>
+</Window>

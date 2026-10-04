@@ -1,4 +1,4 @@
-<Application x:Class="ScheduleWidget.App"
+﻿<Application x:Class="ScheduleWidget.App"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:local="clr-namespace:ScheduleWidget"
@@ -19,6 +19,46 @@
         <SolidColorBrush x:Key="AccentBrush" Color="#FF5B61D6"/>
         <SolidColorBrush x:Key="AccentForegroundBrush" Color="#FFFFFFFF"/>
         <SolidColorBrush x:Key="ControlHoverBrush" Color="#FFEFEEFF"/>
+        <SolidColorBrush x:Key="TodayBrush" Color="#FF3B82F6"/>
+        <SolidColorBrush x:Key="FutureBrush" Color="#FF64748B"/>
+        <SolidColorBrush x:Key="PastBrush" Color="#FFEF4444"/>
+
+        <Style x:Key="TodoCard" TargetType="Border">
+            <Setter Property="Background" Value="{DynamicResource CardBrush}"/>
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding HasCustomColor}" Value="True">
+                    <Setter Property="Background" Value="{Binding Color}"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+        <Style x:Key="TodoTitle" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding HasCustomColor}" Value="True">
+                    <Setter Property="Foreground" Value="{Binding ReadableColor}"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding IsCompleted}" Value="True">
+                    <Setter Property="TextDecorations" Value="Strikethrough"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+        <Style x:Key="TodoDate" TargetType="TextBlock" BasedOn="{StaticResource TodoTitle}">
+            <Setter Property="Foreground" Value="{DynamicResource SubTextBrush}"/>
+        </Style>
+        <Style x:Key="TodoStatus" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource FutureBrush}"/>
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding Status}" Value="Today">
+                    <Setter Property="Foreground" Value="{DynamicResource TodayBrush}"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Status}" Value="Past">
+                    <Setter Property="Foreground" Value="{DynamicResource PastBrush}"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding IsCompleted}" Value="True">
+                    <Setter Property="Foreground" Value="{DynamicResource SubTextBrush}"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
 
         <!-- 폰트 크기 -->
         <sys:Double x:Key="TitleFontSize">14</sys:Double>
@@ -365,6 +405,11 @@
                     <Setter TargetName="ThemeSwatchBody" Property="Background" Value="#FFFFF7FA"/>
                     <Setter TargetName="ThemeSwatchDot" Property="Fill" Value="#FFD05A8A"/>
                 </DataTrigger>
+                <DataTrigger Binding="{Binding}" Value="Modern">
+                    <Setter TargetName="ThemeSwatchTop" Property="Background" Value="#FF111111"/>
+                    <Setter TargetName="ThemeSwatchBody" Property="Background" Value="#FFF7F7F7"/>
+                    <Setter TargetName="ThemeSwatchDot" Property="Fill" Value="#FFD93025"/>
+                </DataTrigger>
             </DataTemplate.Triggers>
         </DataTemplate>
 
@@ -534,6 +579,231 @@
                 <Trigger Property="IsHighlighted" Value="True">
                     <Setter Property="Background" Value="{DynamicResource ControlHoverBrush}"/>
                 </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- Scroll bars (every ScrollViewer / list / drop-down in the app): thin, Apple-like. No arrow buttons, an invisible
+             track and a rounded pill thumb that widens and darkens while hovered or dragged. The gray is a mid tone so it
+             reads on the light windows and on the mini window's Dark theme; override these two brushes to retint it. -->
+        <SolidColorBrush x:Key="ScrollThumbBrush" Color="#86868B" Opacity="0.55"/>
+        <SolidColorBrush x:Key="ScrollThumbActiveBrush" Color="#6E6E73" Opacity="0.9"/>
+
+        <Style x:Key="SlimScrollPageButton" TargetType="{x:Type RepeatButton}">
+            <Setter Property="Focusable" Value="False"/>
+            <Setter Property="IsTabStop" Value="False"/>
+            <Setter Property="OverridesDefaultStyle" Value="True"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type RepeatButton}">
+                        <Border Background="Transparent"/>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- The pill: 6px idle, 9px and darker while its bar is hovered or the pill is dragged. -->
+        <Style x:Key="SlimScrollThumbV" TargetType="{x:Type Thumb}">
+            <Setter Property="Focusable" Value="False"/>
+            <Setter Property="IsTabStop" Value="False"/>
+            <Setter Property="OverridesDefaultStyle" Value="True"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type Thumb}">
+                        <Border x:Name="Pill" Background="{DynamicResource ScrollThumbBrush}" CornerRadius="4.5" Width="6"
+                                HorizontalAlignment="Center" SnapsToDevicePixels="True"/>
+                        <ControlTemplate.Triggers>
+                            <DataTrigger Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType={x:Type ScrollBar}}}" Value="True">
+                                <Setter TargetName="Pill" Property="Width" Value="9"/>
+                                <Setter TargetName="Pill" Property="Background" Value="{DynamicResource ScrollThumbActiveBrush}"/>
+                            </DataTrigger>
+                            <Trigger Property="IsDragging" Value="True">
+                                <Setter TargetName="Pill" Property="Width" Value="9"/>
+                                <Setter TargetName="Pill" Property="Background" Value="{DynamicResource ScrollThumbActiveBrush}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="SlimScrollThumbH" TargetType="{x:Type Thumb}">
+            <Setter Property="Focusable" Value="False"/>
+            <Setter Property="IsTabStop" Value="False"/>
+            <Setter Property="OverridesDefaultStyle" Value="True"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type Thumb}">
+                        <Border x:Name="Pill" Background="{DynamicResource ScrollThumbBrush}" CornerRadius="4.5" Height="6"
+                                VerticalAlignment="Center" SnapsToDevicePixels="True"/>
+                        <ControlTemplate.Triggers>
+                            <DataTrigger Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType={x:Type ScrollBar}}}" Value="True">
+                                <Setter TargetName="Pill" Property="Height" Value="9"/>
+                                <Setter TargetName="Pill" Property="Background" Value="{DynamicResource ScrollThumbActiveBrush}"/>
+                            </DataTrigger>
+                            <Trigger Property="IsDragging" Value="True">
+                                <Setter TargetName="Pill" Property="Height" Value="9"/>
+                                <Setter TargetName="Pill" Property="Background" Value="{DynamicResource ScrollThumbActiveBrush}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <ControlTemplate x:Key="SlimVerticalScrollBar" TargetType="{x:Type ScrollBar}">
+            <Grid Background="Transparent" SnapsToDevicePixels="True">
+                <Track x:Name="PART_Track" IsDirectionReversed="True" Margin="0,4,0,4">
+                    <Track.DecreaseRepeatButton><RepeatButton Command="ScrollBar.PageUpCommand" Style="{StaticResource SlimScrollPageButton}"/></Track.DecreaseRepeatButton>
+                    <Track.IncreaseRepeatButton><RepeatButton Command="ScrollBar.PageDownCommand" Style="{StaticResource SlimScrollPageButton}"/></Track.IncreaseRepeatButton>
+                    <Track.Thumb><Thumb MinHeight="24" Style="{StaticResource SlimScrollThumbV}"/></Track.Thumb>
+                </Track>
+            </Grid>
+        </ControlTemplate>
+
+        <ControlTemplate x:Key="SlimHorizontalScrollBar" TargetType="{x:Type ScrollBar}">
+            <Grid Background="Transparent" SnapsToDevicePixels="True">
+                <Track x:Name="PART_Track" IsDirectionReversed="False" Margin="4,0,4,0">
+                    <Track.DecreaseRepeatButton><RepeatButton Command="ScrollBar.PageLeftCommand" Style="{StaticResource SlimScrollPageButton}"/></Track.DecreaseRepeatButton>
+                    <Track.IncreaseRepeatButton><RepeatButton Command="ScrollBar.PageRightCommand" Style="{StaticResource SlimScrollPageButton}"/></Track.IncreaseRepeatButton>
+                    <Track.Thumb><Thumb MinWidth="24" Style="{StaticResource SlimScrollThumbH}"/></Track.Thumb>
+                </Track>
+            </Grid>
+        </ControlTemplate>
+
+        <Style TargetType="{x:Type ScrollBar}">
+            <Setter Property="Stylus.IsFlicksEnabled" Value="False"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="OverridesDefaultStyle" Value="True"/>
+            <Setter Property="Width" Value="12"/>
+            <Setter Property="MinWidth" Value="12"/>
+            <Setter Property="Height" Value="NaN"/>
+            <Setter Property="MinHeight" Value="0"/>
+            <Setter Property="Template" Value="{StaticResource SlimVerticalScrollBar}"/>
+            <Style.Triggers>
+                <Trigger Property="Orientation" Value="Horizontal">
+                    <Setter Property="Width" Value="NaN"/>
+                    <Setter Property="MinWidth" Value="0"/>
+                    <Setter Property="Height" Value="12"/>
+                    <Setter Property="MinHeight" Value="12"/>
+                    <Setter Property="Template" Value="{StaticResource SlimHorizontalScrollBar}"/>
+                </Trigger>
+                <Trigger Property="IsEnabled" Value="False">
+                    <Setter Property="Opacity" Value="0"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- Same layout as the stock WPF ScrollViewer, but the square where both bars meet is transparent (no gray block). -->
+        <Style TargetType="{x:Type ScrollViewer}">
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type ScrollViewer}">
+                        <Grid x:Name="Grid" Background="{TemplateBinding Background}">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                            <Rectangle x:Name="Corner" Grid.Column="1" Grid.Row="1" Fill="Transparent"/>
+                            <ScrollContentPresenter x:Name="PART_ScrollContentPresenter" Grid.Column="0" Grid.Row="0"
+                                                    CanContentScroll="{TemplateBinding CanContentScroll}" CanHorizontallyScroll="False" CanVerticallyScroll="False"
+                                                    Content="{TemplateBinding Content}" ContentTemplate="{TemplateBinding ContentTemplate}" Margin="{TemplateBinding Padding}"/>
+                            <ScrollBar x:Name="PART_VerticalScrollBar" AutomationProperties.AutomationId="VerticalScrollBar" Cursor="Arrow"
+                                       Grid.Column="1" Grid.Row="0" Minimum="0" Maximum="{TemplateBinding ScrollableHeight}"
+                                       ViewportSize="{TemplateBinding ViewportHeight}" Visibility="{TemplateBinding ComputedVerticalScrollBarVisibility}"
+                                       Value="{Binding VerticalOffset, Mode=OneWay, RelativeSource={RelativeSource TemplatedParent}}"/>
+                            <ScrollBar x:Name="PART_HorizontalScrollBar" AutomationProperties.AutomationId="HorizontalScrollBar" Cursor="Arrow"
+                                       Grid.Column="0" Grid.Row="1" Orientation="Horizontal" Minimum="0" Maximum="{TemplateBinding ScrollableWidth}"
+                                       ViewportSize="{TemplateBinding ViewportWidth}" Visibility="{TemplateBinding ComputedHorizontalScrollBarVisibility}"
+                                       Value="{Binding HorizontalOffset, Mode=OneWay, RelativeSource={RelativeSource TemplatedParent}}"/>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- ═══ Sliders (앱 전체): thin rounded track, filled part in the action color, round white thumb ═══
+             Colors come from the Aux* brushes, so each window/theme (미니 창 Dark 등) recolors them; these are the fallbacks
+             for places without the auxiliary styles. Fits in 16 px, so the mini window's 16 px seek row does not clip it. -->
+        <SolidColorBrush x:Key="AuxActionBrush" Color="#1D1D1F"/>
+        <!-- Text in the action color (outline buttons): a readable shade of it per theme. AuxTheme sets it here for the current
+             theme (and on each themed window); it is not in AuxiliaryStyles, so windows that merge those still see this one. -->
+        <SolidColorBrush x:Key="AuxActionTextBrush" Color="#1D1D1F"/>
+        <SolidColorBrush x:Key="AuxHairlineBrush" Color="#E0E0E0"/>
+        <SolidColorBrush x:Key="SliderThumbFillBrush" Color="#FFFFFF"/>
+        <SolidColorBrush x:Key="SliderThumbRingBrush" Color="#C7C7CC"/>
+
+        <Style x:Key="SliderTrackFill" TargetType="{x:Type RepeatButton}">
+            <Setter Property="Focusable" Value="False"/>
+            <Setter Property="IsTabStop" Value="False"/>
+            <Setter Property="OverridesDefaultStyle" Value="True"/>
+            <Setter Property="Template"><Setter.Value>
+                <ControlTemplate TargetType="{x:Type RepeatButton}">
+                    <Grid Background="Transparent">
+                        <Border Background="{DynamicResource AuxActionBrush}" CornerRadius="2"
+                                Height="{TemplateBinding Height}" Width="{TemplateBinding Width}"/>
+                    </Grid>
+                </ControlTemplate>
+            </Setter.Value></Setter>
+        </Style>
+        <Style x:Key="SliderTrackRest" TargetType="{x:Type RepeatButton}">
+            <Setter Property="Focusable" Value="False"/>
+            <Setter Property="IsTabStop" Value="False"/>
+            <Setter Property="OverridesDefaultStyle" Value="True"/>
+            <Setter Property="Template"><Setter.Value>
+                <ControlTemplate TargetType="{x:Type RepeatButton}"><Border Background="Transparent"/></ControlTemplate>
+            </Setter.Value></Setter>
+        </Style>
+        <Style x:Key="SliderRoundThumb" TargetType="{x:Type Thumb}">
+            <Setter Property="Focusable" Value="False"/>
+            <Setter Property="OverridesDefaultStyle" Value="True"/>
+            <Setter Property="Width" Value="14"/>
+            <Setter Property="Height" Value="14"/>
+            <Setter Property="Template"><Setter.Value>
+                <ControlTemplate TargetType="{x:Type Thumb}">
+                    <Grid Background="Transparent">
+                        <Ellipse x:Name="Knob" Fill="{DynamicResource SliderThumbFillBrush}" Stroke="{DynamicResource SliderThumbRingBrush}" StrokeThickness="0.75">
+                            <Ellipse.Effect><DropShadowEffect BlurRadius="4" ShadowDepth="1" Direction="270" Opacity="0.22" Color="#000000"/></Ellipse.Effect>
+                        </Ellipse>
+                    </Grid>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Knob" Property="StrokeThickness" Value="1.25"/></Trigger>
+                        <Trigger Property="IsDragging" Value="True"><Setter TargetName="Knob" Property="Fill" Value="#F2F2F7"/></Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value></Setter>
+        </Style>
+
+        <ControlTemplate x:Key="RoundSliderHorizontal" TargetType="{x:Type Slider}">
+            <Grid MinHeight="16" Background="Transparent" SnapsToDevicePixels="True">
+                <Border Height="4" CornerRadius="2" VerticalAlignment="Center" Background="{DynamicResource AuxHairlineBrush}" Margin="1,0"/>
+                <Track x:Name="PART_Track" VerticalAlignment="Center" IsDirectionReversed="{TemplateBinding IsDirectionReversed}">
+                    <Track.DecreaseRepeatButton><RepeatButton Style="{StaticResource SliderTrackFill}" Height="4" Command="Slider.DecreaseLarge"/></Track.DecreaseRepeatButton>
+                    <Track.IncreaseRepeatButton><RepeatButton Style="{StaticResource SliderTrackRest}" Command="Slider.IncreaseLarge"/></Track.IncreaseRepeatButton>
+                    <Track.Thumb><Thumb Style="{StaticResource SliderRoundThumb}"/></Track.Thumb>
+                </Track>
+            </Grid>
+        </ControlTemplate>
+        <ControlTemplate x:Key="RoundSliderVertical" TargetType="{x:Type Slider}">
+            <Grid MinWidth="16" Background="Transparent" SnapsToDevicePixels="True">
+                <Border Width="4" CornerRadius="2" HorizontalAlignment="Center" Background="{DynamicResource AuxHairlineBrush}" Margin="0,1"/>
+                <Track x:Name="PART_Track" HorizontalAlignment="Center" IsDirectionReversed="{TemplateBinding IsDirectionReversed}">
+                    <Track.DecreaseRepeatButton><RepeatButton Style="{StaticResource SliderTrackFill}" Width="4" Command="Slider.DecreaseLarge"/></Track.DecreaseRepeatButton>
+                    <Track.IncreaseRepeatButton><RepeatButton Style="{StaticResource SliderTrackRest}" Command="Slider.IncreaseLarge"/></Track.IncreaseRepeatButton>
+                    <Track.Thumb><Thumb Style="{StaticResource SliderRoundThumb}"/></Track.Thumb>
+                </Track>
+            </Grid>
+        </ControlTemplate>
+        <!-- Implicit: every Slider in the app (재생 위치, 음량, 캐릭터 크기·위치, 투명도, 글꼴 크기 …). -->
+        <Style TargetType="{x:Type Slider}">
+            <Setter Property="Focusable" Value="True"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="MinHeight" Value="16"/>
+            <Setter Property="Template" Value="{StaticResource RoundSliderHorizontal}"/>
+            <Style.Triggers>
+                <Trigger Property="Orientation" Value="Vertical">
+                    <Setter Property="MinHeight" Value="0"/>
+                    <Setter Property="MinWidth" Value="16"/>
+                    <Setter Property="Template" Value="{StaticResource RoundSliderVertical}"/>
+                </Trigger>
+                <Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.45"/></Trigger>
             </Style.Triggers>
         </Style>
     </Application.Resources>

@@ -15,6 +15,7 @@
     <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
     <Deterministic>true</Deterministic>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>app.ico</ApplicationIcon>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <PlatformTarget>AnyCPU</PlatformTarget>
@@ -40,7 +41,22 @@
       <HintPath>..\packages\Newtonsoft.Json.13.0.4\lib\net45\Newtonsoft.Json.dll</HintPath>
     </Reference>
     <Reference Include="System" />
+    <!-- Windows media sessions (Windows.Media.Control) for showing/controlling YouTube, YouTube Music, etc. played elsewhere. -->
+    <Reference Include="Windows">
+      <HintPath>$(MSBuildProgramFiles32)\Windows Kits\10\UnionMetadata\10.0.26100.0\Windows.winmd</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.Runtime.WindowsRuntime">
+      <HintPath>$(WINDIR)\Microsoft.NET\Framework64\v4.0.30319\System.Runtime.WindowsRuntime.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
     <Reference Include="System.Data" />
+    <!-- Song title click → the browser tab playing it (UI Automation of the browser's tab strip). -->
+    <Reference Include="UIAutomationClient" />
+    <Reference Include="UIAutomationTypes" />
+    <!-- 캐릭터 내보내기 / .zip 가져오기 -->
+    <Reference Include="System.IO.Compression" />
+    <Reference Include="System.IO.Compression.FileSystem" />
     <Reference Include="System.Drawing" />
     <Reference Include="System.Windows.Forms" />
     <Reference Include="System.Xml" />
@@ -49,6 +65,14 @@
     <Reference Include="System.Xml.Linq" />
     <Reference Include="System.Data.DataSetExtensions" />
     <Reference Include="System.Net.Http" />
+    <Reference Include="System.Web" />
+    <Reference Include="System.Security" />
+    <Reference Include="Microsoft.Web.WebView2.Core">
+      <HintPath>..\packages\Microsoft.Web.WebView2.1.0.4191.47\lib\net462\Microsoft.Web.WebView2.Core.dll</HintPath>
+    </Reference>
+    <Reference Include="Microsoft.Web.WebView2.Wpf">
+      <HintPath>..\packages\Microsoft.Web.WebView2.1.0.4191.47\lib\net462\Microsoft.Web.WebView2.Wpf.dll</HintPath>
+    </Reference>
     <Reference Include="System.Xaml">
       <RequiredTargetFramework>4.0</RequiredTargetFramework>
     </Reference>
@@ -66,17 +90,49 @@
     <Compile Include="Services\NativeMethods.cs" />
     <Compile Include="Services\StartupService.cs" />
     <Compile Include="Services\SliderInteraction.cs" />
+    <Compile Include="Services\ChromelessWindow.cs" />
+    <Compile Include="Services\AuxTheme.cs" />
+    <Compile Include="Services\CubicBezierEase.cs" />
+    <Compile Include="Services\HotKeyGesture.cs" />
+    <Compile Include="Services\PetLog.cs" />
+    <Compile Include="Services\ErrorLog.cs" />
+    <Compile Include="Services\SafeDatePicker.cs" />
+    <Compile Include="Services\GoogleCalendarService.cs" />
+    <Compile Include="Services\MediaAppActivator.cs" />
+    <Compile Include="Services\TypingInput.cs" />
     <Compile Include="Models\ScheduleModels.cs" />
     <Compile Include="Models\AppearanceSettings.cs" />
+    <Compile Include="Models\FeatureSettings.cs" />
+    <Page Include="Styles\AuxiliaryStyles.xaml"><Generator>MSBuild:Compile</Generator></Page>
+    <Compile Include="MainWindow.Features.cs" />
+    <Compile Include="MainWindow.Google.cs" />
+    <Compile Include="MainWindow.Update.cs" />
+    <Compile Include="MainWindow.UpdateNotice.cs" />
+    <Page Include="UpdateNoticeWindow.xaml"><Generator>MSBuild:Compile</Generator></Page>
+    <Compile Include="UpdateNoticeWindow.xaml.cs"><DependentUpon>UpdateNoticeWindow.xaml</DependentUpon></Compile>
+    <Compile Include="Services\UpdateClient.cs" />
+    <Compile Include="Services\UpdatePublicKey.cs" />
+    <Compile Include="Services\CommunicationService.cs" />
+    <Compile Include="Services\EmbeddedBrowser.cs" />
+    <Compile Include="Services\CharacterCatalog.cs" />
+    <Compile Include="Services\CodexPets.cs" />
+    <Compile Include="Services\SpriteSharpener.cs" />
+    <Compile Include="Services\YouTubePlaylistService.cs" />
+    <Compile Include="Services\KoreanHolidays.cs" />
+    <Compile Include="Services\SystemMediaService.cs" />
+    <Compile Include="Services\AppVolumeService.cs" />
+    <Page Include="MiniWindow.xaml"><Generator>MSBuild:Compile</Generator></Page>
+    <Compile Include="MiniWindow.xaml.cs"><DependentUpon>MiniWindow.xaml</DependentUpon></Compile>
+    <Compile Include="MiniWindow.UpcomingPreview.cs"><DependentUpon>MiniWindow.xaml</DependentUpon></Compile>
+    <Page Include="ContactWindow.xaml"><Generator>MSBuild:Compile</Generator></Page>
+    <Compile Include="ContactWindow.xaml.cs"><DependentUpon>ContactWindow.xaml</DependentUpon></Compile>
+    <Page Include="MusicWindow.xaml"><Generator>MSBuild:Compile</Generator></Page>
+    <Compile Include="MusicWindow.xaml.cs"><DependentUpon>MusicWindow.xaml</DependentUpon></Compile>
+    <Page Include="CharacterWindow.xaml"><Generator>MSBuild:Compile</Generator></Page>
+    <Compile Include="CharacterWindow.xaml.cs"><DependentUpon>CharacterWindow.xaml</DependentUpon></Compile>
+    <Page Include="PetSettingsWindow.xaml"><Generator>MSBuild:Compile</Generator></Page>
+    <Compile Include="PetSettingsWindow.xaml.cs"><DependentUpon>PetSettingsWindow.xaml</DependentUpon></Compile>
     <Page Include="MainWindow.xaml">
-      <Generator>MSBuild:Compile</Generator>
-      <SubType>Designer</SubType>
-    </Page>
-    <Page Include="SettingsWindow.xaml">
-      <Generator>MSBuild:Compile</Generator>
-      <SubType>Designer</SubType>
-    </Page>
-    <Page Include="EditScheduleWindow.xaml">
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </Page>
@@ -86,14 +142,6 @@
     </Compile>
     <Compile Include="MainWindow.xaml.cs">
       <DependentUpon>MainWindow.xaml</DependentUpon>
-      <SubType>Code</SubType>
-    </Compile>
-    <Compile Include="SettingsWindow.xaml.cs">
-      <DependentUpon>SettingsWindow.xaml</DependentUpon>
-      <SubType>Code</SubType>
-    </Compile>
-    <Compile Include="EditScheduleWindow.xaml.cs">
-      <DependentUpon>EditScheduleWindow.xaml</DependentUpon>
       <SubType>Code</SubType>
     </Compile>
   </ItemGroup>
@@ -125,6 +173,38 @@
   <ItemGroup>
     <None Include="App.config" />
     <None Include="app.manifest" />
+    <None Include="app.ico" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+  <ItemGroup>
+    <Content Include="Player\*.html"><CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory></Content>
+    <!-- 기본 캐릭터 (흰·검은·파란·빨간 모찌, the user's own pets): pet.json + spritesheet.webp each, next to the exe in DefaultPets\
+         (not "Characters": the app deletes that old folder at start). -->
+    <Content Include="DefaultPets\*\pet.json;DefaultPets\*\spritesheet.webp"><CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory></Content>
+    <!-- Google OAuth "데스크톱 앱" client for 구글 캘린더 연동 (downloaded from Google Cloud Console; see README). -->
+    <Content Include="google_client.json" Condition="Exists('google_client.json')"><CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory></Content>
+    <!-- The same client built into the exe, encrypted (tools/Protect-GoogleClient.ps1 makes it). -->
+    <EmbeddedResource Include="google_client.bin" Condition="Exists('google_client.bin')"><LogicalName>ScheduleWidget.google_client.bin</LogicalName></EmbeddedResource>
+  </ItemGroup>
+  <!-- 업데이트 설치: ScheduleWidget.Updater.exe is built with the app and placed next to ScheduleWidget.exe (built only, not
+       referenced; the app copies it into the updates folder and runs that copy so it can replace its own file). -->
+  <ItemGroup Condition="Exists('..\Updater\ScheduleWidget.Updater.csproj')">
+    <ProjectReference Include="..\Updater\ScheduleWidget.Updater.csproj">
+      <Project>{7B2E4C61-3F0A-4D8E-9C55-1A6B0E2D7F31}</Project>
+      <Name>ScheduleWidget.Updater</Name>
+      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+      <Private>false</Private>
+      <OutputItemType>UpdaterOutput</OutputItemType>
+    </ProjectReference>
+  </ItemGroup>
+  <Target Name="CopyUpdaterToOutput" AfterTargets="Build" Condition="'@(UpdaterOutput)' != ''">
+    <Copy SourceFiles="@(UpdaterOutput)" DestinationFolder="$(OutDir)" SkipUnchangedFiles="true">
+      <Output TaskParameter="CopiedFiles" ItemName="FileWrites" />
+    </Copy>
+  </Target>
+  <Import Project="..\packages\Microsoft.Web.WebView2.1.0.4191.47\build\Microsoft.Web.WebView2.targets" Condition="Exists('..\packages\Microsoft.Web.WebView2.1.0.4191.47\build\Microsoft.Web.WebView2.targets')" />
+  <!-- A fresh clone: restore first (msbuild ScheduleWidget.sln /t:Restore /p:RestorePackagesConfig=true), then build. -->
+  <Target Name="EnsureNuGetPackageBuildImports" BeforeTargets="PrepareForBuild">
+    <Error Condition="!Exists('..\packages\Microsoft.Web.WebView2.1.0.4191.47\build\Microsoft.Web.WebView2.targets')" Text="NuGet 패키지가 없습니다. 먼저 복원하세요: msbuild ScheduleWidget.sln /t:Restore /p:RestorePackagesConfig=true" />
+  </Target>
 </Project>

@@ -12,8 +12,40 @@ namespace ScheduleWidget
         [DllImport("user32.dll", SetLastError = true)] public static extern IntPtr FindWindow(string lpClassName, string lpWindowName);
         [DllImport("user32.dll", SetLastError = true)] public static extern IntPtr FindWindowEx(IntPtr hWndParent, IntPtr hWndChildAfter, string lpszClass, string lpszWindow);
         [DllImport("user32.dll", SetLastError = true)] public static extern bool IsWindow(IntPtr hWnd);
+        [DllImport("user32.dll", SetLastError = true)] public static extern bool RegisterHotKey(IntPtr hWnd, int id, uint fsModifiers, uint vk);
+        [DllImport("user32.dll", SetLastError = true)] public static extern bool UnregisterHotKey(IntPtr hWnd, int id);
+        public const int WM_HOTKEY = 0x0312;
+        public const uint MOD_NOREPEAT = 0x4000;
+        [DllImport("user32.dll")] public static extern IntPtr GetFocus();
+        [DllImport("user32.dll")] public static extern IntPtr SetFocus(IntPtr hWnd);
         [DllImport("user32.dll", SetLastError = true)] private static extern bool IsWindowVisible(IntPtr hWnd);
         [DllImport("user32.dll", SetLastError = true)] private static extern bool GetWindowRect(IntPtr hWnd, out Rect rect);
+        // PW_RENDERFULLCONTENT (2): the window's own content (DWM), even while other windows cover it.
+        [DllImport("user32.dll", SetLastError = true)] public static extern bool PrintWindow(IntPtr hWnd, IntPtr hdc, uint flags);
+
+        [DllImport("dwmapi.dll")] private static extern int DwmGetWindowAttribute(IntPtr hwnd, int attribute, out int value, int size);
+
+        /// <summary>
+        /// True while DWM hides the window without it being "hidden" (another virtual desktop, a suspended app): its content
+        /// is not composed then, so reading its pixels tells nothing.
+        /// </summary>
+        public static bool IsCloaked(IntPtr hwnd)
+        {
+            if (hwnd == IntPtr.Zero) return false;
+            try { return DwmGetWindowAttribute(hwnd, 14 /* DWMWA_CLOAKED */, out int cloaked, sizeof(int)) == 0 && cloaked != 0; }
+            catch (DllNotFoundException) { return false; }
+            catch (EntryPointNotFoundException) { return false; }
+        }
+
+        /// <summary>The window's size in device pixels (this app is per-monitor DPI aware).</summary>
+        public static bool TryGetWindowSize(IntPtr hwnd, out int width, out int height)
+        {
+            width = height = 0;
+            if (hwnd == IntPtr.Zero || !GetWindowRect(hwnd, out Rect rect)) return false;
+            width = rect.Right - rect.Left;
+            height = rect.Bottom - rect.Top;
+            return true;
+        }
         [DllImport("user32.dll", SetLastError = true)] public static extern int SetWindowLong(IntPtr hWnd, int nIndex, int dwNewLong);
         [DllImport("user32.dll", SetLastError = true)] public static extern int GetWindowLong(IntPtr hWnd, int nIndex);
         [DllImport("user32.dll", EntryPoint = "SetWindowLongPtrW", SetLastError = true)]
@@ -162,6 +194,36 @@ namespace ScheduleWidget
             return IsWindow(desktopHost);
         }
 
+        /// <summary>
+        /// Widget stacking. onTop = true: always above other windows (topmost).
+        /// onTop = false (default): an ordinary window — it comes to the front when clicked and goes behind
+        /// when another app is clicked, like any other app.
+        /// </summary>
+        public static void SetWidgetStacking(System.Windows.Window window, bool onTop)
+        {
+            IntPtr handle = new System.Windows.Interop.WindowInteropHelper(window).EnsureHandle();
+            window.Topmost = onTop;
+            SetWindowPos(handle, onTop ? HWND_TOPMOST_PTR : HWND_NOTOPMOST_PTR, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+        }
+
+        /// <summary>
+        /// Brings a non-pinned widget window to the top of the normal (non-topmost) windows without activating it.
+        /// Needed because the widgets are owned by the desktop (so Win+D keeps them), and Windows does not raise a
+        /// desktop-owned window on its own when it is clicked. Briefly entering and leaving the topmost band puts it
+        /// above every ordinary app; clicking another app afterwards covers it again as usual. No-op when pinned topmost.
+        /// </summary>
+        public static void RaiseAboveOtherApps(System.Windows.Window window)
+        {
+            if (window == null || window.Topmost) return;
+            IntPtr handle = new System.Windows.Interop.WindowInteropHelper(window).Handle;
+            if (handle == IntPtr.Zero) return;
+            SetWindowPos(handle, HWND_TOPMOST_PTR, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+            SetWindowPos(handle, HWND_NOTOPMOST_PTR, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+        }
+
+        private static readonly IntPtr HWND_TOPMOST_PTR = new IntPtr(-1);
+        private static readonly IntPtr HWND_NOTOPMOST_PTR = new IntPtr(-2);
+
         private static IntPtr SetWindowOwner(IntPtr hwnd, IntPtr owner)
         {
             return IntPtr.Size == 8
@@ -208,7 +270,99 @@ namespace ScheduleWidget
             return true;
         }
 
+        /// <summary>The window's rectangle in device pixels (where Windows really has it, whatever WPF's Left / Top say).</summary>
+        public static bool TryGetWindowRect(IntPtr hwnd, out Rect rect)
+        {
+            rect = default(Rect);
+            return hwnd != IntPtr.Zero && GetWindowRect(hwnd, out rect);
+        }
+
+        [DllImport("user32.dll")] private static extern bool EnumDisplayMonitors(IntPtr hdc, IntPtr clip, MonitorEnumProc callback, IntPtr data);
+        private delegate bool MonitorEnumProc(IntPtr monitor, IntPtr hdc, IntPtr rect, IntPtr data);
+
+        /// <summary>
+        /// The work areas (device pixels) of every monitor attached now; a monitor that reports no size (present but
+        /// disconnected) is left out.
+        /// </summary>
+        public static System.Collections.Generic.List<Rect> GetWorkAreas()
+        {
+            var areas = new System.Collections.Generic.List<Rect>();
+            EnumDisplayMonitors(IntPtr.Zero, IntPtr.Zero, (monitor, hdc, rect, data) =>
+            {
+                var info = new MonitorInfo { Size = Marshal.SizeOf(typeof(MonitorInfo)) };
+                if (GetMonitorInfo(monitor, ref info) && info.Monitor.Right > info.Monitor.Left && info.Monitor.Bottom > info.Monitor.Top &&
+                    info.Work.Right > info.Work.Left && info.Work.Bottom > info.Work.Top)
+                    areas.Add(new Rect { Left = info.Work.Left, Top = info.Work.Top, Right = info.Work.Right, Bottom = info.Work.Bottom });
+                return true;
+            }, IntPtr.Zero);
+            return areas;
+        }
+
+        [StructLayout(LayoutKind.Sequential)] private struct NativePoint { public int X, Y; }
+        [DllImport("user32.dll")] private static extern bool GetCursorPos(out NativePoint point);
+        [DllImport("user32.dll")] private static extern IntPtr MonitorFromPoint(NativePoint point, uint flags);
+        [DllImport("shcore.dll")] private static extern int GetDpiForMonitor(IntPtr monitor, int type, out uint dpiX, out uint dpiY);
+
+        /// <summary>The mouse pointer in device pixels.</summary>
+        public static System.Drawing.Point CursorPosition()
+        {
+            return GetCursorPos(out NativePoint point) ? new System.Drawing.Point(point.X, point.Y) : System.Windows.Forms.Control.MousePosition;
+        }
+
+        /// <summary>
+        /// The work area (device pixels) and scale (1 = 96 DPI) of the monitor at this point (the nearest one when the point
+        /// is on none). The scale is 0 when the monitor's DPI could not be read.
+        /// </summary>
+        public static bool TryGetWorkAreaAt(System.Drawing.Point at, out Rect workArea, out double scale)
+        {
+            workArea = default(Rect);
+            scale = 0;
+            IntPtr monitor = MonitorFromPoint(new NativePoint { X = at.X, Y = at.Y }, MonitorDefaultToNearest);
+            if (monitor == IntPtr.Zero) return false;
+            var info = new MonitorInfo { Size = Marshal.SizeOf(typeof(MonitorInfo)) };
+            if (!GetMonitorInfo(monitor, ref info)) return false;
+            workArea = new Rect { Left = info.Work.Left, Top = info.Work.Top, Right = info.Work.Right, Bottom = info.Work.Bottom };
+            try { if (GetDpiForMonitor(monitor, 0 /* MDT_EFFECTIVE_DPI */, out uint dpiX, out uint dpiY) == 0 && dpiX > 0) scale = dpiX / 96.0; }
+            catch (DllNotFoundException) { }
+            catch (EntryPointNotFoundException) { }
+            return true;
+        }
+
         private delegate bool EnumWindowsProc(IntPtr topLevelWindow, IntPtr lParam);
+
+        [DllImport("user32.dll")] private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
+        [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern int GetClassName(IntPtr hWnd, System.Text.StringBuilder name, int size);
+        [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern int GetWindowText(IntPtr hWnd, System.Text.StringBuilder text, int size);
+
+        private const int WS_EX_TRANSPARENT = 0x20, WS_EX_LAYERED = 0x80000;
+
+        /// <summary>
+        /// Makes the browser process's own see-through top-level windows whose title contains <paramref name="titlePart"/>
+        /// click-through (WS_EX_TRANSPARENT on top of their WS_EX_LAYERED). A WebView2 composition view keeps such a window
+        /// over the view's area; when Windows raised it above the window showing the view (the desktop activated, …) it took
+        /// every click there. Returns how many windows it changed.
+        /// </summary>
+        public static int MakeBrowserWindowsClickThrough(uint browserProcessId, string titlePart)
+        {
+            if (browserProcessId == 0 || string.IsNullOrEmpty(titlePart)) return 0;
+            int changed = 0;
+            EnumWindows((window, lParam) =>
+            {
+                if (GetWindowThreadProcessId(window, out uint pid) == 0 || pid != browserProcessId) return true;
+                var name = new System.Text.StringBuilder(64);
+                GetClassName(window, name, name.Capacity);
+                if (name.ToString() != "Chrome_WidgetWin_1") return true;
+                var title = new System.Text.StringBuilder(512);
+                GetWindowText(window, title, title.Capacity);
+                if (title.ToString().IndexOf(titlePart, StringComparison.OrdinalIgnoreCase) < 0) return true;
+                int style = GetWindowLong(window, GWL_EXSTYLE);
+                if ((style & WS_EX_LAYERED) == 0 || (style & WS_EX_TRANSPARENT) != 0) return true;
+                SetWindowLong(window, GWL_EXSTYLE, style | WS_EX_TRANSPARENT);
+                changed++;
+                return true;
+            }, IntPtr.Zero);
+            return changed;
+        }
 
         [StructLayout(LayoutKind.Sequential)]
         private struct MonitorInfo

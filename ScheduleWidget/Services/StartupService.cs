@@ -9,7 +9,13 @@ namespace ScheduleWidget
     public sealed class StartupService
     {
         private const string AppName = "ScheduleWidget";
-        private const string RunKeyPath = @"SOFTWARE\Microsoft\Windows\CurrentVersion\Run";
+        private const string DefaultRunKeyPath = @"SOFTWARE\Microsoft\Windows\CurrentVersion\Run";
+        private readonly string runKeyPath;
+
+        public StartupService() : this(DefaultRunKeyPath) { }
+
+        /// <summary>Tests pass their own HKCU key, so 저장 in the settings never touches the real Windows 시작 entry.</summary>
+        public StartupService(string runKeyPath) { this.runKeyPath = runKeyPath; }
 
         public bool TryEnableStartup(out string errorMessage)
         {
@@ -28,7 +34,7 @@ namespace ScheduleWidget
 
             try
             {
-                using (RegistryKey key = Registry.CurrentUser.OpenSubKey(RunKeyPath, false))
+                using (RegistryKey key = Registry.CurrentUser.OpenSubKey(runKeyPath, false))
                 {
                     if (key == null)
                         return true;
@@ -77,7 +83,7 @@ namespace ScheduleWidget
                 if (enabled)
                 {
                     string startupCommand = "\"" + exePath + "\"";
-                    using (RegistryKey key = Registry.CurrentUser.CreateSubKey(RunKeyPath, true))
+                    using (RegistryKey key = Registry.CurrentUser.CreateSubKey(runKeyPath, true))
                     {
                         if (key == null)
                         {
@@ -102,7 +108,7 @@ namespace ScheduleWidget
                 }
                 else
                 {
-                    using (RegistryKey key = Registry.CurrentUser.OpenSubKey(RunKeyPath, true))
+                    using (RegistryKey key = Registry.CurrentUser.OpenSubKey(runKeyPath, true))
                     {
                         if (key != null)
                         {

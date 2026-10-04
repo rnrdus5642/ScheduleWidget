@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
+using System.Linq;
 using System.Security;
 using System.Text;
 using Newtonsoft.Json;
@@ -16,6 +18,12 @@ namespace ScheduleWidget
         private readonly string jsonPath;
         private readonly string backupPath;
         private readonly string legacyJsonPath;
+
+        // What this manager last wrote to schedules.json (and the file's time and size right after): a save of exactly the
+        // same data while the file is still that one writes nothing — no disk flush, and .bak keeps the previous version.
+        private string lastWrittenJson;
+        private DateTime lastWrittenTime;
+        private long lastWrittenLength;
 
         public DataManager()
             : this(
@@ -43,11 +51,20 @@ namespace ScheduleWidget
         public string DataFilePath => jsonPath;
         public string BackupFilePath => backupPath;
 
+        /// <summary>
+        /// How long a data file another program has open (a backup or sync tool, a scanner, an editor) is waited for. Such a
+        /// file is not damaged: loading then fails with DataStorageException — it is never moved aside and replaced by the
+        /// older backup, which the next save would have written over the newer file. Checks shorten it.
+        /// </summary>
+        public TimeSpan BusyWait { get; set; } = TimeSpan.FromSeconds(2);
+
         public DataLoadResult LoadData()
         {
             try
             {
                 Directory.CreateDirectory(dataDirectory);
+                lastWrittenJson = null; // the next save writes (and rotates .bak) whatever the file holds now
+                CleanUpStaleFiles();
 
                 string migrationWarning = MigrateLegacyDataIfNeeded();
 
@@ -187,11 +204,24 @@ namespace ScheduleWidget
             return new DataLoadResult(new AppData(), BuildResetWarning(null, quarantinedBackup));
         }
 
-        private static bool TryReadData(string path, out AppData data, out Exception error)
+        // False only when the content is no valid data (a damaged file: the caller moves it aside and uses the backup) or the
+        // file is gone. A file in use by another program, or one that may not be read, throws DataStorageException instead.
+        private bool TryReadData(string path, out AppData data, out Exception error)
         {
+            data = null;
+            string json;
             try
             {
-                string json = File.ReadAllText(path, Encoding.UTF8);
+                json = ReadWhenFree(path);
+            }
+            catch (Exception ex) when (ex is FileNotFoundException || ex is DirectoryNotFoundException)
+            {
+                error = ex; // gone since it was looked for: handled like a damaged one, as before
+                return false;
+            }
+
+            try
+            {
                 data = JsonConvert.DeserializeObject<AppData>(json);
                 if (data == null)
                     throw new JsonSerializationException("저장 파일에 유효한 데이터가 없습니다.");
@@ -207,9 +237,43 @@ namespace ScheduleWidget
             }
         }
 
+        // Reads the file, waiting BusyWait while another program holds it (a sharing or lock violation) or access is denied;
+        // still so after that, loading stops with DataStorageException and nothing is changed on disk.
+        private string ReadWhenFree(string path)
+        {
+            DateTime giveUp = DateTime.UtcNow + BusyWait;
+            while (true)
+            {
+                try
+                {
+                    return File.ReadAllText(path, Encoding.UTF8);
+                }
+                catch (Exception ex) when (IsBusy(ex))
+                {
+                    if (DateTime.UtcNow >= giveUp)
+                        throw new DataStorageException(
+                            "일정 파일을 열 수 없습니다(다른 프로그램이 사용 중일 수 있습니다). 잠시 후 다시 실행해 주세요."
+                                + Environment.NewLine + "파일: " + path, ex);
+                    System.Threading.Thread.Sleep(100);
+                }
+            }
+        }
+
+        // Not a damaged file: in use by another program, or not ours to read (a missing file is handled by the callers).
+        private static bool IsBusy(Exception ex)
+        {
+            return ex is UnauthorizedAccessException ||
+                   ex is SecurityException ||
+                   ex is IOException && !(ex is FileNotFoundException) && !(ex is DirectoryNotFoundException);
+        }
+
         private void WriteDataAtomically(AppData data)
         {
             string json = JsonConvert.SerializeObject(data, Formatting.Indented);
+            if (lastWrittenJson != null && string.Equals(json, lastWrittenJson, StringComparison.Ordinal) && IsLastWrittenFile())
+                return; // nothing changed since this manager wrote the file (a window move, a sync that found nothing new, …)
+
+            lastWrittenJson = null;
             string tempPath = Path.Combine(
                 dataDirectory,
                 DataFileName + "." + Guid.NewGuid().ToString("N") + ".tmp");
@@ -234,6 +298,11 @@ namespace ScheduleWidget
                     File.Replace(tempPath, jsonPath, backupPath, true);
                 else
                     File.Move(tempPath, jsonPath);
+
+                var written = new FileInfo(jsonPath);
+                lastWrittenTime = written.LastWriteTimeUtc;
+                lastWrittenLength = written.Length;
+                lastWrittenJson = json;
             }
             finally
             {
@@ -241,8 +310,49 @@ namespace ScheduleWidget
             }
         }
 
+        // schedules.json is still the file this manager wrote last (not replaced, restored or deleted since).
+        private bool IsLastWrittenFile()
+        {
+            try
+            {
+                var file = new FileInfo(jsonPath);
+                return file.Exists && file.LastWriteTimeUtc == lastWrittenTime && file.Length == lastWrittenLength;
+            }
+            catch (Exception ex) when (IsStorageException(ex))
+            {
+                return false;
+            }
+        }
+
+        // Left behind by a save or a restore cut short (the app killed mid-write): temp files over 10 minutes old go, and of
+        // the quarantined broken files (.corrupt.*) the newest 5 stay. schedules.json and .bak are never touched.
+        private void CleanUpStaleFiles()
+        {
+            try
+            {
+                DateTime stale = DateTime.UtcNow.AddMinutes(-10);
+                foreach (string path in Directory.GetFiles(dataDirectory, DataFileName + ".*.tmp"))
+                {
+                    if (!System.Text.RegularExpressions.Regex.IsMatch(Path.GetFileName(path), @"\Aschedules\.json\.(restore\.)?[0-9a-f]{32}\.tmp\z")) continue;
+                    if (File.GetLastWriteTimeUtc(path) < stale) TryDelete(path);
+                }
+                var corrupt = new List<KeyValuePair<string, string>>();
+                foreach (string path in Directory.GetFiles(dataDirectory, "schedules*.corrupt.*"))
+                {
+                    var match = System.Text.RegularExpressions.Regex.Match(Path.GetFileName(path), @"\Aschedules(\.json)?\.corrupt\.(\d{17})\.[0-9a-f]{32}\.(json|bak)\z");
+                    if (match.Success) corrupt.Add(new KeyValuePair<string, string>(match.Groups[2].Value, path));
+                }
+                foreach (var old in corrupt.OrderByDescending(c => c.Key, StringComparer.Ordinal).Skip(5)) TryDelete(old.Value);
+            }
+            catch (Exception ex) when (IsStorageException(ex))
+            {
+                // Only housekeeping: the data itself loads either way.
+            }
+        }
+
         private void TryRestorePrimaryFromBackup()
         {
+            lastWrittenJson = null;
             string tempPath = Path.Combine(
                 dataDirectory,
                 DataFileName + ".restore." + Guid.NewGuid().ToString("N") + ".tmp");
@@ -310,6 +420,64 @@ namespace ScheduleWidget
                 data.WindowState.MonitorStates = new Dictionary<string, MonitorStateData>();
             if (data.Schedules == null) data.Schedules = new List<ScheduleItem>();
             if (data.Appearance == null) data.Appearance = new AppearanceSettings();
+            if (data.Communication == null) data.Communication = new CommunicationSettings();
+            if (data.Reminders == null) data.Reminders = new ReminderSettings();
+            data.Reminders.DaysBefore = Math.Max(0, Math.Min(30, data.Reminders.DaysBefore));
+            data.Reminders.Hour = Math.Max(0, Math.Min(23, data.Reminders.Hour));
+            data.Reminders.Minute = Math.Max(0, Math.Min(59, data.Reminders.Minute));
+            if (data.Music == null) data.Music = new MusicSettings();
+            if (string.IsNullOrWhiteSpace(data.CharacterManifest)) data.CharacterManifest = CharacterCatalog.DefaultManifest;
+            data.MiniDayCount = Math.Max(1, Math.Min(7, data.MiniDayCount));
+            data.MiniFlipEffect = Math.Max(0, Math.Min(6, data.MiniFlipEffect)); // 1–6 = 효과 1–6, 0 = 애니메이션 없음
+            data.MiniCharacterScale = Math.Max(50, Math.Min(300, data.MiniCharacterScale));
+            if (data.MiniExtraCharacters == null) data.MiniExtraCharacters = new List<MiniCharacterSlot>();
+            data.MiniExtraCharacters.RemoveAll(s => s == null || string.IsNullOrWhiteSpace(s.Manifest));
+            if (data.MiniExtraCharacters.Count > 2) data.MiniExtraCharacters.RemoveRange(2, data.MiniExtraCharacters.Count - 2);
+            foreach (var slot in data.MiniExtraCharacters) if (string.IsNullOrWhiteSpace(slot.Animation)) slot.Animation = "idle";
+            foreach (var slot in data.MiniExtraCharacters) if (slot.Scale.HasValue) slot.Scale = Math.Max(50, Math.Min(300, slot.Scale.Value));
+            data.MiniCharacterSide = string.Equals(data.MiniCharacterSide, "Right", StringComparison.OrdinalIgnoreCase) ? "Right" : "Left";
+            data.MiniCharacterVertical = Math.Max(0, Math.Min(100, data.MiniCharacterVertical));
+            data.MiniCharacterGap = Math.Max(-80, Math.Min(60, data.MiniCharacterGap));
+            data.BringToFrontHotKey = HotKeyGesture.ParseOrDefault(data.BringToFrontHotKey).ToString();
+            if (data.GoogleCalendar == null) data.GoogleCalendar = new GoogleCalendarSettings();
+            if (data.GoogleCalendar.SyncedEventIds == null) data.GoogleCalendar.SyncedEventIds = new List<string>();
+            data.GoogleCalendar.SyncedEventIds.RemoveAll(string.IsNullOrWhiteSpace);
+            if (data.GoogleCalendar.OwnedEventIds == null) data.GoogleCalendar.OwnedEventIds = new List<string>();
+            data.GoogleCalendar.OwnedEventIds.RemoveAll(string.IsNullOrWhiteSpace);
+            if (data.GoogleCalendar.HiddenEvents == null) data.GoogleCalendar.HiddenEvents = new Dictionary<string, string>();
+            foreach (string key in data.GoogleCalendar.HiddenEvents.Keys.Where(string.IsNullOrWhiteSpace).ToList()) data.GoogleCalendar.HiddenEvents.Remove(key);
+            if (data.GoogleCalendar.SyncedPetIds == null) data.GoogleCalendar.SyncedPetIds = new List<string>();
+            data.GoogleCalendar.SyncedPetIds.RemoveAll(id => !CharacterCatalog.IsPetId(id));
+            if (data.GoogleCalendar.FailedPetFiles == null) data.GoogleCalendar.FailedPetFiles = new List<string>();
+            data.GoogleCalendar.FailedPetFiles.RemoveAll(string.IsNullOrWhiteSpace);
+            if (data.GoogleCalendar.RefusedPetDeletes == null) data.GoogleCalendar.RefusedPetDeletes = new List<string>();
+            data.GoogleCalendar.RefusedPetDeletes.RemoveAll(id => !CharacterCatalog.IsPetId(id));
+            // Dragged spots: the mini window's pets, and the TODO window's pets (👤) apart from them.
+            data.MiniPetSpots = NormalizeSpots(data.MiniPetSpots);
+            data.CompanionPetSpots = NormalizeSpots(data.CompanionPetSpots);
+            data.CompanionCharacterSide = string.Equals(data.CompanionCharacterSide, "Right", StringComparison.OrdinalIgnoreCase) ? "Right" : "Left";
+            data.CompanionCharacterVertical = Math.Max(0, Math.Min(100, data.CompanionCharacterVertical));
+            data.CompanionCharacterGap = Math.Max(-80, Math.Min(60, data.CompanionCharacterGap));
+            // Each character's last spot: keys are character ids ("DefaultPets/mochi-white", "Characters/codex","Pet/<folder>", "#2" for a second
+            // copy); at most 100 kept.
+            data.MiniPetSpotsByCharacter = NormalizeSpotMemory(data.MiniPetSpotsByCharacter, data);
+            data.CompanionPetSpotsByCharacter = NormalizeSpotMemory(data.CompanionPetSpotsByCharacter, data);
+            data.Music.Volume = ClampFinite(data.Music.Volume, 0, 1, 0.5);
+            data.Music.VolumeBeforeMute = data.Music.VolumeBeforeMute > 0.001 ? ClampFinite(data.Music.VolumeBeforeMute, 0.01, 1, 0.5) : 0.5;
+            if (data.Music.Playlists == null) data.Music.Playlists = new List<MusicPlaylist>();
+            data.Music.Playlists.RemoveAll(p => p == null);
+            var playlistIds = new HashSet<Guid>();
+            foreach (var playlist in data.Music.Playlists)
+            {
+                if (playlist.Id == Guid.Empty || !playlistIds.Add(playlist.Id))
+                {
+                    playlist.Id = Guid.NewGuid();
+                    playlistIds.Add(playlist.Id);
+                }
+                if (string.IsNullOrWhiteSpace(playlist.Name)) playlist.Name = "내 플레이리스트";
+                if (playlist.Tracks == null) playlist.Tracks = new List<MusicTrack>();
+                playlist.Tracks.RemoveAll(t => t == null || string.IsNullOrWhiteSpace(t.Source));
+            }
 
             MigrateLegacyLightAppearance(data.Appearance);
 
@@ -320,6 +488,17 @@ namespace ScheduleWidget
             var usedScheduleIds = new HashSet<Guid>();
             foreach (ScheduleItem item in data.Schedules)
             {
+                // A date written any other way (an old or hand-edited file: "2026-9-3") is stored as yyyy-MM-dd, which the
+                // mini calendar and the Google sync read; one that is not a date at all stays as it is (the list shows 날짜 확인).
+                if (!string.IsNullOrWhiteSpace(item.Period) &&
+                    !DateTime.TryParseExact(item.Period, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out _) &&
+                    DateTime.TryParse(item.Period, CultureInfo.CurrentCulture, DateTimeStyles.AllowWhiteSpaces, out DateTime loose))
+                    item.Period = loose.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+                // 여러 날 일정의 끝: a later day as yyyy-MM-dd (at most ScheduleItem.MaxRangeDays on), else none (one day).
+                item.EndPeriod = ScheduleItem.NormalizeEndPeriod(item.Period, item.EndPeriod);
+                item.Time =FeatureRules.TryScheduleTime(item.Time, out string time) ? time : null;
+                if (!FeatureRules.IsColor(item.Color)) item.Color = null;
+                if (item.ReminderReceipts == null) item.ReminderReceipts = new Dictionary<string, string>();
                 if (item.Id != Guid.Empty && usedScheduleIds.Add(item.Id))
                     continue;
 
@@ -362,6 +541,9 @@ namespace ScheduleWidget
             }
 
             var defaults = new AppearanceSettings();
+            if (!FeatureRules.IsColor(data.Appearance.TodayColor)) data.Appearance.TodayColor = defaults.TodayColor;
+            if (!FeatureRules.IsColor(data.Appearance.FutureColor)) data.Appearance.FutureColor = defaults.FutureColor;
+            if (!FeatureRules.IsColor(data.Appearance.PastColor)) data.Appearance.PastColor = defaults.PastColor;
             data.Appearance.Opacity = ClampFinite(data.Appearance.Opacity, 0.3, 1.0, defaults.Opacity);
             data.Appearance.TitleFontSize = ClampFinite(
                 data.Appearance.TitleFontSize, 10, 24, defaults.TitleFontSize);
@@ -448,6 +630,60 @@ namespace ScheduleWidget
                 return;
 
             appearance.CopyColorsFrom(AppearanceSettings.Presets["Light"]);
+        }
+
+        private static void NormalizeSpot(MiniPetSpot spot)
+        {
+            if (spot.Left.HasValue && (double.IsNaN(spot.Left.Value) || double.IsInfinity(spot.Left.Value))) spot.Left = null;
+            if (spot.Top.HasValue && (double.IsNaN(spot.Top.Value) || double.IsInfinity(spot.Top.Value))) spot.Top = null;
+            if (spot.Left.HasValue) spot.Left = Math.Max(-400, Math.Min(500, spot.Left.Value));
+            if (spot.Top.HasValue) spot.Top = Math.Max(-200, Math.Min(300, spot.Top.Value));
+            if (spot.EdgeX != "L" && spot.EdgeX != "R") spot.EdgeX = null;
+            if (spot.EdgeY != "T" && spot.EdgeY != "B") spot.EdgeY = null;
+            if (string.IsNullOrWhiteSpace(spot.Key) || spot.Key.Length > 200) spot.Key = null; // whose spot: unknown → the slot's character now
+            spot.OffsetX =double.IsNaN(spot.OffsetX) || double.IsInfinity(spot.OffsetX) ? 0 : Math.Max(-2000, Math.Min(2000, spot.OffsetX));
+            spot.OffsetY = double.IsNaN(spot.OffsetY) || double.IsInfinity(spot.OffsetY) ? 0 : Math.Max(-2000, Math.Min(2000, spot.OffsetY));
+        }
+
+        // The spots of the (up to 3) pets in slot order. A missing entry becomes "not placed" so the pets after it keep theirs.
+        private static List<MiniPetSpot> NormalizeSpots(List<MiniPetSpot> spots)
+        {
+            if (spots == null) return new List<MiniPetSpot>();
+            if (spots.Count > 3) spots.RemoveRange(3, spots.Count - 3);
+            for (int i = 0; i < spots.Count; i++)
+            {
+                if (spots[i] == null) spots[i] = new MiniPetSpot();
+                NormalizeSpot(spots[i]);
+            }
+            return spots;
+        }
+
+        private static Dictionary<string, MiniPetSpot> NormalizeSpotMemory(Dictionary<string, MiniPetSpot> memory, AppData data)
+        {
+            if (memory == null) return new Dictionary<string, MiniPetSpot>();
+            // "Pet/abc#2" (a second copy of a character) belongs to "Pet/abc".
+            string Character(string key) { int copy = key.IndexOf('#'); return copy < 0 ? key : key.Substring(0, copy); }
+            foreach (string key in memory.Keys.ToList())
+            {
+                var spot = memory[key];
+                if (string.IsNullOrWhiteSpace(key) || key.Length > 200 || spot == null || CharacterCatalog.IsDeletedKey(Character(key)))
+                {
+                    memory.Remove(key); // also a character deleted in 캐릭터 선택
+                    continue;
+                }
+                NormalizeSpot(spot);
+                if (spot.EdgeX == null && spot.Left == null && spot.EdgeY == null && spot.Top == null) memory.Remove(key);
+            }
+            if (memory.Count > 100)
+            {
+                // Over 100: the oldest entries go first (the file keeps them in the order they came), never those of the
+                // characters in the slots now.
+                var inUse = new HashSet<string>(new[] { data.CharacterManifest }.Concat(data.MiniExtraCharacters.Select(s => s.Manifest))
+                    .Select(CharacterCatalog.SelectionKey), StringComparer.OrdinalIgnoreCase);
+                foreach (string key in memory.Keys.Where(k => !inUse.Contains(Character(k))).Take(memory.Count - 100).ToList())
+                    memory.Remove(key);
+            }
+            return memory;
         }
 
         private static double ClampFinite(double value, double minimum, double maximum, double defaultValue)

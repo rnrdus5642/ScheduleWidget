@@ -9,34 +9,43 @@ namespace ScheduleWidget
     public class TrayService : IDisposable
     {
         private NotifyIcon trayIcon;
+        private Icon icon;          // ours to dispose (not the shared SystemIcons fallback)
+        private ContextMenuStrip menu;
+        private Font menuFont;      // SystemFonts.MenuFont hands out a new Font each time
 
         public void Initialize(MainWindow window)
         {
+            icon = CreateTrayIcon();
             trayIcon = new NotifyIcon
             {
-                Icon = CreateTrayIcon(),
+                Icon = icon,
                 Visible = true,
                 Text = "일정 위젯"
             };
 
-            var menu = new ContextMenuStrip
+            menuFont = SystemFonts.MenuFont;
+            var renderer = new WidgetMenuRenderer();
+            menu = new ContextMenuStrip
             {
-                Renderer = new WidgetMenuRenderer(),
+                Renderer = renderer,
                 ShowImageMargin = false,
                 ShowCheckMargin = false,
                 BackColor = Color.White,
                 ForeColor = Color.FromArgb(23, 32, 51),
                 // OS 메뉴 글꼴을 사용해 DPI 배율에서도 글자가 흐려지거나 잘리지 않게 합니다.
-                Font = SystemFonts.MenuFont,
+                Font = menuFont,
                 Padding = new Padding(8),
                 DropShadowEnabled = true
             };
 
             // 메뉴 창 자체도 렌더러와 같은 반경으로 잘라 모서리에서 흰색 사각형이
             // 삐져나오지 않도록 합니다.
-            menu.SizeChanged += (s, e) => ApplyMenuRegion(menu);
+            menu.SizeChanged += (s, e) => ApplyMenuRegion((ContextMenuStrip)s);
 
-            menu.Items.Add(CreateMenuItem("열기", (s, e) => window.Show()));
+            // One "열기": reopens whichever window was in use last (미니 창 or 원본 일정 창).
+            menu.Items.Add(CreateMenuItem("열기", (s, e) => window.OpenLastWindow()));
+            menu.Items.Add(CreateMenuItem("연락 · 알림", (s, e) => window.ShowContacts()));
+            menu.Items.Add(CreateMenuItem("음악", (s, e) => window.ShowMusic()));
 
             menu.Items.Add(CreateMenuItem("위치 초기화", (s, e) =>
             {
@@ -50,15 +59,27 @@ namespace ScheduleWidget
                 Margin = new Padding(8, 7, 8, 7)
             });
 
-            ToolStripMenuItem exitItem = CreateMenuItem("종료", (s, e) => {
-                Dispose();
-                System.Windows.Application.Current.Shutdown();
-            });
-            exitItem.ForeColor = Color.FromArgb(210, 65, 82);
+            // 종료 = the app's own 종료 (marks the app as closing first, so no window treats its close as "switch back").
+            // Run after this click has finished: exiting disposes this menu.
+            ToolStripMenuItem exitItem = CreateMenuItem("종료", (s, e) =>
+                window.Dispatcher.BeginInvoke(new Action(window.ExitApplication)));
             menu.Items.Add(exitItem);
 
+            // Right-clicking the tray icon again while the menu shows should only close it. The press on the icon
+            // already closes the menu (focus leaves it), so skip the reopen that the same click would trigger.
+            DateTime menuClosedAt = DateTime.MinValue;
+            menu.Closed += (s, e) => menuClosedAt = DateTime.Now;
+            menu.Opening += (s, e) =>
+            {
+                if ((DateTime.Now - menuClosedAt).TotalMilliseconds < 500) { e.Cancel = true; return; }
+                ApplyMenuColors(renderer, exitItem, AuxTheme.Current == "Dark");
+            };
+            ApplyMenuColors(renderer, exitItem, false);
+
             trayIcon.ContextMenuStrip = menu;
-            trayIcon.DoubleClick += (s, e) => window.Show();
+            // Left click (or double click) on the tray icon brings the last-used window to the front.
+            trayIcon.MouseClick += (s, e) => { if (e.Button == MouseButtons.Left) window.OpenLastWindow(); };
+            trayIcon.DoubleClick += (s, e) => window.OpenLastWindow();
         }
 
         private static ToolStripMenuItem CreateMenuItem(string text, EventHandler handler)
@@ -75,6 +96,19 @@ namespace ScheduleWidget
             return item;
         }
 
+        // The menu follows the app's Dark theme; every other theme keeps the light menu.
+        private void ApplyMenuColors(WidgetMenuRenderer renderer, ToolStripMenuItem exitItem, bool dark)
+        {
+            if (menu == null) return;
+            renderer.Background = dark ? Color.FromArgb(21, 29, 44) : Color.White;
+            renderer.Border = dark ? Color.FromArgb(42, 58, 83) : Color.FromArgb(218, 224, 234);
+            renderer.Hover = dark ? Color.FromArgb(36, 49, 73) : Color.FromArgb(241, 243, 247);
+            menu.BackColor = renderer.Background;
+            menu.ForeColor = dark ? Color.FromArgb(248, 250, 252) : Color.FromArgb(23, 32, 51);
+            foreach (ToolStripItem item in menu.Items) item.ForeColor = menu.ForeColor;
+            exitItem.ForeColor = dark ? Color.FromArgb(255, 122, 136) : Color.FromArgb(210, 65, 82);
+        }
+
         private static void ApplyMenuRegion(ContextMenuStrip menu)
         {
             if (menu.Width <= 0 || menu.Height <= 0)
@@ -83,7 +117,21 @@ namespace ScheduleWidget
             using (GraphicsPath path = CreateRoundedRectangle(
                 new RectangleF(0.5f, 0.5f, menu.Width - 1f, menu.Height - 1f), 12f))
             {
+                Region previous = menu.Region; // a new region on every resize: free the old one
                 menu.Region = new Region(path);
+                previous?.Dispose();
+            }
+        }
+
+        // Same calendar icon as the tray, for windows that show a title bar / taskbar icon.
+        public static System.Windows.Media.ImageSource CreateWindowIcon()
+        {
+            using (Icon icon = CreateTrayIcon())
+            {
+                var source = System.Windows.Interop.Imaging.CreateBitmapSourceFromHIcon(icon.Handle,
+                    System.Windows.Int32Rect.Empty, System.Windows.Media.Imaging.BitmapSizeOptions.FromEmptyOptions());
+                source.Freeze();
+                return source;
             }
         }
 
@@ -163,9 +211,9 @@ namespace ScheduleWidget
 
         private sealed class WidgetMenuRenderer : ToolStripRenderer
         {
-            private static readonly Color Background = Color.White;
-            private static readonly Color Border = Color.FromArgb(218, 224, 234);
-            private static readonly Color Hover = Color.FromArgb(241, 243, 247);
+            public Color Background = Color.White;
+            public Color Border = Color.FromArgb(218, 224, 234);
+            public Color Hover = Color.FromArgb(241, 243, 247);
 
             protected override void OnRenderToolStripBackground(ToolStripRenderEventArgs e)
             {
@@ -246,8 +294,26 @@ namespace ScheduleWidget
             if (trayIcon != null)
             {
                 trayIcon.Visible = false;
+                trayIcon.ContextMenuStrip = null;
                 trayIcon.Dispose();
+                trayIcon = null;
             }
+            if (menu != null)
+            {
+                Region region = menu.Region;
+                menu.Dispose();
+                region?.Dispose();
+                menu = null;
+            }
+            menuFont?.Dispose();
+            menuFont = null;
+            if (icon != null && !ReferenceEquals(icon, SystemIcons.Application)) icon.Dispose();
+            icon = null;
+        }
+
+        public void Notify(string title, string text)
+        {
+            trayIcon?.ShowBalloonTip(8000, title, text, ToolTipIcon.Info);
         }
     }
 }
