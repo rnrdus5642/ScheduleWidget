@@ -59,7 +59,6 @@
             </Setter>
             <Style.Triggers>
                 <DataTrigger Binding="{Binding IsToday}" Value="True">
-                    <Setter Property="Background" Value="{DynamicResource MiniTodayBrush}"/>
                     <Setter Property="BorderBrush" Value="{DynamicResource MiniTodayBorderBrush}"/>
                 </DataTrigger>
             </Style.Triggers>

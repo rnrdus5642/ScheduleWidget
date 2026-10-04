@@ -351,7 +351,7 @@ namespace ScheduleWidget
         // this window changes. Light keeps the original lilac paper look.
         private sealed class MiniTheme
         {
-            public string Paper, Frame, Header, Ink, Muted, Hover, Day, Ring, Today, TodayBorder, Holiday, Weekday, Saturday;
+            public string Paper, Frame, Header, Ink, Muted, Hover, Day, Ring, TodayBorder, Holiday, Weekday, Saturday;
             public string Top, TopInk, TopHover; // calendar top bar (period label row); null = Header / Ink / Hover
             public string Canvas, Surface, AuxInk, AuxMuted, Hairline, Action;
         }
@@ -362,25 +362,25 @@ namespace ScheduleWidget
             ["Light"] = new MiniTheme
             {
                 Paper = "#FFFFFAF2", Frame = "#635277", Header = "#EDE3FA", Ink = "#514461", Muted = "#8A7B9C", Hover = "#DCCFF3",
-                Day = "#F6F0EA", Ring = "#F5B5AF", Today = "#FFD5D0", TodayBorder = "#C77478", Holiday = "#BD656C", Weekday = "#84758F", Saturday = "#637FA5",
+                Day = "#F6F0EA", Ring = "#F5B5AF", TodayBorder = "#635277", Holiday = "#BD656C", Weekday = "#84758F", Saturday = "#637FA5",
                 Canvas = "#F5F5F7", Surface = "#FFFFFF", AuxInk = "#1D1D1F", AuxMuted = "#6E6E73", Hairline = "#E0E0E0", Action = "#1D1D1F"
             },
             ["Dark"] = new MiniTheme
             {
                 Paper = "#FF1B2233", Frame = "#5C6F96", Header = "#27324B", Ink = "#E6EAF2", Muted = "#9AA6BC", Hover = "#34436A",
-                Day = "#232C41", Ring = "#8295FF", Today = "#3A4A7A", TodayBorder = "#8295FF", Holiday = "#FF8A94", Weekday = "#AEB8CC", Saturday = "#8FB4FF",
+                Day = "#232C41", Ring = "#8295FF", TodayBorder = "#8295FF", Holiday = "#FF8A94", Weekday = "#AEB8CC", Saturday = "#8FB4FF",
                 Canvas = "#1F2636", Surface = "#151D2C", AuxInk = "#F8FAFC", AuxMuted = "#C3CDDC", Hairline = "#2A3A53", Action = "#5B6CE0"
             },
             ["Blue"] = new MiniTheme
             {
                 Paper = "#FFF8FCFF", Frame = "#2F5E96", Header = "#DCEBFF", Ink = "#102A4A", Muted = "#466B92", Hover = "#C4DCFA",
-                Day = "#EAF4FF", Ring = "#8FB8E7", Today = "#CFE3FF", TodayBorder = "#2477E6", Holiday = "#C4505B", Weekday = "#466B92", Saturday = "#2477E6",
+                Day = "#EAF4FF", Ring = "#8FB8E7", TodayBorder = "#2477E6", Holiday = "#C4505B", Weekday = "#466B92", Saturday = "#2477E6",
                 Canvas = "#EAF4FF", Surface = "#FFFFFF", AuxInk = "#102A4A", AuxMuted = "#466B92", Hairline = "#A8C8ED", Action = "#2477E6"
             },
             ["Pink"] = new MiniTheme
             {
                 Paper = "#FFFFF9FB", Frame = "#8E4A67", Header = "#FDE4EF", Ink = "#4A2035", Muted = "#A56A82", Hover = "#F8CFE0",
-                Day = "#FFEDF4", Ring = "#F4B6CE", Today = "#FFD5E4", TodayBorder = "#D05A8A", Holiday = "#C8455F", Weekday = "#A56A82", Saturday = "#637FA5",
+                Day = "#FFEDF4", Ring = "#F4B6CE", TodayBorder = "#D05A8A", Holiday = "#C8455F", Weekday = "#A56A82", Saturday = "#637FA5",
                 Canvas = "#FFF4F8", Surface = "#FFFFFF", AuxInk = "#4A2035", AuxMuted = "#A56A82", Hairline = "#F4CBDC", Action = "#D05A8A"
             },
             // Modern: black and white. Light gray paper with white day cards, black frame and text, black top bar with white text; day names in color (weekdays black, Sat blue, Sun/holiday red).
@@ -388,7 +388,7 @@ namespace ScheduleWidget
             {
                 Paper = "#FFF7F7F7", Frame = "#111111", Header = "#F2F2F2", Ink = "#111111", Muted = "#6B6B6B", Hover = "#E4E4E4",
                 Top = "#111111", TopInk = "#FFFFFF", TopHover = "#3A3A3A",
-                Day = "#FFFFFF", Ring = "#FFFFFF", Today = "#EEEEEE", TodayBorder = "#111111", Holiday = "#D93025", Weekday = "#111111", Saturday = "#1A73E8",
+                Day = "#FFFFFF", Ring = "#FFFFFF", TodayBorder = "#111111", Holiday = "#D93025", Weekday = "#111111", Saturday = "#1A73E8",
                 Canvas = "#F2F2F2", Surface = "#FFFFFF", AuxInk = "#111111", AuxMuted = "#6B6B6B", Hairline = "#D9D9D9", Action = "#111111"
             }
         };
@@ -406,7 +406,7 @@ namespace ScheduleWidget
             void Set(string key, string color) { var brush = new SolidColorBrush((Color)ColorConverter.ConvertFromString(color)); brush.Freeze(); Resources[key] = brush; }
             Set("MiniPaperBrush", next.Paper); Set("MiniFrameBrush", next.Frame); Set("MiniHeaderBrush", next.Header);
             Set("MiniInkBrush", next.Ink); Set("MiniMutedBrush", next.Muted); Set("MiniHoverBrush", next.Hover);
-            Set("MiniDayBrush", next.Day); Set("MiniRingBrush", next.Ring); Set("MiniTodayBrush", next.Today);
+            Set("MiniDayBrush", next.Day); Set("MiniRingBrush", next.Ring);
             Set("MiniTodayBorderBrush", next.TodayBorder); Set("MiniHolidayBrush", next.Holiday);
             Set("AuxCanvasBrush", next.Canvas); Set("AuxSurfaceBrush", next.Surface); Set("AuxInkBrush", next.AuxInk);
             Set("AuxMutedBrush", next.AuxMuted); Set("AuxHairlineBrush", next.Hairline);
