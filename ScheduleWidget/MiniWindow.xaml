@@ -225,8 +225,7 @@
                 <Grid x:Name="CalendarSheet" SizeChanged="CalendarSheet_SizeChanged">
                     <Grid.RowDefinitions><RowDefinition Height="30"/><RowDefinition Height="*"/></Grid.RowDefinitions>
                     <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                    <Border x:Name="CalendarHeader" Grid.ColumnSpan="2" Background="{DynamicResource MiniHeaderBrush}" CornerRadius="8,8,0,0" BorderBrush="{DynamicResource MiniFrameBrush}" BorderThickness="0,0,0,2"
-                            MouseLeftButtonUp="CalendarHeader_Click" Cursor="Hand">
+                    <Border x:Name="CalendarHeader" Grid.ColumnSpan="2" Background="{DynamicResource MiniHeaderBrush}" CornerRadius="8,8,0,0" BorderBrush="{DynamicResource MiniFrameBrush}" BorderThickness="0,0,0,2">
                         <!-- Arrows at the far ends; today beside ‹, schedule list beside ›, period label centered. -->
                         <Grid Margin="3,2,3,0">
                             <Grid.ColumnDefinitions>
@@ -244,7 +243,7 @@
                                            Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type Button}}}"/>
                             </Button>
                             </StackPanel>
-                            <Button x:Name="RangeLabelButton" Grid.Column="2" Width="Auto" Padding="8,0" HorizontalAlignment="Center" IsHitTestVisible="False" Style="{StaticResource WeekArrow}" Click="RangeLabel_Click"
+                            <Button x:Name="RangeLabelButton" Grid.Column="2" Width="Auto" Padding="8,0" HorizontalAlignment="Center" Cursor="Hand" Style="{StaticResource WeekArrow}" Click="RangeLabel_Click"
                                     AutomationProperties.Name="표시할 날짜 수 선택">
                                 <TextBlock x:Name="WeekLabel" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource MiniInkBrush}" TextTrimming="CharacterEllipsis"/>
                             </Button>

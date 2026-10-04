@@ -2909,6 +2909,7 @@ namespace ScheduleWidget
 
         private void RangeLabel_Click(object sender, RoutedEventArgs e)
         {
+            if (RecentlyDragged) return;
             CloseDayPopup();
             if (!RangePopup.IsOpen) RangeCalendar.Visibility = Visibility.Collapsed;
             if (!RangePopup.IsOpen) UpdateDayCountButtons();
@@ -3207,9 +3208,8 @@ namespace ScheduleWidget
             return 0;
         }
 
-        // Only the calendar's top band (period label, arrows, style drop-down, ⚙, TODO) moves the window when dragged; the
-        // days, the music bar and the pets stay put. A press that doesn't move past the drag threshold stays a normal click
-        // (on the band: the day-count choice or its buttons).
+        // The calendar's top band (including its date label and buttons) moves the window when dragged.
+        // An ordinary click acts only on the date label or a button; the blank band has no click action.
         private Point? calendarPress;
 
         private void Calendar_PreviewMouseDown(object sender, MouseButtonEventArgs e)
@@ -3239,16 +3239,6 @@ namespace ScheduleWidget
             Mouse.Capture(null); // releases the pressed day button so no click fires after the move
             e.Handled = true;
             MoveWindowByDrag();
-        }
-
-
-        // Clicking the top band (the arrows and buttons handle their own clicks) opens the day-count choice.
-        // Moving the window is done by dragging, which Calendar_PreviewMouseMove handles.
-        private void CalendarHeader_Click(object sender, MouseButtonEventArgs e)
-        {
-            if (RecentlyDragged) return;
-            e.Handled = true;
-            RangeLabel_Click(sender, e);
         }
 
         // A drag that moved the window must not end in a click that opens a bubble, menu or the day-count choice.
