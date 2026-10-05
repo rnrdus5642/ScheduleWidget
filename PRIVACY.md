@@ -1,6 +1,6 @@
 # ScheduleWidget 개인정보처리방침 (Privacy Policy)
 
-최종 수정: 2026-10-05
+최종 수정: 2026-10-06
 
 ScheduleWidget은 Windows PC에서 동작하는 개인용 일정 위젯입니다. 프로젝트 운영자는 [rnrdus5642](https://github.com/rnrdus5642)입니다. 이 문서는 앱이 어떤 정보를 어디에 저장하는지, 사용자가 선택한 기능에 따라 어떤 외부 서비스와 통신하는지, 소개 홈페이지가 처리하는 정보를 설명합니다. 읽기용 웹 문서는 [docs/privacy.html](docs/privacy.html)에 있습니다.
 
@@ -14,11 +14,11 @@ ScheduleWidget은 Windows PC에서 동작하는 개인용 일정 위젯입니다
 
 구글 로그인은 브라우저에서 진행하며 앱은 구글 계정 비밀번호를 입력받거나 보관하지 않습니다. 로그인하면 연결 계정을 확인하고, `설정 → 연동 → 구글`에서 캘린더와 캐릭터 보관 스위치를 각각 켰을 때 해당 기능을 사용합니다.
 
-- **Google Calendar API** (`https://www.googleapis.com/auth/calendar.events`): 사용자의 기본 캘린더 일정을 읽어 위젯에 표시하고, 위젯에서 추가·수정한 일정을 같은 캘린더에 반영합니다. 일정의 제목·날짜·시간·길이, 참석자가 있는지 또는 다른 사람이 주최한 일정인지(삭제할 때 구글에서도 지울지 정하는 데만 사용)만 사용합니다. 반복 일정은 앞으로 8주 치만 가져옵니다.
+- **Google Calendar API** (`https://www.googleapis.com/auth/calendar.events.owned`): 사용자의 기본 캘린더 일정을 읽어 위젯에 표시하고, 위젯에서 추가·수정한 일정을 같은 캘린더에 반영합니다. 일정의 제목·날짜·시간·길이, 참석자가 있는지 또는 다른 사람이 주최한 일정인지(삭제할 때 구글에서도 지울지 정하는 데만 사용)만 사용합니다. 반복 일정은 앞으로 8주 치만 가져옵니다.
   - 위젯이 만든 일정에는 "이 앱이 만든 일정"이라는 표시와 완료 여부를 일정의 비공개 속성(`extendedProperties.private`, 다른 사람에게 보이지 않음)으로 저장합니다.
   - 위젯에서 일정을 지우면, 위젯이 만든 참석자 없는 일정만 구글 캘린더에서도 지웁니다. 참석자가 있는 일정이나 구글 캘린더에서 만든 일정은 위젯에서만 지우고 구글 캘린더에는 그대로 둡니다.
 - **Google Drive API** (`https://www.googleapis.com/auth/drive.file`): 사용자가 가져온 캐릭터 이미지를 드라이브의 `ScheduleWidget 캐릭터` 폴더에 보관하고 다른 PC에서 받아 옵니다. 이 권한으로는 이 앱이 만든 파일만 볼 수 있으며, 드라이브의 다른 파일에는 접근할 수 없습니다. 캐릭터는 이 PC의 캐릭터 선택에서 삭제했을 때만 드라이브에서도 지웁니다.
-- **계정 이메일 주소** (`email`): 설정 화면에 어떤 계정이 연결되었는지 표시하고, 다른 계정으로 로그인했는지 확인하는 데만 사용합니다.
+- **계정 이메일 주소** (`https://www.googleapis.com/auth/userinfo.email`): 설정 화면에 어떤 계정이 연결되었는지 표시하고, 다른 계정으로 로그인했는지 확인하는 데만 사용합니다.
 - 로그인 정보(갱신 토큰)는 Windows 계정 암호화(DPAPI)로 보호해 사용자 PC에만 저장합니다.
 
 구글 API에서 받은 정보는 위 기능에 사용하며, 개발자가 광고·사용자 추적·판매·AI 모델 학습에 사용하지 않습니다. 사용자가 일정의 메시지 작성·전송을 선택하거나 전송 알림을 설정하면 일정 정보가 선택한 메시지 서비스로 전송될 수 있으며, 그 내용은 아래에 설명합니다. ScheduleWidget의 구글 사용자 데이터 사용은 [Google API 서비스 사용자 데이터 정책](https://developers.google.com/terms/api-services-user-data-policy)(제한적 사용 요구사항 포함)을 따릅니다.
@@ -65,7 +65,7 @@ ScheduleWidget은 Windows PC에서 동작하는 개인용 일정 위젯입니다
 
 **English summary**: ScheduleWidget runs locally on Windows. It has no developer server, and it sends no analytics, ads or crash data anywhere; schedules and settings stay in `%LocalAppData%\ScheduleWidget` on the user's PC. It talks to outside services only for features the user turns on or uses, directly between the user's PC and that service:
 
-- **Google** (browser sign-in, then optional sync switches): the Google Calendar API (calendar.events) syncs the primary calendar's events (title, date, time, length, and whether the event has guests or another organizer, used to decide whether deleting it in the widget also deletes it on Google; recurring events only for the next 8 weeks; events the widget creates carry a private "created by this app" mark and the completed flag). Deleting in the widget deletes on Google only the guest-less events the widget created. The Google Drive API (drive.file, app-created files only) keeps the user's imported characters, deleted there only when deleted on this PC. The account email is shown in the settings and used to tell accounts apart. Use of Google API data adheres to the Google API Services User Data Policy, including Limited Use requirements. It is not used for advertising, sale, tracking or AI model training. User-enabled messages and reminders may send schedule details to the selected service, as described below.
+- **Google** (browser sign-in, then optional sync switches): the Google Calendar API (calendar.events.owned) syncs the primary calendar's events (title, date, time, length, and whether the event has guests or another organizer, used to decide whether deleting it in the widget also deletes it on Google; recurring events only for the next 8 weeks; events the widget creates carry a private "created by this app" mark and the completed flag). Deleting in the widget deletes on Google only the guest-less events the widget created. The Google Drive API (drive.file, app-created files only) keeps the user's imported characters, deleted there only when deleted on this PC. The account email is shown in the settings and used to tell accounts apart. Use of Google API data adheres to the Google API Services User Data Policy, including Limited Use requirements. It is not used for advertising, sale, tracking or AI model training. User-enabled messages and reminders may send schedule details to the selected service, as described below.
 - **Telegram / Kakao** (optional reminders and messages set up by the user): schedule titles, dates and times, or the message the user writes, are sent to the Telegram Bot API or the Kakao Talk message API; Kakao tokens are refreshed with Kakao's auth server. SMS and calls are only handed to Windows Phone Link / `tel:` with the text on the clipboard.
 - **YouTube** (music the user adds): the app fetches YouTube playlist pages and oEmbed (with a consent cookie, no sign-in) to read titles, and plays songs in an embedded YouTube player (WebView2) whose cookies and cache stay in `%LocalAppData%\ScheduleWidget\WebView2Music`.
 
