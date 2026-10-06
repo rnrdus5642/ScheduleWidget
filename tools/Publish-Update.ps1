@@ -90,7 +90,7 @@ if ($FromFolder) {
     $pattern = '\[assembly:\s*AssemblyInformationalVersion\("[^"]*"\)\]'
     $stamped = if ([regex]::IsMatch($info, $pattern)) { [regex]::Replace($info, $pattern, $attr) } else { $info.TrimEnd("`r", "`n") + $nl + $attr + $nl }
     $stampedEncoding = New-Object Text.UTF8Encoding($hasBom)
-    $stampedBytes = $stampedEncoding.GetBytes($stamped)
+    $stampedBytes = [byte[]]($stampedEncoding.GetPreamble() + $stampedEncoding.GetBytes($stamped))
     $stampTemp = $infoPath + '.' + [Guid]::NewGuid().ToString('N') + '.tmp'
     $stampBackup = $infoPath + '.' + [Guid]::NewGuid().ToString('N') + '.bak'
     try {

@@ -444,6 +444,8 @@ msbuild ScheduleWidget.sln -restore /p:RestorePackagesConfig=true /p:Configurati
 - 업데이트 저장소는 `Services\UpdateClient.cs`의 `GitHubRepository`이며, 가져온 설정은 `rnrdus5642/ScheduleWidget`입니다. 앱은 `Services\UpdatePublicKey.cs`의 공개키로 업데이트를 검증합니다. `tools\Publish-Update.ps1`로 새 업데이트를 발행하려면 이 공개키와 일치하는 개인키가 `%USERPROFILE%\.schedulewidget\update-signing-key.xml`에 있어야 합니다. 개인키는 저장소에 포함되지 않습니다.
 - 서명키를 준비할 때는 `powershell -NoProfile -ExecutionPolicy Bypass -File tools\New-UpdateKey.ps1`을 실행합니다. 이미 키가 있으면 재사용합니다. 배포 후 `-Force`로 키를 바꾸면 기존 앱이 새 업데이트를 거부하므로, 같은 키를 계속 사용합니다.
 - 개인키 파일은 현재 Windows 사용자에게 묶인 DPAPI로 암호화됩니다. 파일 복사만으로 다른 PC나 재설치한 Windows에서 복구할 수 있는 것은 아니므로, PC를 바꾸기 전에는 별도의 복구 가능한 암호화 백업이 필요합니다. 개인키는 배포 ZIP에 넣지 않습니다.
+- 배포 파일 준비는 `powershell -NoProfile -ExecutionPolicy Bypass -File tools\Publish-Update.ps1 -DryRun`으로 합니다. 날짜·시간 형식의 버전을 소스에 기록하고 빌드한 뒤 `.work\publish\<버전>\`에 ZIP, 서명된 `latest.json`, 배포 설명을 만듭니다. `-DryRun`은 여기까지 수행하고 GitHub 게시 명령을 출력합니다.
+- 릴리스에는 생성된 ZIP과 `latest.json`을 함께 올립니다. ZIP을 다시 압축하거나 내용을 바꾸면 서명된 해시와 달라지므로, 변경이 필요할 때는 배포 스크립트로 새 버전을 생성합니다.
 
 ## 검증
 
