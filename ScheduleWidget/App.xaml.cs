@@ -142,18 +142,30 @@ namespace ScheduleWidget
 
         private void OnDispatcherUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e)
         {
-            ErrorLog.Write("ui", e.Exception);
             e.Handled = true;
             if (closingForErrors) return;
+            ErrorLog.Write("ui", e.Exception);
+            // A dead WPF render thread cannot recover by handling the next twenty window messages. Close once;
+            // the error dialog's message pump must not flood the log while the user is reading the message.
+            bool renderFailure = IsRenderThreadFailure(e.Exception);
             // Keep going after startup, unless errors keep coming (the same failure every frame): then stop instead of looping.
             if ((DateTime.Now - recentErrorsSince).TotalMinutes >= 1) { recentErrorsSince = DateTime.Now; recentErrors = 0; }
             bool running = this.MainWindow is ScheduleWidget.MainWindow main && main.StartupCompleted;
-            if (running && ++recentErrors <= 20) return;
+            if (!renderFailure && running && ++recentErrors <= 20) return;
             closingForErrors = true;
-            MessageBox.Show((running ? "오류가 계속 발생해 앱을 종료합니다." : "앱을 시작하는 중 오류가 발생해 종료합니다.") + Environment.NewLine +
+            string message = renderFailure ? "화면을 그리는 중 오류가 발생해 앱을 종료합니다."
+                : running ? "오류가 계속 발생해 앱을 종료합니다." : "앱을 시작하는 중 오류가 발생해 종료합니다.";
+            MessageBox.Show(message + Environment.NewLine +
                 e.Exception.Message + Environment.NewLine + Environment.NewLine + "자세한 내용: " + ErrorLog.FilePath,
                 "일정 위젯", MessageBoxButton.OK, MessageBoxImage.Error);
             Shutdown(1);
+        }
+
+        public static bool IsRenderThreadFailure(Exception error)
+        {
+            for (Exception current = error; current != null; current = current.InnerException)
+                if (current is System.Runtime.InteropServices.COMException && current.HResult == unchecked((int)0x88980406)) return true;
+            return false;
         }
 
         // Every window (연락·알림, 음악, 캐릭터 선택 등) shows the app's calendar icon instead of the default one.

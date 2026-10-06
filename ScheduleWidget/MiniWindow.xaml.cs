@@ -144,7 +144,7 @@ namespace ScheduleWidget
                 _ = Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.ApplicationIdle, new Action(PrewarmPopups));
                 await InitCharacterViewAsync();
             };
-            Closed += (s, e) => { FlushSave(); closed = true; MusicWindow.PlaybackChanged -= OnPlaybackChanged; recoveryTimer?.Stop(); healthTimer?.Stop(); pixelTimer?.Stop(); petWatchTimer?.Stop(); CharacterView.Dispose(); };
+            Closed += (s, e) => { FlushSave(); closed = true; MusicWindow.PlaybackChanged -= OnPlaybackChanged; recoveryTimer?.Stop(); healthTimer?.Stop(); pixelTimer?.Stop(); petWatchTimer?.Stop(); displayResumeTimer?.Stop(); CharacterView.Dispose(); };
             // Pets vanishing: the view's capture can stall after the screen sleeps, the session is locked, the PC resumes
             // or a (virtual) monitor comes and goes — check the view and repaint it (or reload it) when that happens.
             Microsoft.Win32.SystemEvents.PowerModeChanged += OnPowerModeChanged;
@@ -182,8 +182,13 @@ namespace ScheduleWidget
             LocationChanged += (s, e) => PlacePlacementBanner(); // moved while placing: above / below the calendar may swap
             // Display / DPI changes (monitors plugged, moved between, scaling changed): Explorer may rebuild the desktop host,
             // so re-attach like the main window does, and keep the window on a screen.
+            Microsoft.Win32.SystemEvents.DisplaySettingsChanging += OnDisplayChanging;
             Microsoft.Win32.SystemEvents.DisplaySettingsChanged += OnDisplayChanged;
-            Closed += (s, e) => Microsoft.Win32.SystemEvents.DisplaySettingsChanged -= OnDisplayChanged;
+            Closed += (s, e) =>
+            {
+                Microsoft.Win32.SystemEvents.DisplaySettingsChanging -= OnDisplayChanging;
+                Microsoft.Win32.SystemEvents.DisplaySettingsChanged -= OnDisplayChanged;
+            };
             Activated += (s, e) => { if (!companion) NativeMethods.RaiseAboveOtherApps(this); };
         }
 
@@ -3541,12 +3546,36 @@ namespace ScheduleWidget
             changed?.Invoke();
         }
 
-        private void OnDisplayChanged(object sender, EventArgs e) =>
-            Dispatcher.BeginInvoke(new Action(ReattachToDesktop), System.Windows.Threading.DispatcherPriority.Background);
+        private void OnDisplayChanging(object sender, EventArgs e)
+        {
+            if (Dispatcher.HasShutdownStarted || Dispatcher.HasShutdownFinished) return;
+            Action prepare = () =>
+            {
+                if (closed || !IsLoaded) return;
+                PrepareCharacterDisplayChange();
+                ScheduleCharacterDisplayResume(3000); // also recover if Windows never sends the matching Changed event
+            };
+            if (Dispatcher.CheckAccess()) prepare();
+            else Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Send, prepare);
+        }
+
+        private void OnDisplayChanged(object sender, EventArgs e)
+        {
+            if (Dispatcher.HasShutdownStarted || Dispatcher.HasShutdownFinished) return;
+            Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Send, new Action(() =>
+            {
+                if (closed || !IsLoaded) return;
+                PrepareCharacterDisplayChange();
+                ScheduleCharacterDisplayResume();
+                ReattachToDesktop();
+            }));
+        }
 
         protected override void OnDpiChanged(DpiScale oldDpi, DpiScale newDpi)
         {
+            if (IsLoaded) PrepareCharacterDisplayChange();
             base.OnDpiChanged(oldDpi, newDpi);
+            if (IsLoaded) ScheduleCharacterDisplayResume();
             Dispatcher.BeginInvoke(new Action(ReattachToDesktop), System.Windows.Threading.DispatcherPriority.Background);
         }
 
@@ -3580,7 +3609,12 @@ namespace ScheduleWidget
         // Monitors / work area changed (seen by the window itself as well as through SystemEvents): checked once they settle.
         private IntPtr WatchScreens(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
         {
-            const int WM_DISPLAYCHANGE = 0x007E, WM_SETTINGCHANGE = 0x001A, SPI_SETWORKAREA = 0x002F;
+            const int WM_DISPLAYCHANGE = 0x007E, WM_DPICHANGED = 0x02E0, WM_SETTINGCHANGE = 0x001A, SPI_SETWORKAREA = 0x002F;
+            if ((msg == WM_DISPLAYCHANGE || msg == WM_DPICHANGED) && IsLoaded && !closed)
+            {
+                PrepareCharacterDisplayChange();
+                ScheduleCharacterDisplayResume();
+            }
             if (msg == WM_DISPLAYCHANGE || (msg == WM_SETTINGCHANGE && wParam.ToInt64() == SPI_SETWORKAREA))
                 ScheduleEnsureVisible(msg == WM_DISPLAYCHANGE ? "displaychange" : "workarea", 300, 1500);
             return IntPtr.Zero;
@@ -3792,6 +3826,8 @@ namespace ScheduleWidget
         private string recoveryReason;
         private readonly System.Collections.Generic.List<DateTime> recoveries = new System.Collections.Generic.List<DateTime>();
         private bool viewReady;                     // CoreWebView2 initialised on the current CharacterView
+        private bool characterDisplayChanging;
+        private System.Windows.Threading.DispatcherTimer displayResumeTimer;
         internal Action<bool, string> recoveryOverride = null;   // tests: (recreate, reason) instead of reloading a real view
         internal Func<System.Threading.Tasks.Task<bool>> healthCheckOverride = null; // tests: the view's answer to the health check
         internal Action<string> pagePostOverride = null;         // tests: messages that would go to the page
@@ -3815,10 +3851,11 @@ namespace ScheduleWidget
 
         private async System.Threading.Tasks.Task InitCharacterViewAsync()
         {
+            if (closed || characterDisplayChanging) return;
             viewReady = false;
+            var view = CharacterView;
             try
             {
-                var view = CharacterView;
                 view.DefaultBackgroundColor = System.Drawing.Color.Transparent;
                 await EmbeddedBrowser.InitializeAsync(view);
                 if (closed || view != CharacterView) return;
@@ -3836,7 +3873,7 @@ namespace ScheduleWidget
             }
             catch (Exception ex) when (CharacterCatalog.IsImportError(ex) || ex is System.Runtime.InteropServices.COMException ||
                                        ex is Microsoft.Web.WebView2.Core.WebView2RuntimeNotFoundException || ex is ObjectDisposedException)
-            { CharacterViewStartFailed(ex); }
+            { if (!closed && view == CharacterView && !characterDisplayChanging) CharacterViewStartFailed(ex); }
         }
 
         internal void CharacterViewStartFailed(Exception ex)
@@ -3913,7 +3950,7 @@ namespace ScheduleWidget
         /// <summary>Reload the page (or build a new view) about a second from now; at most 3 times a minute.</summary>
         internal void RequestCharacterRecovery(bool recreate, string reason)
         {
-            if (closed) return;
+            if (closed || characterDisplayChanging) return;
             PetLog.Write(recreate ? "recover-view" : "recover-page", reason);
             recoveryRecreate |= recreate;
             recoveryReason = reason;
@@ -3937,7 +3974,7 @@ namespace ScheduleWidget
 
         internal void RunPendingRecovery()
         {
-            if (closed) return;
+            if (closed || characterDisplayChanging) return;
             recoveryTimer?.Stop();
             bool recreate = recoveryRecreate;
             string reason = recoveryReason;
@@ -3953,8 +3990,54 @@ namespace ScheduleWidget
         // A dead browser process cannot be reused: drop the view and put a fresh one in the same place.
         private async System.Threading.Tasks.Task RecreateCharacterViewAsync()
         {
-            if (closed) return;
+            if (closed || characterDisplayChanging) return;
             EmbeddedBrowser.ResetEnvironment();
+            ReplaceCharacterView();
+            await InitCharacterViewAsync();
+        }
+
+        // A composition view retains a D3D surface on its old display adapter. Dispose it before the display/DPI
+        // transition is rendered, so WPF cannot submit that stale surface to an adapter that disappeared.
+        internal void PrepareCharacterDisplayChange()
+        {
+            if (closed || characterDisplayChanging) return;
+            characterDisplayChanging = true;
+            recoveryTimer?.Stop();
+            healthTimer?.Stop();
+            pixelTimer?.Stop();
+            petWatchTimer?.Stop();
+            recoveryRecreate = false;
+            ReplaceCharacterView();
+            PetLog.Write("display-changing", "graphics surface released");
+        }
+
+        private void ScheduleCharacterDisplayResume(int milliseconds = 500)
+        {
+            if (closed || !characterDisplayChanging) return;
+            if (displayResumeTimer == null)
+            {
+                displayResumeTimer = new System.Windows.Threading.DispatcherTimer();
+                displayResumeTimer.Tick += (s, e) => ResumeCharacterAfterDisplayChange();
+            }
+            displayResumeTimer.Stop();
+            displayResumeTimer.Interval = TimeSpan.FromMilliseconds(milliseconds);
+            displayResumeTimer.Start();
+        }
+
+        internal void ResumeCharacterAfterDisplayChange()
+        {
+            displayResumeTimer?.Stop();
+            if (closed || !characterDisplayChanging) return;
+            characterDisplayChanging = false;
+            PetLog.Write("display-changed", "graphics surface restarting");
+            if (recoveryOverride != null) { recoveryOverride(true, "display-change"); return; }
+            var _ = InitCharacterViewAsync();
+            UpdatePetWatch();
+        }
+
+        private void ReplaceCharacterView()
+        {
+            viewReady = false;
             var old = CharacterView;
             int index = CharacterHost.Children.IndexOf(old);
             var fresh = new Microsoft.Web.WebView2.Wpf.WebView2CompositionControl
@@ -3975,14 +4058,13 @@ namespace ScheduleWidget
             RegisterName("CharacterView", fresh);
             try { old.Dispose(); } catch (Exception ex) when (ex is InvalidOperationException || ex is System.Runtime.InteropServices.COMException) { }
             lastLayoutJson = null;
-            await InitCharacterViewAsync();
         }
 
         // Display / DPI change, resume, unlock, shown again: ask the page for a sign of life a second later. No answer →
         // reload it; an answer → resend the layout and make it repaint (restarts a stalled capture).
         internal void ScheduleHealthCheck(string reason)
         {
-            if (closed) return;
+            if (closed || characterDisplayChanging) return;
             if (healthTimer == null)
             {
                 healthTimer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
@@ -4002,10 +4084,11 @@ namespace ScheduleWidget
 
         internal async System.Threading.Tasks.Task RunHealthCheckAsync(string reason)
         {
-            if (closed || !IsVisible && healthCheckOverride == null) return; // hidden: checked again when shown
+            if (closed || characterDisplayChanging || !IsVisible && healthCheckOverride == null) return; // hidden: checked again when shown
             if (recoveryTimer != null && recoveryTimer.IsEnabled) return; // a reload / new view is already on its way
+            var observedView = CharacterView;
             bool? alive = await PageAnswersAsync();
-            if (alive == null || closed) return; // still starting (or already recovering)
+            if (alive == null || closed || characterDisplayChanging || observedView != CharacterView) return; // still starting, or a replaced view answered late
             if (alive == false) { RequestCharacterRecovery(false, "no-answer-" + reason); return; }
             if (PageNeverReady) { RequestCharacterRecovery(false, "never-ready-" + reason); return; }
             RepaintPets();
@@ -4032,7 +4115,7 @@ namespace ScheduleWidget
         // answer → reload; empty → repaint, look again, then a new view — the same steps as after a display change.
         private void UpdatePetWatch()
         {
-            if (closed || !IsVisible) { petWatchTimer?.Stop(); return; }
+            if (closed || characterDisplayChanging || !IsVisible) { petWatchTimer?.Stop(); return; }
             if (petWatchTimer == null)
             {
                 petWatchTimer = new System.Windows.Threading.DispatcherTimer(System.Windows.Threading.DispatcherPriority.Background);
@@ -4048,12 +4131,13 @@ namespace ScheduleWidget
 
         internal async System.Threading.Tasks.Task WatchPetsAsync()
         {
-            if (closed || !IsVisible || !PetsShown || placingPets || weekFlip != null) return;
+            if (closed || characterDisplayChanging || !IsVisible || !PetsShown || placingPets || weekFlip != null) return;
             // A check or recovery already on its way (an event came just now) does the job.
             if (recoveryTimer != null && recoveryTimer.IsEnabled || healthTimer != null && healthTimer.IsEnabled ||
                 pixelTimer != null && pixelTimer.IsEnabled) return;
+            var observedView = CharacterView;
             bool? alive = await PageAnswersAsync();
-            if (alive == null || closed) return;
+            if (alive == null || closed || characterDisplayChanging || observedView != CharacterView) return;
             if (alive == false) { RequestCharacterRecovery(false, "no-answer-watch"); return; }
             if (PageNeverReady) { RequestCharacterRecovery(false, "never-ready-watch"); return; }
             await CheckPetPixelsAsync("watch", false);
@@ -4066,7 +4150,7 @@ namespace ScheduleWidget
         // Runs after those events and from the quiet watch (WatchPetsAsync).
         private void SchedulePetPixelCheck(string reason, bool confirming)
         {
-            if (closed) return;
+            if (closed || characterDisplayChanging) return;
             if (pixelTimer == null)
             {
                 pixelTimer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(1.5) };
@@ -4089,12 +4173,13 @@ namespace ScheduleWidget
         internal async System.Threading.Tasks.Task<bool?> CheckPetPixelsAsync(string reason, bool confirming)
         {
             // A pet whose image failed (its error shows) is left out below; the other pets are still looked at.
-            if (closed || !IsVisible || !PetsShown || placingPets) return null;
+            if (closed || characterDisplayChanging || !IsVisible || !PetsShown || placingPets) return null;
             if (recoveryTimer != null && recoveryTimer.IsEnabled) return null; // a reload / new view is already on its way
             // A page still loading (or loaded a moment ago) may not have drawn its pets yet: that is not a stalled view.
             if (pageReadyAt == DateTime.MinValue || DateTime.Now - pageReadyAt < TimeSpan.FromSeconds(2)) return null;
             var areas = PetAreasOutsideBoard();
             string key = PixelAreasKey(areas);
+            var observedView = CharacterView;
             bool? drawn = null;
             if (areas.Count > 0)
             {
@@ -4116,11 +4201,12 @@ namespace ScheduleWidget
                     if (!Dispatcher.CheckAccess())
                     {
                         bool? seen = drawn;
-                        return await Dispatcher.InvokeAsync(() => ConcludePixelCheck(reason, confirming, seen, key)).Task;
+                        return await Dispatcher.InvokeAsync(() => characterDisplayChanging || observedView != CharacterView
+                            ? null : ConcludePixelCheck(reason, confirming, seen, key)).Task;
                     }
                 }
             }
-            return ConcludePixelCheck(reason, confirming, drawn, key);
+            return characterDisplayChanging || observedView != CharacterView ? null : ConcludePixelCheck(reason, confirming, drawn, key);
         }
 
         private bool? ConcludePixelCheck(string reason, bool confirming, bool? drawn, string key)

@@ -55,6 +55,7 @@ namespace ScheduleWidget.Checks
             Run("Updates reject a modified signed manifest", SignedUpdates);
             Run("Global shortcuts reject unmodified typing keys", Shortcuts);
             Run("Automatic media policy follows active apps and preserves manual choices", AutomaticMediaSelection);
+            Run("Fatal rendering errors are distinguished from recoverable COM errors", RenderingFailureClassification);
             Run("WPF resources and six window layouts construct", WindowResources);
 
             Console.WriteLine("{0} passed, {1} failed.", passed, failed);
@@ -281,6 +282,68 @@ namespace ScheduleWidget.Checks
             Require(!HotKeyGesture.TryParse("G", out _) && !HotKeyGesture.TryParse("Shift+G", out _), "Typing key accepted as a global shortcut.");
         }
 
+        private static void RenderingFailureClassification()
+        {
+            var failure = new System.Runtime.InteropServices.COMException("Localized graphics failure", unchecked((int)0x88980406));
+            Require(App.IsRenderThreadFailure(failure), "The recorded render failure was missed.");
+            Require(App.IsRenderThreadFailure(new TargetInvocationException(failure)), "A wrapped render failure was missed.");
+            Require(!App.IsRenderThreadFailure(null), "A missing exception was treated as fatal.");
+            Require(!App.IsRenderThreadFailure(new System.Runtime.InteropServices.COMException("Unrelated browser failure", unchecked((int)0x80004005))), "An unrelated COM failure was treated as fatal.");
+            Require(!App.IsRenderThreadFailure(new Exception("UCEERR_RENDERTHREADFAILURE (0x88980406)")), "Message text was mistaken for the actual HRESULT.");
+        }
+
+        private static void CharacterDisplayChanges()
+        {
+            var data = Data();
+            var mini = new MiniWindow(data, () => true, () => { });
+            var flags = BindingFlags.Instance | BindingFlags.NonPublic;
+            var prepare = typeof(MiniWindow).GetMethod("PrepareCharacterDisplayChange", flags);
+            var resume = typeof(MiniWindow).GetMethod("ResumeCharacterAfterDisplayChange", flags);
+            var recovery = typeof(MiniWindow).GetField("recoveryOverride", flags);
+            try
+            {
+                string before = JsonConvert.SerializeObject(data);
+                var old = (FrameworkElement)mini.FindName("CharacterView");
+                double width = old.Width, height = old.Height;
+                Canvas.SetLeft(old, 24); Canvas.SetTop(old, 12);
+                int resumes = 0;
+                recovery.SetValue(mini, (Action<bool, string>)((recreate, reason) => {
+                    Require(recreate && reason == "display-change", "Display recovery lost its reason.");
+                    resumes++;
+                }));
+                var pendingAnswer = new TaskCompletionSource<bool>();
+                typeof(MiniWindow).GetField("healthCheckOverride", flags).SetValue(mini, (Func<Task<bool>>)(() => pendingAnswer.Task));
+                Task pendingCheck;
+                var previousContext = SynchronizationContext.Current;
+                try
+                {
+                    SynchronizationContext.SetSynchronizationContext(null);
+                    pendingCheck = (Task)typeof(MiniWindow).GetMethod("RunHealthCheckAsync", flags).Invoke(mini, new object[] { "before-display-change" });
+                }
+                finally { SynchronizationContext.SetSynchronizationContext(previousContext); }
+                prepare.Invoke(mini, null);
+                var fresh = (FrameworkElement)mini.FindName("CharacterView");
+                Require(fresh != old && fresh.Width == width && fresh.Height == height && Canvas.GetLeft(fresh) == 24 && Canvas.GetTop(fresh) == 12,
+                    "Display change failed to replace the graphics view in place.");
+                prepare.Invoke(mini, null);
+                Require(ReferenceEquals(fresh, mini.FindName("CharacterView")) && resumes == 0, "Repeated display messages recreated or resumed the browser too early.");
+                Require(!(bool)typeof(MiniWindow).GetField("viewReady", flags).GetValue(mini), "A stale view remained ready.");
+                resume.Invoke(mini, null);
+                resume.Invoke(mini, null);
+                Require(resumes == 1, "Display recovery did not resume exactly once.");
+                pendingAnswer.SetResult(false);
+                pendingCheck.GetAwaiter().GetResult();
+                var retry = (System.Windows.Threading.DispatcherTimer)typeof(MiniWindow).GetField("recoveryTimer", flags).GetValue(mini);
+                Require(retry == null || !retry.IsEnabled, "A late failure from the old view queued recovery of the replacement.");
+                Require(JsonConvert.SerializeObject(data) == before, "Display recovery changed schedules or pet settings.");
+                mini.Close();
+                prepare.Invoke(mini, null);
+                resume.Invoke(mini, null);
+                Require(ReferenceEquals(fresh, mini.FindName("CharacterView")) && resumes == 1, "A closed widget resumed its browser.");
+            }
+            finally { mini.Close(); }
+        }
+
         private static void WindowResources()
         {
             var app = new App();
@@ -328,6 +391,7 @@ namespace ScheduleWidget.Checks
                 var clickMini = new MiniWindow(clickData, () => true, () => { });
                 windows.Add(clickMini);
                 Run("Character double-click selects its settings without opening the picker", () => PetClickRouting(clickMini, clickData));
+                Run("Display changes release pet graphics, coalesce and preserve user data", CharacterDisplayChanges);
                 Run("Compact calendar shows multiple schedules and scrolls every day independently", CalendarDayLists);
                 Run("Embedded agenda lists distant schedules, resizes and reuses schedule editing", AllSchedulesPanel);
                 Run("Music bar keeps one row across playback states and narrow widths", FixedMusicBar);
