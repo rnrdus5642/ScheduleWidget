@@ -6,6 +6,6 @@
     /// </summary>
     internal static class UpdatePublicKey
     {
-        internal const string Xml = "<RSAKeyValue><Modulus>lOxg+Xco86tdPQuUep/8CXQlr86JmKDmXQrZAKyt7e+fVJvnLdS2RPxqgP4g2eNX8yX/y9KzR+XP0nNEpHTyWHkJhlYXxs1qe7BZa0kKKozrSrA9Im0jS0zTSjRzRivGXOTak7EwDIY50POJWha395nv1cU/3F1tooHxb4MUDOulf5WWtE6LOrcPZRuW3Yn5bp5RJ+sd2I8GD0ei7QBoFIEecb2M7eHHmHu9vAAyn34lrcR3YCsKP6TW6TO3TcZQ1QQqhNbH0P6ZUSY5aKSPdyDlPMO8tyIATyHgSSGSKbk9/mhB6afaKXjTiTAD3DwlxEhXaFDUj22H/lSGV3j4wXPr1hGQflU9pCKursQzLbKy5kKUaMNmnZlSWB2xfCpD0+Lw8PutAcH9VcvFIXix4KI/sgcqgv686A1N89hyF9+eHGXCZCDlDIrDu3AdwOWgt7N/U37L51qwND/T4wjvRz35sQzoS0m4EOeutKaYEf4ukJJ+n8OZOIFErNZs4IRF</Modulus><Exponent>AQAB</Exponent></RSAKeyValue>";
+        internal const string Xml = "<RSAKeyValue><Modulus>2R+K+WOFKq8oHlm1QiU1+xq5tSMJC3W82LNOdxrt+w9ErWpFC1x1d0iFZQssx73m8+2zaj7VUh70XtiPue+zNUZDctrjwG+7HTNDATuvbiCSPqupIeBCvivL4IUPLVH46cod2M6PKd6eGxegswBFT2MCxCGvMLv+6deYYKNB9vBy1TsEcYPvJ2mM+PGCxczzFlq99Pt7m9tZ1pEwIUf79bIp7zrZ1pPHQ1+39rGa81L0+pptPrxWwnnWAfHwI6L52cJA3gckQlfyA5NkfbzN0AUCgvUH4zbkZYwyvk8NfH4y42P9if7gu7Z91QUKI90dsRBQNZYFa3q9aLI1KG4Wog7Gj5eQQbzokb+SjoMW4UTC/151RCOOLtQLDn/2xgZSh5/DLOHzplj1Sr5WQwaa1AmEEUkSLQ+wDEADe8h7bTeNrAxUp6IjfPYh+KJ2FxHiwK6XKIIegUBTLojJ/VnjhVVGwg9Ng7RQvGSXTEVFf6zb1WFX/SVUxelnT9VDjieR</Modulus><Exponent>AQAB</Exponent></RSAKeyValue>";
     }
 }

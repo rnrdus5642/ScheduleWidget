@@ -442,6 +442,8 @@ msbuild ScheduleWidget.sln -restore /p:RestorePackagesConfig=true /p:Configurati
 - `ScheduleWidget\google_client.bin`이 있으면 빌드가 `ScheduleWidget.exe`의 리소스로 넣습니다. 그러므로 배포 폴더에 `google_client.json`이나 `Pet` 폴더는 필요 없습니다. 반대로 프로젝트 폴더에 `google_client.json`이 있으면 빌드가 출력 폴더로 복사하고 앱은 그 파일을 내장 클라이언트보다 먼저 쓰므로, 배포용 빌드에서는 두지 않습니다.
 - 배포할 때는 `ScheduleWidget.exe`, `ScheduleWidget.exe.config`, `ScheduleWidget.Updater.exe`, Newtonsoft.Json·WebView2 DLL, `Player`, `DefaultPets`, `runtimes`가 포함된 `ScheduleWidget\bin\Release` 폴더 전체를 옮깁니다. 실행 파일만 따로 복사하면 동작하지 않습니다. `*.pdb`, `*.xml`은 필요 없습니다.
 - 업데이트 저장소는 `Services\UpdateClient.cs`의 `GitHubRepository`이며, 가져온 설정은 `rnrdus5642/ScheduleWidget`입니다. 앱은 `Services\UpdatePublicKey.cs`의 공개키로 업데이트를 검증합니다. `tools\Publish-Update.ps1`로 새 업데이트를 발행하려면 이 공개키와 일치하는 개인키가 `%USERPROFILE%\.schedulewidget\update-signing-key.xml`에 있어야 합니다. 개인키는 저장소에 포함되지 않습니다.
+- 서명키를 준비할 때는 `powershell -NoProfile -ExecutionPolicy Bypass -File tools\New-UpdateKey.ps1`을 실행합니다. 이미 키가 있으면 재사용합니다. 배포 후 `-Force`로 키를 바꾸면 기존 앱이 새 업데이트를 거부하므로, 같은 키를 계속 사용합니다.
+- 개인키 파일은 현재 Windows 사용자에게 묶인 DPAPI로 암호화됩니다. 파일 복사만으로 다른 PC나 재설치한 Windows에서 복구할 수 있는 것은 아니므로, PC를 바꾸기 전에는 별도의 복구 가능한 암호화 백업이 필요합니다. 개인키는 배포 ZIP에 넣지 않습니다.
 
 ## 검증
 
