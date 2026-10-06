@@ -3,9 +3,13 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Net;
+using System.Net.Http;
 using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -45,6 +49,7 @@ namespace ScheduleWidget.Checks
             Run("YouTube links reject unrelated and malformed URLs", YouTubeLinks);
             Run("Google sync only deletes owned unshared events", GoogleDeletion);
             Run("Google sync resolves local and remote edits", GoogleEdits);
+            Run("Google account display works without Calendar metadata permission", GoogleAccountEmail);
             Run("Drive sync only deletes explicitly removed pets", DriveDeletion);
             Run("Default pet manifests and packaged assets load", PackagedAssets);
             Run("Updates reject a modified signed manifest", SignedUpdates);
@@ -196,6 +201,46 @@ namespace ScheduleWidget.Checks
             local.Title = "Local edit";
             plan = GoogleCalendarSync.Plan(new[] { local }, new[] { remote }, new[] { "linked" }, new DateTime(2026, 10, 4));
             Require(plan.Patch.Count == 1 && plan.UpdateLocal.Count == 0, "Local edit lost conflict resolution.");
+        }
+
+        private sealed class GoogleAccountResponseHandler : HttpMessageHandler
+        {
+            private readonly Func<HttpRequestMessage, HttpResponseMessage> respond;
+            public GoogleAccountResponseHandler(Func<HttpRequestMessage, HttpResponseMessage> respond) { this.respond = respond; }
+            protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+                => Task.FromResult(respond(request));
+        }
+
+        private static void GoogleAccountEmail()
+        {
+            int requests = 0;
+            string Read(HttpStatusCode status, string body, bool offline = false)
+            {
+                using (var client = new HttpClient(new GoogleAccountResponseHandler(request =>
+                {
+                    requests++;
+                    Require(request.Method == HttpMethod.Get && request.RequestUri.AbsoluteUri == "https://www.googleapis.com/oauth2/v2/userinfo",
+                        "Account display attempted an API outside the email permission.");
+                    Require(request.Headers.Authorization?.Scheme == "Bearer" && request.Headers.Authorization.Parameter == "test-access-token",
+                        "UserInfo did not use the authorized account's token.");
+                    if (offline) throw new HttpRequestException("Simulated offline account lookup.");
+                    return new HttpResponseMessage(status) { Content = new StringContent(body, Encoding.UTF8, "application/json") };
+                })))
+                {
+                    var service = new GoogleCalendarService(client);
+                    typeof(GoogleCalendarService).GetField("accessToken", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(service, "test-access-token");
+                    var read = typeof(GoogleCalendarService).GetMethod("ReadAccountAsync", BindingFlags.NonPublic | BindingFlags.Instance);
+                    return ((Task<string>)read.Invoke(service, null)).GetAwaiter().GetResult();
+                }
+            }
+            Require(Read(HttpStatusCode.OK, "{\"email\":\"  owner@example.com  \"}") == "owner@example.com", "Granted email could not be shown without Calendar metadata access.");
+            Require(Read(HttpStatusCode.OK, "{}") == null, "Missing email was treated as an account.");
+            Require(Read(HttpStatusCode.OK, "{\"email\":123}") == null, "Non-text email was treated as an account.");
+            Require(Read(HttpStatusCode.OK, "{\"email\":\"not-an-email\"}") == null, "Invalid email was treated as an account.");
+            Require(Read(HttpStatusCode.Forbidden, "{\"error\":{\"code\":403,\"message\":\"insufficient authentication scopes\"}}") == null,
+                "Declining email permission prevented optional account lookup from completing.");
+            Require(Read(HttpStatusCode.OK, "{}", offline: true) == null, "Temporary email lookup failure escaped sign-in.");
+            Require(requests == 6, "Account lookup made unexpected fallback requests.");
         }
 
         private static void DriveDeletion()

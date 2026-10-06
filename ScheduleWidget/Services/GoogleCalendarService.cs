@@ -352,7 +352,8 @@ namespace ScheduleWidget
     /// </summary>
     public sealed class GoogleCalendarService
     {
-        private const string Scope = "https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/drive.file";
+        // Sync uses the user's own primary calendar; no access to calendars shared by other owners is needed.
+        private const string Scope = "https://www.googleapis.com/auth/calendar.events.owned https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/userinfo.email";
         private const string DriveFiles = "https://www.googleapis.com/drive/v3/files";
         private const string PetFolderName = "ScheduleWidget 캐릭터";
         private const string EventsUrl = "https://www.googleapis.com/calendar/v3/calendars/primary/events";
@@ -490,7 +491,7 @@ namespace ScheduleWidget
                 string redirect = "http://127.0.0.1:" + ((IPEndPoint)listener.LocalEndpoint).Port + "/";
                 string url = "https://accounts.google.com/o/oauth2/v2/auth?response_type=code&access_type=offline&prompt=consent" +
                     "&client_id=" + Uri.EscapeDataString(app.Item1) + "&redirect_uri=" + Uri.EscapeDataString(redirect) +
-                    "&scope=" + Uri.EscapeDataString(Scope + " email") + "&code_challenge=" + challenge +
+                    "&scope=" + Uri.EscapeDataString(Scope) + "&code_challenge=" + challenge +
                     "&code_challenge_method=S256&state=" + state;
                 Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
 
@@ -504,7 +505,7 @@ namespace ScheduleWidget
                 if (string.IsNullOrWhiteSpace(refresh)) throw new InvalidOperationException("구글이 연동 토큰을 주지 않았습니다. 다시 로그인해 주세요.");
                 UseAccessToken(token);
                 settings.ProtectedRefreshToken = SecretStore.Protect(refresh);
-                // The account: the e-mail in Google's answer (the "email" scope), else the primary calendar's id; null when
+                // The account: the e-mail in Google's answer, else UserInfo using the same email permission; null when
                 // neither can be read, so a passing error is never taken for another account. Signing in turns nothing on:
                 // the switches in 설정 do.
                 settings.Account = EmailOf(token["id_token"]) ?? await ReadAccountAsync();
@@ -1510,14 +1511,14 @@ namespace ScheduleWidget
 
         private static string Rfc3339(DateTime time) => new DateTimeOffset(time).ToString("yyyy-MM-dd'T'HH:mm:sszzz", CultureInfo.InvariantCulture);
 
-        // The primary calendar's id is the account's e-mail; null when it cannot be read.
+        // Account display must work with email permission alone. Calendar metadata needs a broader, unused scope.
         private async Task<string> ReadAccountAsync()
         {
             try
             {
-                JObject calendar = await SendAsync(HttpMethod.Get, "https://www.googleapis.com/calendar/v3/calendars/primary", null, allowMissing: false);
-                string id = Text(calendar["id"]);
-                return id != null && id.IndexOf('@') > 0 ? id : null;
+                JObject account = await SendAsync(HttpMethod.Get, "https://www.googleapis.com/oauth2/v2/userinfo", null, allowMissing: false);
+                string email = Text(account["email"])?.Trim();
+                return !string.IsNullOrEmpty(email) && email.IndexOf('@') > 0 ? email : null;
             }
             catch (InvalidOperationException) { return null; }
         }

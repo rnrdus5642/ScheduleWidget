@@ -835,6 +835,12 @@
                             <Border x:Name="SettingsGoogleCard" Style="{StaticResource AuxRoundSection}" Padding="14,12" Margin="0,10,0,0">
                                 <StackPanel>
                                     <TextBlock Text="구글 연동" Style="{StaticResource AuxSectionTitle}" FontSize="15"/>
+                                    <TextBlock Text="로그인하면 이메일로 연결된 계정을 표시합니다. 캘린더 연동은 일정 동기화에, 드라이브 연동은 가져온 캐릭터 보관에 사용합니다."
+                                               Style="{StaticResource AuxCaption}" TextWrapping="Wrap" Margin="0,8,0,0"/>
+                                    <Button x:Name="GooglePrivacyPolicyButton" Content="개인정보처리방침 ↗" HorizontalAlignment="Left"
+                                            Margin="0,8,0,0" MinHeight="30" Style="{StaticResource AuxCompactButton}"
+                                            Click="OpenPrivacyPolicy_Click" ToolTip="기본 브라우저에서 개인정보처리방침 열기"
+                                            AutomationProperties.Name="개인정보처리방침 브라우저에서 열기"/>
                                     <!-- Account line and the sign-in button, both centered. -->
                                     <TextBlock x:Name="GoogleAccountText" Style="{StaticResource AuxCaption}" TextWrapping="Wrap"
                                                TextAlignment="Center" HorizontalAlignment="Center" Margin="0,10,0,0"/>

@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
+using System.Diagnostics;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
@@ -9,6 +11,9 @@ namespace ScheduleWidget
 {
     public partial class MainWindow
     {
+        private const string AppWebsiteUrl = "https://schedule.jwstudio.page/";
+        private const string AppPrivacyPolicyUrl = AppWebsiteUrl + "privacy.html";
+
         private readonly List<SettingsContentLease> settingsContentLeases = new List<SettingsContentLease>();
         private ContentControl settingsMusicContent, settingsReminderContent, settingsCharacterContent;
         private ContentControl settingsConnectionsContent;
@@ -146,9 +151,44 @@ namespace ScheduleWidget
             settingsGoogleContent = TakeSettingsControl(SettingsGoogleCard);
             settingsConnectionsContent = new ContentControl();
             window.SetPage(SettingsPage.Connections, settingsConnectionsContent);
+            var websiteLinks = new WrapPanel { Margin = new Thickness(0, 12, 0, 0) };
+            websiteLinks.Children.Add(CreateWebsiteButton("홈페이지 ↗", AppWebsiteUrl));
+            websiteLinks.Children.Add(CreateWebsiteButton("개인정보처리방침 ↗", AppPrivacyPolicyUrl));
             window.SetPage(SettingsPage.About, SettingsScroll(SettingsStack(
-                SettingsCard("ScheduleWidget", new TextBlock { Text = "바탕화면에서 일정을 확인하고 관리하는 달력 위젯입니다.", TextWrapping = TextWrapping.Wrap }),
+                SettingsCard("ScheduleWidget", new TextBlock { Text = "바탕화면에서 일정을 확인하고 관리하는 달력 위젯입니다.", TextWrapping = TextWrapping.Wrap }, websiteLinks),
                 TakeSettingsControl(UpdateCard))));
+        }
+
+        private Button CreateWebsiteButton(string caption, string url)
+        {
+            var button = new Button
+            {
+                Content = caption, MinHeight = 32, Margin = new Thickness(0, 0, 8, 8),
+                Style = (Style)UnifiedSettings.FindResource("AuxUtilityButton"),
+                ToolTip = "기본 브라우저에서 열기: " + url
+            };
+            button.Click += (sender, args) => OpenAppWebsite(url, button);
+            return button;
+        }
+
+        private void OpenPrivacyPolicy_Click(object sender, RoutedEventArgs e)
+        {
+            e.Handled = true;
+            OpenAppWebsite(AppPrivacyPolicyUrl, sender as DependencyObject);
+        }
+
+        private void OpenAppWebsite(string url, DependencyObject source)
+        {
+            try
+            {
+                Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
+            }
+            catch (Exception ex) when (ex is Win32Exception || ex is InvalidOperationException)
+            {
+                var owner = (source == null ? null : Window.GetWindow(source)) ?? (Window)UnifiedSettings ?? this;
+                MessageBox.Show(owner, "브라우저를 열지 못했습니다. 아래 주소로 직접 접속해 주세요.\n\n" + url,
+                    "홈페이지 열기", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
         }
 
         private void PrepareSettingsPage(SettingsPage page)
