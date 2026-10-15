@@ -104,15 +104,11 @@ namespace ScheduleWidget
         private bool ConfirmUpdate(UpdateCheckResult update)
         {
             if (updateConfirmOverride != null) return updateConfirmOverride(update);
-            string text = "새 버전 " + UpdateInfo.Format(update.Version) + "이 있습니다 (현재 " + UpdateInfo.Format(update.Current) + "). 서명 확인됨.";
-            string notes = update.Manifest?.Notes;
-            if (!string.IsNullOrWhiteSpace(notes))
-                text += Environment.NewLine + Environment.NewLine + (notes.Length > 500 ? notes.Substring(0, 500) + "…" : notes.Trim());
-            text += Environment.NewLine + Environment.NewLine + "설치하면 내려받은 뒤 앱이 닫히고 새 버전으로 다시 열립니다." + Environment.NewLine +
-                    "일정과 설정은 그대로 유지됩니다. 설치할까요?";
             Window fromNotice = updateFromNotice ? updateNotice?.Owner : null;
             Window owner = fromNotice != null && fromNotice.IsVisible ? fromNotice : settingsHost ?? this;
-            return System.Windows.MessageBox.Show(owner, text, "업데이트", MessageBoxButton.OKCancel, MessageBoxImage.Question) == MessageBoxResult.OK;
+            var dialog = new UpdateConfirmationWindow(update);
+            dialog.PrepareForOwner(owner);
+            return dialog.ShowDialog() == true;
         }
 
         private static string UpdateErrorText(Exception ex, string fallback)

@@ -17,6 +17,8 @@ packages/
 .work/
 dist/
 ScheduleWidget/bin/Release/FeatureChecks.exe*
+# Local rollback copies created by the updater
+ScheduleWidget/bin/Release.backup-*/
 Updater/bin/Debug/
 Updater/obj/
 tests/bin/

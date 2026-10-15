@@ -344,6 +344,58 @@ namespace ScheduleWidget.Checks
             finally { mini.Close(); }
         }
 
+        private static void UpdateConfirmationLayout()
+        {
+            string notes = "### 변경 사항\n\n- **긴 일정**을 `달력`에서 확인합니다.\n  이어지는 설명도 유지됩니다.\n" +
+                string.Join("\n", Enumerable.Range(1, 16).Select(n => "- 변경 " + n + ": 여러 날의 일정과 설정이 유지되며 긴 설명도 끝까지 읽을 수 있습니다.")) +
+                "\n\n### 추가 안내\n\n마지막 변경 내용까지 보입니다.";
+            var manifest = new UpdateManifest { App = "ScheduleWidget", Version = "2099.0101.0001", File = "update.zip", Size = 1,
+                Sha256 = new string('a', 64), Notes = notes };
+            UpdateCheckResult check;
+            using (var key = new RSACng(2048))
+            {
+                manifest.Signature = Convert.ToBase64String(key.SignData(Encoding.UTF8.GetBytes(UpdateClient.CanonicalString(manifest)), HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1));
+                check = UpdateClient.Evaluate(manifest, key.ToXmlString(false), new Version(2026, 1015, 2312));
+            }
+            string originalTheme = AuxTheme.Current;
+            var dialog = new UpdateConfirmationWindow(check);
+            try
+            {
+                foreach (string theme in new[] { "Light", "Dark" })
+                {
+                    AuxTheme.SetTheme(theme);
+                    foreach (var area in new[] { new Rect(0, 0, 1920, 1040), new Rect(-700, 20, 420, 540) })
+                    {
+                        typeof(UpdateConfirmationWindow).GetMethod("FitWithin", BindingFlags.Instance | BindingFlags.NonPublic)
+                            .Invoke(dialog, new object[] { area, new Rect(area.Left + 10, area.Bottom - 80, 300, 60) });
+                        var bounds = new Rect(dialog.Left, dialog.Top, dialog.Width, dialog.Height);
+                        Require(area.Contains(bounds), "Update confirmation escaped the owner's work area.");
+                        var content = (FrameworkElement)dialog.Content;
+                        content.Measure(new Size(dialog.Width, dialog.Height));
+                        content.Arrange(new Rect(0, 0, dialog.Width, dialog.Height));
+                        content.UpdateLayout();
+                        string rendered = string.Join("\n", VisualDescendants<TextBlock>(content).Select(t => t.Text));
+                        Require(rendered.Contains("긴 일정을 달력에서 확인합니다. 이어지는 설명도 유지됩니다.") && rendered.Contains("마지막 변경 내용까지 보입니다."),
+                            "Long release notes were truncated or lost wrapped content.");
+                        Require(!rendered.Contains("###") && !rendered.Contains("**긴 일정**") && !rendered.Contains("`달력`"), "Raw Markdown leaked into the dialog.");
+                        var scroll = (ScrollViewer)dialog.FindName("NotesScroll");
+                        Require(scroll.ViewportHeight > 40 && scroll.ScrollableHeight > 0, "Long release notes have no usable scroll viewport.");
+                        foreach (string name in new[] { "LaterButton", "InstallButton" })
+                        {
+                            var button = (Button)dialog.FindName(name);
+                            var buttonBounds = button.TransformToAncestor(content).TransformBounds(new Rect(button.RenderSize));
+                            Require(new Rect(content.RenderSize).Contains(buttonBounds) && button.ActualHeight >= 40, "Update actions were clipped: " + name);
+                        }
+                        scroll.ScrollToEnd();
+                        content.UpdateLayout();
+                        Require(Math.Abs(scroll.VerticalOffset - scroll.ScrollableHeight) < 1, "The end of the release notes cannot be reached.");
+                    }
+                }
+                Require(!dialog.IsVisible && dialog.DialogResult != true, "Measuring the dialog displayed it or accepted installation.");
+            }
+            finally { dialog.Close(); AuxTheme.SetTheme(originalTheme); }
+        }
+
         private static void WindowResources()
         {
             var app = new App();
@@ -373,6 +425,7 @@ namespace ScheduleWidget.Checks
                     content.Measure(new Size(800, 600));
                     content.Arrange(new Rect(0, 0, 800, 600));
                 }
+                Run("Update confirmation keeps long notes readable and installation actions on screen", UpdateConfirmationLayout);
                 Require(mini.FindName("WeekCalendar") != null, "Mini calendar was not constructed.");
 
                 bool calendarClosed = false;

@@ -114,6 +114,8 @@
     <Compile Include="MainWindow.Google.cs" />
     <Compile Include="MainWindow.Update.cs" />
     <Compile Include="MainWindow.UpdateNotice.cs" />
+    <Page Include="UpdateConfirmationWindow.xaml"><Generator>MSBuild:Compile</Generator></Page>
+    <Compile Include="UpdateConfirmationWindow.xaml.cs"><DependentUpon>UpdateConfirmationWindow.xaml</DependentUpon></Compile>
     <Page Include="UpdateNoticeWindow.xaml"><Generator>MSBuild:Compile</Generator></Page>
     <Compile Include="UpdateNoticeWindow.xaml.cs"><DependentUpon>UpdateNoticeWindow.xaml</DependentUpon></Compile>
     <Compile Include="Services\UpdateClient.cs" />
