@@ -239,7 +239,7 @@ namespace ScheduleWidget
 
         private void TryOpenUpcomingPreview()
         {
-            if (closed || companion || !IsVisible || !NextWeek.IsVisible || !NextWeek.IsEnabled) return;
+            if (closed || companion || IsMonthViewOpen || !IsVisible || !NextWeek.IsVisible || !NextWeek.IsEnabled) return;
             if (!UpcomingHovered) return;
             // Mid-flip, mid-rush, the arrow held down or the band being dragged: try again once that is over.
             if (WeekFlipRunning || Rushing || NextWeek.IsPressed || Mouse.Captured != null && Mouse.Captured != NextWeek || RecentlyDragged)

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -337,15 +337,19 @@ namespace ScheduleWidget
         }
 
         // 단축키 (default Ctrl+G, set in 설정) anywhere: bring the calendar and any open schedule list above every
-        // window once. It is not pinned: the 모든 창 위에 표시 setting is kept, so clicking another app covers it again.
+        // window, or returns it behind other apps when pressed again. The saved pin preference is retained.
         private const int BringToFrontHotKeyId = 0x5347;
         private bool _bringToFrontHotKey;
+        private bool hotKeyRaised;
+        private IntPtr hotKeyPreviousForeground;
 
         private void UnregisterBringToFrontHotKey()
         {
             var hwnd = new WindowInteropHelper(this).Handle;
             if (_bringToFrontHotKey && hwnd != IntPtr.Zero) NativeMethods.UnregisterHotKey(hwnd, BringToFrontHotKeyId);
             _bringToFrontHotKey = false;
+            hotKeyRaised = false;
+            hotKeyPreviousForeground = IntPtr.Zero;
         }
 
         /// <summary>Registers the saved shortcut (or none when turned off). False when another app already owns it.</summary>
@@ -365,7 +369,7 @@ namespace ScheduleWidget
             if (msg == NativeMethods.WM_HOTKEY && wParam.ToInt32() == BringToFrontHotKeyId)
             {
                 handled = true;
-                if (appData != null && !closingApp) OpenLastWindow();
+                if (appData != null && !closingApp) ToggleWidgetFromHotKey();
             }
             else if (msg == TaskbarCreatedMessage && TaskbarCreatedMessage != 0)
                 OnExplorerRestarted(); // not handled: other listeners (the tray icon) need it too
@@ -786,6 +790,7 @@ namespace ScheduleWidget
         private void RefreshScheduleList()
         {
             if (appData == null) { _scheduleListDirty = true; return; }
+            SyncSettingsDayCount();
             miniWindow?.Refresh();
             // Hidden (mini mode, tray): nothing to see, so build the cards when the window shows again (IsVisibleChanged).
             if (!IsVisible || _startingHidden) { _scheduleListDirty = true; return; }
@@ -1678,7 +1683,7 @@ namespace ScheduleWidget
             appData.AlwaysOnTop = InlineAlwaysOnTopToggle.IsChecked == true;
             appData.MiniBlockDDayVisible = InlineBlockDDaySwitch.IsChecked == true;
             appData.MiniFlipEffect = DraftFlipEffect;
-            appData.MiniDayCount = settingsDayCount == null ? before.MiniDayCount : settingsDayCount.SelectedIndex + 1;
+            appData.MiniDayCount = settingsDayCount == null || !settingsDayCountTouched ? before.MiniDayCount : settingsDayCount.SelectedIndex + 1;
             appData.BringToFrontHotKeyEnabled = InlineHotKeyToggle.IsChecked == true;
             appData.BringToFrontHotKey = _inlineHotKeyDraft.ToString();
             appData.Communication = communication;
@@ -1884,6 +1889,7 @@ namespace ScheduleWidget
 
             res["TitleFontSize"] = settings.TitleFontSize;
             res["DDayFontSize"] = settings.DDayFontSize;
+            UpdateAppearancePreview(settings);
 
             MainBorder.Opacity = settings.Opacity;
             miniWindow?.ApplyAppearance(settings);

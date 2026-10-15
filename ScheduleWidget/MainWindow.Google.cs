@@ -112,11 +112,11 @@ namespace ScheduleWidget
             if (!GoogleActive) return;
             if (googleSyncing) { googleSyncAgain = true; return; }
             googleSyncing = true;
-            UpdateGoogleUi();
             bool failed = false, more = false;
             TimeSpan? googleWait = null;
             try
             {
+                UpdateGoogleUi(); // UI failures must also release googleSyncing in finally.
                 if (GoogleCalendarOn)
                 {
                     try
@@ -226,7 +226,10 @@ namespace ScheduleWidget
                 GoogleAccountText.Text = googleLastError ?? "구글 계정으로 로그인하면 아래 연동을 켤 수 있습니다.";
                 GoogleSignInButton.Content = "구글 로그인";
             }
-            GoogleSignInButton.Style = (Style)GoogleSignInButton.FindResource(GoogleConnected && googleSignIn == null ? "AuxUtilityButton" : "AuxPrimaryButton");
+            // Unified settings detach this card until the connections page is opened. Resolve from the permanent
+            // resource owner, not the card's temporary visual parent; losing a button style must not stop syncing.
+            string signInStyle = GoogleConnected && googleSignIn == null ? "AuxUtilityButton" : "AuxPrimaryButton";
+            if (InlineSettingsPanel.TryFindResource(signInStyle) is Style style) GoogleSignInButton.Style = style;
 
             // The switches: OFF and locked until signed in.
             GoogleCalendarSwitch.IsEnabled = GooglePetsSwitch.IsEnabled = GoogleConnected;

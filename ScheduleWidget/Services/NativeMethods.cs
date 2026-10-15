@@ -17,6 +17,11 @@ namespace ScheduleWidget
         public const int WM_HOTKEY = 0x0312;
         public const uint MOD_NOREPEAT = 0x4000;
         [DllImport("user32.dll")] public static extern IntPtr GetFocus();
+        [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
+        [DllImport("user32.dll")] private static extern bool SetForegroundWindow(IntPtr window);
+        [DllImport("user32.dll")] private static extern IntPtr GetShellWindow();
+        [DllImport("user32.dll")] private static extern IntPtr GetWindow(IntPtr window, uint command);
+        [DllImport("user32.dll")] private static extern IntPtr GetAncestor(IntPtr window, uint flags);
         [DllImport("user32.dll")] public static extern IntPtr SetFocus(IntPtr hWnd);
         [DllImport("user32.dll", SetLastError = true)] private static extern bool IsWindowVisible(IntPtr hWnd);
         [DllImport("user32.dll", SetLastError = true)] private static extern bool GetWindowRect(IntPtr hWnd, out Rect rect);
@@ -90,6 +95,7 @@ namespace ScheduleWidget
         public const uint SWP_NOSIZE = 0x0001;
         public const uint SWP_NOMOVE = 0x0002;
         public const uint SWP_NOACTIVATE = 0x0010;
+        private const uint SWP_NOOWNERZORDER = 0x0200;
         public const uint SWP_SHOWWINDOW = 0x0040;
         public const int SW_SHOWNOACTIVATE = 4;
 
@@ -202,8 +208,16 @@ namespace ScheduleWidget
         public static void SetWidgetStacking(System.Windows.Window window, bool onTop)
         {
             IntPtr handle = new System.Windows.Interop.WindowInteropHelper(window).EnsureHandle();
-            window.Topmost = onTop;
-            SetWindowPos(handle, onTop ? HWND_TOPMOST_PTR : HWND_NOTOPMOST_PTR, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+            if (window.Topmost != onTop)
+            {
+                // WPF's Topmost setter omits SWP_NOOWNERZORDER and can raise the desktop owner too.
+                // Detach only for that synchronous setter, then restore ownership before positioning.
+                IntPtr owner = GetWindow(handle, 4 /* GW_OWNER */);
+                if (owner != IntPtr.Zero) SetWindowOwner(handle, IntPtr.Zero);
+                try { window.Topmost = onTop; }
+                finally { if (owner != IntPtr.Zero && IsWindow(owner)) SetWindowOwner(handle, owner); }
+            }
+            SetWindowPos(handle, onTop ? HWND_TOPMOST_PTR : HWND_NOTOPMOST_PTR, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOOWNERZORDER);
         }
 
         /// <summary>
@@ -217,12 +231,40 @@ namespace ScheduleWidget
             if (window == null || window.Topmost) return;
             IntPtr handle = new System.Windows.Interop.WindowInteropHelper(window).Handle;
             if (handle == IntPtr.Zero) return;
-            SetWindowPos(handle, HWND_TOPMOST_PTR, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
-            SetWindowPos(handle, HWND_NOTOPMOST_PTR, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+            SetWindowPos(handle, HWND_TOPMOST_PTR, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOOWNERZORDER);
+            SetWindowPos(handle, HWND_NOTOPMOST_PTR, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOOWNERZORDER);
         }
 
         private static readonly IntPtr HWND_TOPMOST_PTR = new IntPtr(-1);
         private static readonly IntPtr HWND_NOTOPMOST_PTR = new IntPtr(-2);
+
+        public static bool IsCurrentProcessWindow(IntPtr window)
+        {
+            return window != IntPtr.Zero && GetWindowThreadProcessId(window, out uint pid) != 0 &&
+                pid == (uint)System.Diagnostics.Process.GetCurrentProcess().Id;
+        }
+
+        /// <summary>Return a widget to the desktop without hiding it or changing its saved pin preference.</summary>
+        public static void LowerToDesktop(System.Windows.Window window)
+        {
+            if (window == null || !window.IsVisible) return;
+            SetWidgetStacking(window, false);
+            IntPtr handle = new System.Windows.Interop.WindowInteropHelper(window).Handle;
+            if (handle == IntPtr.Zero) return;
+            IntPtr owner = GetWindow(handle, 4 /* GW_OWNER */);
+            IntPtr ownerRoot = owner == IntPtr.Zero ? IntPtr.Zero : GetAncestor(owner, 2 /* GA_ROOT */);
+            // HWND_BOTTOM alone can put a desktop-owned window underneath the wallpaper.
+            IntPtr after = ownerRoot == IntPtr.Zero ? new IntPtr(1) : GetWindow(ownerRoot, 3 /* GW_HWNDPREV */);
+            if (after == handle) return;
+            SetWindowPos(handle, after, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOOWNERZORDER);
+        }
+
+        public static void RestoreForeground(IntPtr previous)
+        {
+            if (previous == IntPtr.Zero || !IsWindow(previous) || !IsWindowVisible(previous) ||
+                IsCurrentProcessWindow(previous) || IsCloaked(previous)) previous = GetShellWindow();
+            if (previous != IntPtr.Zero) SetForegroundWindow(previous);
+        }
 
         private static IntPtr SetWindowOwner(IntPtr hwnd, IntPtr owner)
         {
@@ -348,20 +390,31 @@ namespace ScheduleWidget
             int changed = 0;
             EnumWindows((window, lParam) =>
             {
-                if (GetWindowThreadProcessId(window, out uint pid) == 0 || pid != browserProcessId) return true;
-                var name = new System.Text.StringBuilder(64);
-                GetClassName(window, name, name.Capacity);
-                if (name.ToString() != "Chrome_WidgetWin_1") return true;
-                var title = new System.Text.StringBuilder(512);
-                GetWindowText(window, title, title.Capacity);
-                if (title.ToString().IndexOf(titlePart, StringComparison.OrdinalIgnoreCase) < 0) return true;
-                int style = GetWindowLong(window, GWL_EXSTYLE);
-                if ((style & WS_EX_LAYERED) == 0 || (style & WS_EX_TRANSPARENT) != 0) return true;
-                SetWindowLong(window, GWL_EXSTYLE, style | WS_EX_TRANSPARENT);
-                changed++;
+                if (MakePetBrowserWindowClickThrough(window, browserProcessId, titlePart)) changed++;
                 return true;
             }, IntPtr.Zero);
             return changed;
+        }
+
+        internal static bool IsPetBrowserWindow(IntPtr window, uint browserProcessId, string titlePart)
+        {
+            if (window == IntPtr.Zero || browserProcessId == 0 || string.IsNullOrEmpty(titlePart) ||
+                GetWindowThreadProcessId(window, out uint pid) == 0 || pid != browserProcessId) return false;
+            var name = new System.Text.StringBuilder(64);
+            GetClassName(window, name, name.Capacity);
+            if (name.ToString() != "Chrome_WidgetWin_1") return false;
+            var title = new System.Text.StringBuilder(512);
+            GetWindowText(window, title, title.Capacity);
+            return title.ToString().IndexOf(titlePart, StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        internal static bool MakePetBrowserWindowClickThrough(IntPtr window, uint browserProcessId, string titlePart)
+        {
+            if (!IsPetBrowserWindow(window, browserProcessId, titlePart)) return false;
+            int style = GetWindowLong(window, GWL_EXSTYLE);
+            if ((style & WS_EX_LAYERED) == 0 || (style & WS_EX_TRANSPARENT) != 0) return false;
+            SetWindowLong(window, GWL_EXSTYLE, style | WS_EX_TRANSPARENT);
+            return (GetWindowLong(window, GWL_EXSTYLE) & WS_EX_TRANSPARENT) != 0;
         }
 
         [StructLayout(LayoutKind.Sequential)]

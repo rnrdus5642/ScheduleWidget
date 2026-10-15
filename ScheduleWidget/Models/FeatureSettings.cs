@@ -42,6 +42,7 @@ namespace ScheduleWidget
         public bool Shuffle { get; set; }
         // 한 곡 반복: 곡이 끝나면 같은 곡을 다시 재생합니다(랜덤·반복보다 우선).
         public bool RepeatOne { get; set; }
+        public bool ExpandYouTubePlaylists { get; set; } = true;
     }
 
     public sealed class MusicPlaylist

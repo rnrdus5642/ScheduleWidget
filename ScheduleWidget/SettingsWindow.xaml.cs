@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Windows;
 using System.Windows.Controls;
@@ -62,7 +62,7 @@ namespace ScheduleWidget
         {
             string[] descriptions = {
                 "앱 실행과 창 표시, 단축키를 설정합니다.",
-                "달력의 테마·투명도와 전체 일정 목록의 글자·색상을 바꿉니다.",
+                "달력의 테마·투명도와 일정 상세의 글자·색상을 바꿉니다.",
                 "전체 표시·캐릭터 목록·전체 배치를 관리합니다. 개별 설정은 캐릭터를 더블클릭하세요.",
                 "재생 옵션과 플레이리스트를 관리합니다. 변경하면 바로 저장됩니다.",
                 "마감 알림의 시점과 받을 곳을 설정합니다.",

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Globalization;
 using System.Linq;
 using System.Windows;
@@ -67,6 +67,7 @@ namespace ScheduleWidget
             }
             ApplyAppearance(data.Appearance, refresh: false);
             weekStart = DefaultRangeStart();
+            InitializeCalendarMode();
             // The pets are sized from the board minus the music bar's room: know whether the bar shows before the first sizing
             // (it used to be counted as shown here and the pets jumped in size right after opening when it is hidden).
             if (!companion) PlayerBar.Visibility = player != null && data.MiniPlayerVisible ? Visibility.Visible : Visibility.Collapsed;
@@ -144,7 +145,8 @@ namespace ScheduleWidget
                 _ = Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.ApplicationIdle, new Action(PrewarmPopups));
                 await InitCharacterViewAsync();
             };
-            Closed += (s, e) => { FlushSave(); closed = true; MusicWindow.PlaybackChanged -= OnPlaybackChanged; recoveryTimer?.Stop(); healthTimer?.Stop(); pixelTimer?.Stop(); petWatchTimer?.Stop(); displayResumeTimer?.Stop(); CharacterView.Dispose(); };
+            Closing += (s, e) => { FinishCalendarModeTransition(); CloseCalendarModeOverlay(); };
+            Closed += (s, e) => { FlushSave(); closed = true; browserInputGuard?.Dispose(); browserInputGuard = null; MusicWindow.PlaybackChanged -= OnPlaybackChanged; recoveryTimer?.Stop(); healthTimer?.Stop(); pixelTimer?.Stop(); petWatchTimer?.Stop(); displayResumeTimer?.Stop(); CharacterView.Dispose(); };
             // Pets vanishing: the view's capture can stall after the screen sleeps, the session is locked, the PC resumes
             // or a (virtual) monitor comes and goes — check the view and repaint it (or reload it) when that happens.
             Microsoft.Win32.SystemEvents.PowerModeChanged += OnPowerModeChanged;
@@ -161,9 +163,9 @@ namespace ScheduleWidget
                 Microsoft.Win32.SystemEvents.SessionSwitch -= OnSessionSwitch;
                 SpriteSharpener.SheetReady -= OnSharpSheetReady;
             };
-            IsVisibleChanged += (s, e) => { if ((bool)e.NewValue) ScheduleHealthCheck("shown"); UpdatePetWatch(); };
+            IsVisibleChanged += (s, e) => { if ((bool)e.NewValue) ScheduleHealthCheck("shown"); else { FinishCalendarModeTransition(); HideCalendarModeOverlay(); } UpdatePetWatch(); };
             // Desktop-owned (survives Win+D) windows are not raised by Windows on click; raise like a normal app.
-            PreviewMouseDown += (s, e) => { if (!companion) NativeMethods.RaiseAboveOtherApps(this); };
+            PreviewMouseDown += (s, e) => { FinishCalendarModeTransition(); if (!companion) NativeMethods.RaiseAboveOtherApps(this); };
             // Pet clicks that would miss the pets' own handlers (see RescuePetClick). Before them: preview events tunnel from here.
             AddHandler(PreviewMouseLeftButtonDownEvent, new MouseButtonEventHandler((s, e) => RescuePetClick(e, right: false)), true);
             AddHandler(PreviewMouseRightButtonUpEvent, new MouseButtonEventHandler((s, e) => RescuePetClick(e, right: true)), true);
@@ -240,8 +242,9 @@ namespace ScheduleWidget
             TodayButton.IsEnabled = fromStart < 0 || fromStart >= count;
             // One pass over the schedules for the whole range instead of one pass per day.
             var byDay = data.Schedules.Where(s => s.Period != null && !s.IsMultiDay).ToLookup(s => s.Period, StringComparer.Ordinal);
-            // 여러 날 schedules on this page: shown on every day they cover.
+            // Multi-day schedules get a single spanning bar, while day details retain the complete list.
             var ranges = data.Schedules.Where(s => s.IsMultiDay && s.Overlaps(weekStart, end)).ToList();
+            weekRangeSegments = CalendarRangeLayout.Build(ranges, weekStart, visibleCount, visibleCount);
             var cells = Enumerable.Range(0, visibleCount).Select(offset =>
             {
                 DateTime date = weekStart.AddDays(offset);
@@ -250,7 +253,7 @@ namespace ScheduleWidget
                 var dayColors = BlockColors(tasks);
                 string holiday = KoreanHolidays.NameOf(date);
                 string label = date.ToString("M월 d일 (ddd)", korean);
-                var blocks = tasks.Select(s =>
+                var blocks = tasks.Where(s => !s.IsMultiDay).Select(s =>
                 {
                     string color = dayColors[s];
                     bool hasTime = !string.IsNullOrWhiteSpace(s.Time);
@@ -287,7 +290,8 @@ namespace ScheduleWidget
                 };
             }).ToList();
             SyncDayCells(cells);
-            RefreshAllSchedules();
+            UpdateWeekRangeLayout();
+            RefreshMonthCalendar();
             if (selectedDay.HasValue && DayPopup != null && DayPopup.IsOpen) RefreshDaySchedules();
         }
 
@@ -314,6 +318,15 @@ namespace ScheduleWidget
             public string Hint { get => hint; set => Set(ref hint, value, nameof(Hint)); }
             public bool IsToday { get => isToday; set => Set(ref isToday, value, nameof(IsToday)); }
             public object TaskBlocks { get => taskBlocks; set => Set(ref taskBlocks, value, nameof(TaskBlocks)); }
+            private Thickness rangeInset = new Thickness(0, 5, 0, 0);
+            private int hiddenRangeCount;
+            public Thickness RangeInset { get => rangeInset; set => Set(ref rangeInset, value, nameof(RangeInset)); }
+            public int HiddenRangeCount
+            {
+                get => hiddenRangeCount;
+                set { if (hiddenRangeCount == value) return; hiddenRangeCount = value; PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(null)); }
+            }
+            public string RangeOverflowLabel => "+" + HiddenRangeCount + "개 기간 일정";
 
             internal void CopyFrom(DayCell next)
             {
@@ -398,7 +411,7 @@ namespace ScheduleWidget
             Set("MiniPaperBrush", next.Paper); Set("MiniFrameBrush", next.Frame); Set("MiniHeaderBrush", next.Header);
             Set("MiniInkBrush", next.Ink); Set("MiniMutedBrush", next.Muted); Set("MiniHoverBrush", next.Hover);
             Set("MiniDayBrush", next.Day); Set("MiniRingBrush", next.Ring);
-            Set("MiniTodayBorderBrush", next.TodayBorder); Set("MiniHolidayBrush", next.Holiday);
+            Set("MiniTodayBorderBrush", next.TodayBorder); Set("MiniHolidayBrush", next.Holiday); Set("MiniSaturdayBrush", next.Saturday);
             Set("AuxCanvasBrush", next.Canvas); Set("AuxSurfaceBrush", next.Surface); Set("AuxInkBrush", next.AuxInk);
             Set("AuxMutedBrush", next.AuxMuted); Set("AuxHairlineBrush", next.Hairline);
             Set("AuxActionBrush", next.Action); Set("AuxFocusBrush", next.Action);
@@ -590,12 +603,9 @@ namespace ScheduleWidget
             var item = blockItem;
             BlockPopup.IsOpen = false;
             if (item == null || !data.Schedules.Contains(item)) return;
-            if ((BlockPopup.PlacementTarget as FrameworkElement)?.DataContext is AllScheduleRow)
-            {
-                OpenAllScheduleEditor(item);
-                return;
-            }
             if (!DateTime.TryParseExact(item.Period, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out DateTime day)) return;
+            if ((BlockPopup.PlacementTarget as FrameworkElement)?.DataContext is MonthScheduleBlock monthBlock) day = monthBlock.Date;
+            if ((BlockPopup.PlacementTarget as FrameworkElement)?.DataContext is CalendarRangeBar rangeBar) day = rangeBar.Date;
             var dayButton = FindDayButton(day.Date);
             // 여러 날 begun before this page: the first day of it the page shows.
             for (int i = 0; dayButton == null && item.IsMultiDay && i < dayCells.Count; i++)
@@ -625,7 +635,7 @@ namespace ScheduleWidget
                 }
                 return null;
             }
-            return Search(WeekDays);
+            return Search(IsMonthViewOpen ? MonthDays : WeekDays);
         }
 
         private void CompleteMiniSchedule_Click(object sender, RoutedEventArgs e)
@@ -768,6 +778,7 @@ namespace ScheduleWidget
 
         private void CloseDayPopup()
         {
+            reopenDayAfterLowering = false;
             if (MiniDateInput != null) MiniDateInput.IsDropDownOpen = false;
             if (MiniEndDateInput != null) MiniEndDateInput.IsDropDownOpen = false;
             if (DayPopup != null)
@@ -779,6 +790,29 @@ namespace ScheduleWidget
             selectedDay = null;
             miniDateInvalid = false;
             if (MiniEditorPanel != null) MiniEditorPanel.Visibility = Visibility.Collapsed;
+        }
+
+        private bool reopenDayAfterLowering;
+
+        internal void DismissPopupsForLowering()
+        {
+            // Closing the popup normally clears the editor; preserve it across a shortcut toggle.
+            reopenDayAfterLowering = DayPopup.IsOpen;
+            keepDayPopupState = true;
+            try { DayPopup.IsOpen = false; }
+            finally { keepDayPopupState = false; }
+            MiniDateInput.IsDropDownOpen = MiniEndDateInput.IsDropDownOpen = false;
+            PlaylistPopup.IsOpen = VolumePopup.IsOpen = RangePopup.IsOpen = QueuePopup.IsOpen = BlockPopup.IsOpen = false;
+            CloseUpcomingPreview();
+        }
+
+        internal void RestorePopupAfterRaising()
+        {
+            if (!reopenDayAfterLowering || !selectedDay.HasValue) return;
+            reopenDayAfterLowering = false;
+            RefreshDaySchedules();
+            RemeasurePopup(DayPopup);
+            DayPopup.IsOpen = true;
         }
 
         private bool TryGetMiniDate(out DateTime date)
@@ -818,13 +852,17 @@ namespace ScheduleWidget
             bool sameDay = dayPopupDay == day;
             if (sameDay && DayPopup.IsOpen) { CloseDayPopup(); return; }
             if (sameDay && popupClosedAt.TryGetValue(DayPopup, out DateTime closedAt) && (DateTime.Now - closedAt).TotalMilliseconds < 300) return;
-            dayPopupDay = day;
-            selectedDay = day;
-            ResetMiniEditor(selectedDay.Value);
-            MiniEditorPanel.Visibility = Visibility.Collapsed;
-            RefreshDaySchedules();
+            PrepareDayDetails(day);
             OpenDayPopupAt(button);
             e.Handled = true;
+        }
+
+        private void PrepareDayDetails(DateTime day)
+        {
+            dayPopupDay = selectedDay = day.Date;
+            ResetMiniEditor(day.Date);
+            MiniEditorPanel.Visibility = Visibility.Collapsed;
+            RefreshDaySchedules();
         }
 
         private void OpenDayPopupAt(FrameworkElement anchor)
@@ -1059,6 +1097,7 @@ namespace ScheduleWidget
             CloseDayPopup();
             FinishWeekFlip(); // a flip still running jumps to its end first: the picture shows the settled page, the arrows its limits
             int direction = int.Parse((string)((Button)sender).Tag, CultureInfo.InvariantCulture);
+            if (IsMonthViewOpen) { MoveMonth(direction); return; }
             if (!(direction < 0 && PreviousWeek.IsEnabled || direction > 0 && NextWeek.IsEnabled)) { Refresh(); return; }
             DateTime target = weekStart.AddDays(direction * DayCount);
             if (!WeekFlipAnimates) { weekStart = target; Refresh(); return; }
@@ -1109,6 +1148,7 @@ namespace ScheduleWidget
             CloseDayPopup();
             RangePopup.IsOpen = false;
             FinishWeekFlip(); // a flip (or rush) still running ends first
+            if (IsMonthViewOpen) { displayedMonth = MonthStart(DateTime.Today); Refresh(); return; }
             DateTime target = DefaultRangeStart();
             int days = (target - weekStart).Days;
             if (days == 0 || !WeekFlipAnimates || DayCount <= 0) { weekStart = target; Refresh(); return; }
@@ -1220,7 +1260,7 @@ namespace ScheduleWidget
         private const uint SwpNoSize = 0x0001, SwpNoMove = 0x0002, SwpNoZOrder = 0x0004, SwpNoOwnerZOrder = 0x0200;
 
         private bool WeekFlipAnimates =>
-            !IsAllSchedulesOpen && // keep the agenda stationary while its calendar changes weeks
+            !IsMonthViewOpen && // monthly navigation does not use the week-page animation
             data.MiniFlipEffect != 0 && // 애니메이션 없음: the week changes at once (and no page window is ever made)
             (weekFlipAnimationsOverride ?? SystemParameters.ClientAreaAnimation) && !companion && !closed && IsLoaded && IsVisible &&
             PresentationSource.FromVisual(this) != null && WeekDays.Parent is FrameworkElement host && host.ActualWidth >= 2 &&
@@ -2973,7 +3013,8 @@ namespace ScheduleWidget
         {
             CloseDayPopup();
             EndRush(); // a page chosen here stays, even mid-오늘로 이동 (see FinishWeekFlip)
-            weekStart = DayCount == 7 ? StartOfWeek(date) : date.Date;
+            if (IsMonthViewOpen) displayedMonth = MonthStart(date);
+            else weekStart = DayCount == 7 ? StartOfWeek(date) : date.Date;
             Refresh();
         }
 
@@ -3041,6 +3082,7 @@ namespace ScheduleWidget
         {
             // A flip's old page is a picture of the day area at its old size: a resize (corner grip, music bar rows) ends it.
             FinishWeekFlip();
+            UpdateWeekRangeLayout();
         }
 
 
@@ -3051,7 +3093,7 @@ namespace ScheduleWidget
 
         private void WeekCalendar_SizeChanged(object sender, SizeChangedEventArgs e)
         {
-            if (!e.HeightChanged || resizingBoard) return; // a corner-grip drag: the pets re-fit when it ends
+            if (!e.HeightChanged || resizingBoard || changingCalendarMode) return; // pets re-fit once per mode-transition frame
             double basis = PetSizeBasis();
             if (e.PreviousSize.Height > 0 && basis == petBasisSeen) return;
             petBasisSeen = basis;
@@ -3065,7 +3107,8 @@ namespace ScheduleWidget
         /// board is resized or the bar is shown / hidden — not when the bar's title or seek rows come and go.</summary>
         internal double PetSizeBasis() =>
             companion ? 260 // the TODO window's pets use a fixed base (a 260 px calendar) — its window height is not a calendar
-                : Math.Max(80, BoardHeight - CalendarTopMargin - (PlayerBar != null && PlayerBar.Visibility == Visibility.Visible ? RestingBarRoom : CalendarBottomGapNoBar));
+                : Math.Max(80, (IsMonthViewOpen ? (ValidCalendarBoard(data.MiniBoard) ? data.MiniBoard.Height : 312) : BoardHeight)
+                    - CalendarTopMargin - (PlayerBar != null && PlayerBar.Visibility == Visibility.Visible ? RestingBarRoom : CalendarBottomGapNoBar));
 
         // Character height follows the calendar: 100% = half the calendar height, scaled by the user's setting (50~300%).
         public void UpdateCharacterSize()
@@ -3102,18 +3145,18 @@ namespace ScheduleWidget
             Point mouse = PointToScreenDip(System.Windows.Forms.Control.MousePosition);
             double dx = mouse.X - gripStartMouse.X, dy = mouse.Y - gripStartMouse.Y;
             if (corner[1] == 'R')
-                Width = Clamp(gripStartBounds.Width + dx, MinWidthNow, maxWidth);
+                Width = Clamp(gripStartBounds.Width + dx, Math.Min(MinWidthNow, maxWidth), maxWidth);
             else
             {
-                double next = Clamp(gripStartBounds.Width - dx, MinWidthNow, maxWidth);
+                double next = Clamp(gripStartBounds.Width - dx, Math.Min(MinWidthNow, maxWidth), maxWidth);
                 Left = gripStartBounds.Right - next;
                 Width = next;
             }
             if (corner[0] == 'B')
-                Height = Clamp(gripStartBounds.Height + dy, MinHeightNow, maxHeight);
+                Height = Clamp(gripStartBounds.Height + dy, Math.Min(MinHeightNow, maxHeight), maxHeight);
             else
             {
-                double next = Clamp(gripStartBounds.Height - dy, MinHeightNow, maxHeight);
+                double next = Clamp(gripStartBounds.Height - dy, Math.Min(MinHeightNow, maxHeight), maxHeight);
                 Top = gripStartBounds.Bottom - next;
                 Height = next;
             }
@@ -3126,6 +3169,7 @@ namespace ScheduleWidget
 
         private void ResizeGrip_DragStarted(object sender, System.Windows.Controls.Primitives.DragStartedEventArgs e)
         {
+            FinishCalendarModeTransition();
             resizingBoard = true;
             gripStartPets = PetBoardRects(BoardWidth, BoardHeight); // pets that grow with the calendar are kept apart at the end
             gripStartBounds = new Rect(Left, Top, WindowWidthNow, WindowHeightNow);
@@ -3141,6 +3185,7 @@ namespace ScheduleWidget
 
         private void ResizeGrip_DragCompleted(object sender, System.Windows.Controls.Primitives.DragCompletedEventArgs e)
         {
+            if (resettingScreenInput) { e.Handled = true; return; }
             resizingBoard = false;
             UpdateCharacterSize();
             KeepPetsApart(gripStartPets);
@@ -3424,6 +3469,11 @@ namespace ScheduleWidget
         /// <summary>The saved calendar board. Older versions saved only the window, which held a pet column on one side.</summary>
         public static MonitorStateData SavedBoard(AppData data)
         {
+            return data.MiniMonthView && ValidCalendarBoard(data.MiniMonthBoard) ? data.MiniMonthBoard : SavedCompactBoard(data);
+        }
+
+        private static MonitorStateData SavedCompactBoard(AppData data)
+        {
             if (data.MiniBoard != null) return data.MiniBoard;
             var window = data.MiniPosition;
             if (window == null) return null;
@@ -3447,7 +3497,7 @@ namespace ScheduleWidget
 
         private const double MinCalendarOnlyWidth = 220, MinBoardHeight = 190;
         private double MinWidthNow => MinCalendarOnlyWidth + 2 * Edge + petPads.Left + petPads.Right;
-        private double MinHeightNow => MinBoardHeight + 2 * Edge + petPads.Top + petPads.Bottom;
+        private double MinHeightNow => (IsMonthViewOpen ? MonthMinimumHeight : MinBoardHeight) + 2 * Edge + petPads.Top + petPads.Bottom;
 
         public void UpdateCharacterVisibility()
         {
@@ -3510,6 +3560,7 @@ namespace ScheduleWidget
 
         private void SavePosition()
         {
+            if (changingCalendarMode) return;
             if (!IsFinite(Left) || !IsFinite(Top)) return;
             if (companion)
             {
@@ -3518,8 +3569,18 @@ namespace ScheduleWidget
                 SaveSoon();
                 return;
             }
-            data.MiniPosition = new MonitorStateData { Left = Left, Top = Top, Width = Width, Height = Height };
-            data.MiniBoard = new MonitorStateData { Left = Left + Edge + petPads.Left, Top = Top + Edge + petPads.Top, Width = BoardWidth, Height = BoardHeight };
+            var board = new MonitorStateData { Left = Left + Edge + petPads.Left, Top = Top + Edge + petPads.Top, Width = BoardWidth, Height = BoardHeight };
+            if (IsMonthViewOpen)
+            {
+                data.MiniMonthBoard = board;
+                // An explicit resize/move in either mode updates their shared horizontal geometry.
+                if (ValidCalendarBoard(data.MiniBoard)) { data.MiniBoard.Left = board.Left; data.MiniBoard.Width = board.Width; }
+            }
+            else
+            {
+                data.MiniPosition = new MonitorStateData { Left = Left, Top = Top, Width = Width, Height = Height };
+                data.MiniBoard = board;
+            }
             if (loadedSlotKeys != null) RememberSpots(); // after a drag / placement: each character keeps its new spot
             MiniSettingsStateChanged?.Invoke();
             SaveSoon();
@@ -3604,7 +3665,7 @@ namespace ScheduleWidget
         private bool restoredPlace;   // the window opened at a saved place
         private bool ensureWhenShown; // the screens changed while hidden: checked on the next show
         private bool movingWindow;    // the user is dragging the window (DragMove): never moved under them
-        private bool HasSavedPlace => data.MiniBoard != null || data.MiniPosition != null;
+        private bool HasSavedPlace => SavedBoard(data) != null;
 
         // Monitors / work area changed (seen by the window itself as well as through SystemEvents): checked once they settle.
         private IntPtr WatchScreens(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
@@ -3810,7 +3871,7 @@ namespace ScheduleWidget
                 else if (VolumePopup.IsOpen) VolumePopup.IsOpen = false;
                 else if (PlaylistPopup.IsOpen) PlaylistPopup.IsOpen = false;
                 else if (BlockPopup.IsOpen) BlockPopup.IsOpen = false;
-                else if (IsAllSchedulesOpen) SetAllSchedulesOpen(false);
+                else if (IsMonthViewOpen) SetMonthViewOpen(false);
                 else HideToTray(); // nothing open: hide the widget; the tray icon (열기) brings it back
                 return;
             }
@@ -3868,6 +3929,7 @@ namespace ScheduleWidget
                 };
                 view.CoreWebView2.NewWindowRequested += (sender, args) => args.Handled = true;
                 view.CoreWebView2.ProcessFailed += (sender, args) => { if (view == CharacterView) HandleCharacterProcessFailed(args.ProcessFailedKind); };
+                EnsureViewClickThrough(); // observe native creation/title changes before navigation creates the surface
                 viewReady = true;
                 ReloadCharacter();
             }
@@ -4000,7 +4062,10 @@ namespace ScheduleWidget
         // transition is rendered, so WPF cannot submit that stale surface to an adapter that disappeared.
         internal void PrepareCharacterDisplayChange()
         {
-            if (closed || characterDisplayChanging) return;
+            if (closed) return;
+            ResetPointerForScreenChange();
+            if (characterDisplayChanging) return;
+            EnsureViewClickThrough(); // keep the retiring surface harmless while the runtime disposes it
             characterDisplayChanging = true;
             recoveryTimer?.Stop();
             healthTimer?.Stop();
@@ -4029,6 +4094,7 @@ namespace ScheduleWidget
             displayResumeTimer?.Stop();
             if (closed || !characterDisplayChanging) return;
             characterDisplayChanging = false;
+            RecoverScreenInputLayout();
             PetLog.Write("display-changed", "graphics surface restarting");
             if (recoveryOverride != null) { recoveryOverride(true, "display-change"); return; }
             var _ = InitCharacterViewAsync();
@@ -4085,6 +4151,8 @@ namespace ScheduleWidget
         internal async System.Threading.Tasks.Task RunHealthCheckAsync(string reason)
         {
             if (closed || characterDisplayChanging || !IsVisible && healthCheckOverride == null) return; // hidden: checked again when shown
+            RecoverScreenInputLayout();
+            EnsureViewClickThrough();
             if (recoveryTimer != null && recoveryTimer.IsEnabled) return; // a reload / new view is already on its way
             var observedView = CharacterView;
             bool? alive = await PageAnswersAsync();
@@ -4238,16 +4306,26 @@ namespace ScheduleWidget
         /// raise it above this window (e.g. when the desktop was activated), and from then on it took every click on the pets
         /// and much of the calendar — the pets stayed dead until the window was dragged. Click-through, it never can.
         /// </summary>
+        private BrowserWindowInputGuard browserInputGuard;
+        private uint guardedBrowserProcessId;
+
         private void EnsureViewClickThrough()
         {
             if (closed) return;
             var core = LiveCore;
-            if (core == null) return;
+            if (core == null) { browserInputGuard?.Verify(); return; }
             uint pid;
             try { pid = core.BrowserProcessId; }
             catch (Exception ex) when (ex is InvalidOperationException || ex is System.Runtime.InteropServices.COMException) { return; }
-            int changed = NativeMethods.MakeBrowserWindowsClickThrough(pid, "character.html?mini");
-            if (changed > 0) PetLog.Write("view", "browser window made click-through (" + changed + ")");
+            if (pid == 0) return;
+            if (browserInputGuard == null || guardedBrowserProcessId != pid)
+            {
+                browserInputGuard?.Dispose();
+                guardedBrowserProcessId = pid;
+                browserInputGuard = new BrowserWindowInputGuard(pid, "character.html?mini", Dispatcher,
+                    changed => PetLog.Write("view-input", "browser surface made click-through (" + changed + ")"));
+            }
+            else browserInputGuard.Verify();
         }
 
         /// <summary>Called when a new page says "ready": after a rebuild for looking empty, check that the new view shows.</summary>
@@ -4449,14 +4527,14 @@ namespace ScheduleWidget
         private void OnPowerModeChanged(object sender, Microsoft.Win32.PowerModeChangedEventArgs e)
         {
             if (e.Mode == Microsoft.Win32.PowerModes.Resume)
-                Dispatcher.BeginInvoke(new Action(() => { PetLog.Write("resume"); ScheduleHealthCheck("resume"); ScreensMayHaveChanged("resume"); }));
+                Dispatcher.BeginInvoke(new Action(() => { PetLog.Write("resume"); ResetPointerForScreenChange(); EnsureViewClickThrough(); ScheduleHealthCheck("resume"); ScreensMayHaveChanged("resume"); }));
         }
 
         private void OnSessionSwitch(object sender, Microsoft.Win32.SessionSwitchEventArgs e)
         {
             if (e.Reason == Microsoft.Win32.SessionSwitchReason.SessionUnlock || e.Reason == Microsoft.Win32.SessionSwitchReason.ConsoleConnect ||
                 e.Reason == Microsoft.Win32.SessionSwitchReason.RemoteConnect)
-                Dispatcher.BeginInvoke(new Action(() => { ScheduleHealthCheck("session-" + e.Reason); ScreensMayHaveChanged("session-" + e.Reason); }));
+                Dispatcher.BeginInvoke(new Action(() => { ResetPointerForScreenChange(); EnsureViewClickThrough(); ScheduleHealthCheck("session-" + e.Reason); ScreensMayHaveChanged("session-" + e.Reason); }));
         }
 
         private void ShowCharacterError(string message, int pet = 0)
@@ -5198,17 +5276,18 @@ namespace ScheduleWidget
         }
 
         /// <summary>Re-fits the window around the board and the pets, keeping the board where it is on screen.</summary>
-        private void ApplyPetLayout(bool save = true)
+        private void ApplyPetLayout(bool save = true, MonitorStateData board = null)
         {
             if (closed || CharacterHost == null || MiniRoot == null || layingOutPets) return;
+            if (modeTransitionTo != null && board == null) return; // only the destination's explicit layout runs during a transition
             layingOutPets = true;
             try
             {
                 // A DPI change may have left the window's pixels out of step with Width / Height: put them back first. Sizing
                 // it here otherwise made WPF read the wrong pixel size back into Width — and the calendar shrank by half.
-                if (!resizingBoard) SyncWindowPixels();
-                double boardW = BoardWidth, boardH = BoardHeight;
-                double boardLeft = Left + Edge + petPads.Left, boardTop = Top + Edge + petPads.Top;
+                if (!resizingBoard && board == null) SyncWindowPixels();
+                double boardW = board?.Width ?? BoardWidth, boardH = board?.Height ?? BoardHeight;
+                double boardLeft = board?.Left ?? (Left + Edge + petPads.Left), boardTop = board?.Top ?? (Top + Edge + petPads.Top);
                 bool shown = PetsShown;
                 var rects = shown ? PetBoardRects(boardW, boardH).Where(r => r.Width > 0).ToList() : new System.Collections.Generic.List<Rect>();
                 var pads = new Thickness(
@@ -5232,13 +5311,19 @@ namespace ScheduleWidget
                 bool padsChanged = pads != petPads;
                 petPads = pads;
                 MiniRoot.Margin = new Thickness(Edge + pads.Left, Edge + pads.Top, Edge + pads.Right, Edge + pads.Bottom);
-                if (padsChanged && !resizingBoard)
+                if ((padsChanged || board != null) && !resizingBoard)
                 {
                     // Grow/shrink around the board so it stays still (before the first placement only the size matters).
-                    if (IsFinite(Left) && IsFinite(Top)) { Left = boardLeft - Edge - pads.Left; Top = boardTop - Edge - pads.Top; }
-                    Width = boardW + 2 * Edge + pads.Left + pads.Right;
-                    Height = boardH + 2 * Edge + pads.Top + pads.Bottom;
-                    requestedSize = new Size(Width, Height);
+                    if (board != null)
+                        SetCalendarWindowBounds(new Rect(boardLeft - Edge - pads.Left, boardTop - Edge - pads.Top,
+                            boardW + 2 * Edge + pads.Left + pads.Right, boardH + 2 * Edge + pads.Top + pads.Bottom));
+                    else
+                    {
+                        if (IsFinite(Left) && IsFinite(Top)) { Left = boardLeft - Edge - pads.Left; Top = boardTop - Edge - pads.Top; }
+                        Width = boardW + 2 * Edge + pads.Left + pads.Right;
+                        Height = boardH + 2 * Edge + pads.Top + pads.Bottom;
+                        requestedSize = new Size(Width, Height);
+                    }
                 }
                 CharacterHost.Visibility = shown ? Visibility.Visible : Visibility.Collapsed;
                 var inView = PetRects();
@@ -5736,7 +5821,7 @@ namespace ScheduleWidget
             // Not in the middle of a layout pass (ApplyPetLayout sets Left / Top / Width / Height one at a time: in between the
             // board's height reads half-updated, and the pets were re-sized from it — then left larger than the window, cut
             // off, or shrunk) nor while a corner grip drags (the pets re-fit when it ends).
-            if (e.HeightChanged && !layingOutPets && !resizingBoard) UpdateCharacterSize();
+            if (e.HeightChanged && !layingOutPets && !resizingBoard && !changingCalendarMode) UpdateCharacterSize();
         }
     }
 }

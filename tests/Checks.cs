@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
@@ -377,12 +377,12 @@ namespace ScheduleWidget.Checks
 
                 bool calendarClosed = false;
                 mini.Closed += (sender, args) => calendarClosed = true;
-                var todoButton = (System.Windows.Controls.Button)mini.FindName("TodoButton");
+                var todoButton = (System.Windows.Controls.Button)mini.FindName("MonthViewButton");
                 int windowCount = app.Windows.Count;
                 todoButton.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
-                Require(mini.IsAllSchedulesOpen && app.Windows.Count == windowCount && !main.IsVisible, "The agenda opened a separate window.");
+                Require(mini.IsMonthViewOpen && app.Windows.Count == windowCount && !main.IsVisible, "The month view opened a separate window.");
                 todoButton.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
-                Require(!mini.IsAllSchedulesOpen && !calendarClosed, "The list button did not fold the agenda back into the calendar.");
+                Require(!mini.IsMonthViewOpen && !calendarClosed, "The month button did not restore the original range.");
 
                 typeof(MainWindow).GetField("miniWindow", flags).SetValue(main, mini);
                 var clickData = Data();
@@ -392,8 +392,18 @@ namespace ScheduleWidget.Checks
                 windows.Add(clickMini);
                 Run("Character double-click selects its settings without opening the picker", () => PetClickRouting(clickMini, clickData));
                 Run("Display changes release pet graphics, coalesce and preserve user data", CharacterDisplayChanges);
+                Run("Repeated screen changes cancel stale pointer states without saving transitional geometry", DisplayPointerReset);
                 Run("Compact calendar shows multiple schedules and scrolls every day independently", CalendarDayLists);
-                Run("Embedded agenda lists distant schedules, resizes and reuses schedule editing", AllSchedulesPanel);
+                Run("Month calendar covers whole months, boundaries and schedule editing", MonthCalendar);
+                Run("Calendar modes resize, fit the screen and restore independent geometry", CalendarModeGeometry);
+                Run("Calendar keeps both horizontal edges fixed and uses free space above or below", CalendarAnchoredExpansion);
+                Run("Monthly schedule titles, times, colors and overflow remain accessible", MonthScheduleVisibility);
+                Run("Monthly mode preserves the basic calendar's pet scale", CalendarModePetScale);
+                Run("Range bars span dates, wrap at week boundaries and keep overlaps separate", CalendarRangeBars);
+                Run("Range overflow, editing and completion preserve the original schedule", CalendarRangeActions);
+                Run("Calendar mode animation keeps intermediate geometry out of saved settings", CalendarModeTransition);
+                Run("Mode snapshots preserve live pixels and motion settles at the rendered destination", CalendarModePixelHandoff);
+                Run("Global shortcut toggles foreground and desktop without hiding the calendar", () => HotKeyToggle(main, data));
                 Run("Music bar keeps one row across playback states and narrow widths", FixedMusicBar);
                 Run("External media automatically updates the bar without controlling other apps", AutomaticMediaRouting);
                 Run("Media events coalesce and keep idle metadata and volume queries at zero", EventDrivenMediaWatch);
@@ -432,8 +442,11 @@ namespace ScheduleWidget.Checks
                 Require(firstList.Items.Count == 12 && nextList.Items.Count == 12, "A small calendar dropped schedules.");
                 var second = (FrameworkElement)firstList.ItemContainerGenerator.ContainerFromIndex(1);
                 Require(second != null, "The second schedule was not rendered.");
-                var secondBounds = second.TransformToAncestor(scroll).TransformBounds(new Rect(second.RenderSize));
-                Require(secondBounds.Bottom <= scroll.ViewportHeight + 1, "Only one schedule fits in a compact day cell.");
+                // The container includes the gap after its card; at fractional DPI that blank gap can extend past
+                // the viewport while both complete cards are still visible. Measure the card itself.
+                var secondCard = VisualDescendants<Border>(second).First();
+                var secondBounds = secondCard.TransformToAncestor(scroll).TransformBounds(new Rect(secondCard.RenderSize));
+                Require(secondBounds.Bottom <= scroll.ViewportHeight + 1, "Only one complete schedule card fits in a compact day cell.");
                 Require(scroll.ScrollableHeight > 0, "Overflow schedules cannot be scrolled.");
                 scroll.ScrollToEnd();
                 content.UpdateLayout();
@@ -455,65 +468,107 @@ namespace ScheduleWidget.Checks
             finally { mini.Close(); }
         }
 
-        private static void AllSchedulesPanel()
+        private static void MonthCalendar()
         {
             var data = new AppData { MiniCharacterVisible = false, MiniPlayerVisible = false };
-            var earlier = new ScheduleItem { Title = "Earlier", Period = DateTime.Today.AddDays(-2).ToString("yyyy-MM-dd") };
-            var distant = new ScheduleItem { Title = "Next year", Period = DateTime.Today.AddYears(1).ToString("yyyy-MM-dd"),
-                EndPeriod = DateTime.Today.AddYears(1).AddDays(2).ToString("yyyy-MM-dd"), Time = "14:30", Color = "#336699" };
-            data.Schedules.Add(distant);
-            data.Schedules.Add(earlier);
+            var trip = new ScheduleItem { Title = "Three-day trip", Period = "2026-10-05", EndPeriod = "2026-10-07", Time = "14:30" };
+            data.Schedules.Add(trip);
+            data.Schedules.Add(new ScheduleItem { Title = "Other month", Period = "2026-09-30" });
             int saves = 0;
             var mini = new MiniWindow(data, () => { saves++; return true; }, () => { });
             try
             {
-                var content = (FrameworkElement)mini.Content;
-                void Layout(double width)
+                mini.ShowRangeFrom(new DateTime(2026, 10, 19));
+                DateTime originalStart = (DateTime)Field(mini, "weekStart");
+                mini.SetMonthViewOpen(true);
+                var grid = Control<ItemsControl>(mini, "MonthDays");
+                List<MiniWindow.MonthDayCell> Cells() => grid.Items.Cast<MiniWindow.MonthDayCell>().ToList();
+                Require(Cells().Count == 35 && Cells()[0].Date == new DateTime(2026, 9, 28) && Cells()[34].Date == new DateTime(2026, 11, 1), "October's full month grid is wrong.");
+                Require(Cells().Count(c => c.IsCurrentMonth) == 31 && Cells().Count(c => c.Count == 1) == 4, "Multi-day or adjacent-month schedules were omitted.");
+                foreach (double width in new[] { 240.0, 360.0, 800.0, 1200.0 })
                 {
+                    var content = (FrameworkElement)mini.Content;
                     mini.Width = width;
-                    content.Measure(new Size(width, 260));
-                    content.Arrange(new Rect(0, 0, width, 260));
-                    content.UpdateLayout();
+                    content.Measure(new Size(width, 260)); content.Arrange(new Rect(0, 0, width, 260)); content.UpdateLayout();
+                    var panel = Control<FrameworkElement>(mini, "MonthCalendarPanel");
+                    var sheet = Control<FrameworkElement>(mini, "CalendarSheet");
+                    Require(Control<FrameworkElement>(mini, "WeekDays").Visibility == Visibility.Hidden && panel.ActualWidth >= sheet.ActualWidth - 18,
+                        "Month view does not cover the calendar body.");
+                    var buttons = VisualDescendants<Button>(grid).ToArray();
+                    Require(buttons.Length == 35 && buttons.All(button => button.ActualHeight >= 20), "A month day is missing or clipped vertically.");
+                    Require(buttons.Last().TransformToAncestor(grid).TransformBounds(new Rect(buttons.Last().RenderSize)).Bottom <= grid.ActualHeight + 1,
+                        "The last week falls outside the calendar.");
                 }
-                Layout(800);
-                mini.SetAllSchedulesOpen(true);
-                Layout(800);
-                var panel = (FrameworkElement)mini.FindName("AllSchedulesPanel");
-                var list = (ItemsControl)mini.FindName("AllSchedulesList");
-                ScheduleItem ItemAt(int index) => (ScheduleItem)list.Items[index].GetType().GetProperty("Item").GetValue(list.Items[index]);
-                Require(list.Items.Count == 2 && ItemAt(0) == earlier && ItemAt(1) == distant, "The full agenda omitted or misordered distant schedules.");
-                Require((string)list.Items[1].GetType().GetProperty("Detail").GetValue(list.Items[1]) is string detail &&
-                    detail.Contains(DateTime.Today.AddYears(1).Year.ToString()) && detail.Contains("14:30"), "The agenda lost the year or time.");
-                Require(Window.GetWindow(panel) == mini && Grid.GetColumn(panel) == 1, "The agenda is not inside the calendar.");
-                var sheet = (FrameworkElement)mini.FindName("CalendarSheet");
-                Require(panel.TransformToAncestor(sheet).TransformBounds(new Rect(panel.RenderSize)).Right <= sheet.ActualWidth + 1, "The agenda extends outside the calendar.");
-                Layout(360);
-                Require(Grid.GetColumn(panel) == 0 && panel.ActualWidth <= sheet.ActualWidth, "The narrow calendar clips its agenda.");
-                Call(mini, "PrepareAllScheduleEditor", distant);
-                Require(((TextBox)mini.FindName("MiniTitleInput")).Text == distant.Title &&
-                    ((DatePicker)mini.FindName("MiniDateInput")).SelectedDate == distant.StartDate &&
-                    ((CheckBox)mini.FindName("MiniRangeToggle")).IsChecked == true, "Editing a distant multi-day schedule lost its values.");
-                ((TextBox)mini.FindName("MiniTitleInput")).Text = "Updated next year";
-                Call(mini, "SaveMiniSchedule_Click", mini, new RoutedEventArgs(Button.ClickEvent));
-                Require(saves == 1 && distant.Title == "Updated next year" && ItemAt(1) == distant, "Agenda edits did not save and refresh.");
-                SetField(mini, "blockItem", distant);
-                Call(mini, "BlockDone_Click", mini, new RoutedEventArgs(Button.ClickEvent));
-                Require(distant.IsCompleted && saves == 2, "Agenda completion did not use the existing save flow.");
-                Call(mini, "BlockDelete_Click", mini, new RoutedEventArgs(Button.ClickEvent));
-                Require(data.Schedules.Contains(distant), "The first delete press removed a schedule.");
-                Call(mini, "BlockDelete_Click", mini, new RoutedEventArgs(Button.ClickEvent));
-                Require(!data.Schedules.Contains(distant) && list.Items.Count == 1 && saves == 3, "Confirmed deletion did not refresh the agenda.");
-                Call(mini, "PrepareAllScheduleEditor", new object[] { null });
-                ((TextBox)mini.FindName("MiniTitleInput")).Text = "New from agenda";
-                Call(mini, "SaveMiniSchedule_Click", mini, new RoutedEventArgs(Button.ClickEvent));
-                Require(list.Items.Count == 2 && data.Schedules.Any(s => s.Title == "New from agenda") && saves == 4, "Adding through the agenda failed.");
-                ((Button)mini.FindName("AllSchedulesClose")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-                Require(!mini.IsAllSchedulesOpen && !mini.IsVisible, "Closing the agenda opened or closed a desktop window.");
-                data.Schedules.Clear();
-                mini.SetAllSchedulesOpen(true);
-                Require(list.Items.Count == 0 && ((FrameworkElement)mini.FindName("AllSchedulesEmpty")).Visibility == Visibility.Visible, "The empty agenda did not refresh.");
+                Call(mini, "PrepareDayDetails", new DateTime(2026, 10, 6));
+                Require(Control<ItemsControl>(mini, "DaySchedules").Items.Cast<ScheduleItem>().Single() == trip, "Date details lost a continuing multi-day event.");
+                Call(mini, "EditMiniSchedule_Click", new Button { DataContext = trip }, ClickArgs());
+                Require(Control<TextBox>(mini, "MiniTitleInput").Text == trip.Title && Control<DatePicker>(mini, "MiniDateInput").SelectedDate == trip.StartDate &&
+                    Control<CheckBox>(mini, "MiniRangeToggle").IsChecked == true, "Month editing lost the original range.");
+                Control<TextBox>(mini, "MiniTitleInput").Text = "Updated trip";
+                SetField(mini, "selectedDay", null); // do not show a popup during headless checks
+                Call(mini, "SaveMiniSchedule_Click", mini, ClickArgs());
+                Require(saves == 1 && trip.Title == "Updated trip" && Cells().Single(c => c.Date == new DateTime(2026, 10, 6)).Hint.Contains("Updated trip"), "Saving did not refresh the month.");
+                data.Schedules.Remove(trip); mini.Refresh();
+                Require(Cells().Single(c => c.Date == new DateTime(2026, 10, 6)).Count == 0, "Removed schedules remain on the month.");
+                mini.ShowRangeFrom(new DateTime(2028, 2, 1));
+                Require(Cells().Count(c => c.IsCurrentMonth) == 29 && Cells().Any(c => c.Date == new DateTime(2028, 2, 29)), "Leap day missing.");
+                mini.ShowRangeFrom(new DateTime(2026, 3, 1));
+                Require(Cells().Count == 42, "A six-week month was cut short.");
+                mini.ShowRangeFrom(new DateTime(2027, 2, 1));
+                Require(Cells().Count == 28, "A four-week month has unnecessary rows.");
+                mini.ShowRangeFrom(new DateTime(2026, 12, 1));
+                Control<Button>(mini, "NextWeek").RaiseEvent(ClickArgs());
+                Require((DateTime)Field(mini, "displayedMonth") == new DateTime(2027, 1, 1), "Next month failed across the year.");
+                Control<Button>(mini, "PreviousWeek").RaiseEvent(ClickArgs());
+                Require((DateTime)Field(mini, "displayedMonth") == new DateTime(2026, 12, 1), "Previous month failed across the year.");
+                foreach (var limit in new[] { DateTime.MinValue, DateTime.MaxValue })
+                {
+                    mini.ShowRangeFrom(limit);
+                    Require(Cells().Count(c => c.IsCurrentMonth) == 31, "Boundary month is incomplete.");
+                    Require(limit.Year == 1 ? !Control<Button>(mini, "PreviousWeek").IsEnabled : !Control<Button>(mini, "NextWeek").IsEnabled, "Boundary navigation overflows.");
+                }
+                Call(mini, "Today_Click", mini, ClickArgs());
+                Require(Cells().Count(c => c.IsToday) == 1 && !Control<Button>(mini, "TodayButton").IsEnabled, "Today does not return to the current month.");
+                mini.SetMonthViewOpen(false);
+                Require((DateTime)Field(mini, "weekStart") == originalStart && Control<FrameworkElement>(mini, "WeekDays").Visibility == Visibility.Visible && !mini.IsVisible,
+                    "Closing month view changed the original week or showed a new window.");
             }
             finally { mini.Close(); }
+        }
+
+        private static void HotKeyToggle(MainWindow main, AppData data)
+        {
+            var actions = new List<bool>();
+            var state = Tuple.Create(false, false, false);
+            SetField(main, "hotKeyWindowStateOverride", (Func<Tuple<bool, bool, bool>>)(() => state));
+            SetField(main, "hotKeyVisibilityOverride", (Action<bool>)actions.Add);
+            SetField(main, "appData", data);
+            void Press()
+            {
+                object[] args = { IntPtr.Zero, 0x0312, new IntPtr(0x5347), IntPtr.Zero, false };
+                typeof(MainWindow).GetMethod("BringToFrontHotKeyHook", BindingFlags.Instance | BindingFlags.NonPublic).Invoke(main, args);
+                Require((bool)args[4], "The registered shortcut message was not consumed.");
+            }
+            try
+            {
+                Press(); // hidden -> raise
+                state = Tuple.Create(true, true, false); Press(); // active -> lower
+                state = Tuple.Create(true, false, false); Press(); // background -> raise
+                Press(); // switched to another app since raising -> raise again
+                state = Tuple.Create(true, false, true); Press(); // pinned by this shortcut -> lower
+                state = Tuple.Create(false, true, false); Press(); // minimized -> restore
+                Require(actions.SequenceEqual(new[] { true, false, true, true, false, true }), "Shortcut raised/lowered the wrong state.");
+                SetField(main, "closingApp", true); Press();
+                Require(actions.Count == 6, "Shortcut reopened an exiting app.");
+                Call(main, "UnregisterBringToFrontHotKey");
+                Require(!(bool)Field(main, "hotKeyRaised"), "Reconfiguring the shortcut kept stale raise state.");
+            }
+            finally
+            {
+                SetField(main, "closingApp", false);
+                SetField(main, "hotKeyWindowStateOverride", null);
+                SetField(main, "hotKeyVisibilityOverride", null);
+            }
         }
 
         private static IEnumerable<T> VisualDescendants<T>(DependencyObject root) where T : DependencyObject

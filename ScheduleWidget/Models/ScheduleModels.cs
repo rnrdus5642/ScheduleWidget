@@ -37,6 +37,9 @@ namespace ScheduleWidget
         public MonitorStateData MiniPosition { get; set; }
         // 미니 창 달력(음악 막대 포함) 영역의 화면 위치·크기. 창은 이 영역과 주변 펫을 감싸도록 맞춰집니다.
         public MonitorStateData MiniBoard { get; set; }
+        // Saved sizes and last-used positions (for startup). Mode switches grow/shrink around the current board.
+        public MonitorStateData MiniMonthBoard { get; set; }
+        public bool MiniMonthView { get; set; }
         // Kept for older data readers. The calendar is now the primary window; the list opens beside it.
         public bool MiniMode { get; set; } = true;
         // 미니 달력에 한 번에 보여 줄 날짜 수(1~7일).

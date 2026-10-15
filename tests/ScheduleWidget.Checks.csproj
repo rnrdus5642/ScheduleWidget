@@ -38,6 +38,10 @@
     <Compile Include="MediaSourceChecks.cs" />
     <Compile Include="MediaWatchChecks.cs" />
     <Compile Include="SettingsScopeChecks.cs" />
+    <Compile Include="SettingsRuntimeChecks.cs" />
+    <Compile Include="CalendarModeChecks.cs" />
+    <Compile Include="CalendarRangeChecks.cs" />
+    <Compile Include="DisplayInputChecks.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>

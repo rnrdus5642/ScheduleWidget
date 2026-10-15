@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Windows;
@@ -84,7 +84,7 @@ namespace ScheduleWidget
         }
 
         // Esc in the TODO window: close whatever panel is open first; with nothing open, hide the window.
-        // The calendar stays open; its checklist button brings the list back.
+        // The calendar stays open; the month button switches calendar views.
         private void MainWindow_PreviewKeyDown(object sender, KeyEventArgs e)
         {
             if (e.Key != Key.Escape) return;
@@ -96,12 +96,35 @@ namespace ScheduleWidget
             else HideScheduleList();
         }
 
-        // Tray / global shortcut: the calendar and its embedded agenda are one window.
+        // Tray open always raises the calendar; the global shortcut toggles its position in the window stack.
         public void OpenLastWindow()
         {
             ShowMiniWindow();
             if (miniWindow != null) BringToFront(miniWindow);
+            miniWindow?.RestorePopupAfterRaising();
             if (settingsHost != null) BringToFront(settingsHost);
+        }
+
+        // These overrides keep shortcut-routing checks from activating any real windows.
+        private Func<Tuple<bool, bool, bool>> hotKeyWindowStateOverride = null;
+        private Action<bool> hotKeyVisibilityOverride = null;
+
+        private void ToggleWidgetFromHotKey()
+        {
+            IntPtr foreground = NativeMethods.GetForegroundWindow();
+            var state = hotKeyWindowStateOverride?.Invoke() ?? Tuple.Create(
+                miniWindow?.IsVisible == true && miniWindow.WindowState != WindowState.Minimized,
+                NativeMethods.IsCurrentProcessWindow(foreground), miniWindow?.Topmost == true);
+            bool lower = state.Item1 && (state.Item2 || (hotKeyRaised && state.Item3));
+            if (!lower && !NativeMethods.IsCurrentProcessWindow(foreground)) hotKeyPreviousForeground = foreground;
+            hotKeyRaised = !lower;
+            if (hotKeyVisibilityOverride != null) { hotKeyVisibilityOverride(!lower); return; }
+            if (!lower) { OpenLastWindow(); return; }
+            miniWindow?.DismissPopupsForLowering();
+            if (state.Item2) NativeMethods.RestoreForeground(hotKeyPreviousForeground);
+            NativeMethods.LowerToDesktop(miniWindow);
+            NativeMethods.LowerToDesktop(settingsHost);
+            hotKeyPreviousForeground = IntPtr.Zero;
         }
 
         // Activate() alone can be ignored when another app owns the foreground; briefly making the window topmost
@@ -110,7 +133,7 @@ namespace ScheduleWidget
         {
             if (window.WindowState == WindowState.Minimized) window.WindowState = WindowState.Normal;
             window.Show();
-            window.Topmost = true;
+            NativeMethods.SetWidgetStacking(window, true);
             window.Activate();
             NativeMethods.SetWidgetStacking(window, appData?.AlwaysOnTop == true);
             NativeMethods.RaiseAboveOtherApps(window); // desktop-owned: make sure it ends up above other apps

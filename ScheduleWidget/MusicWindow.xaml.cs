@@ -53,6 +53,7 @@ namespace ScheduleWidget
             RepeatToggle.IsChecked = settings.Repeat;
             ShuffleToggle.IsChecked = settings.Shuffle;
             RepeatOneToggle.IsChecked = settings.RepeatOne;
+            ExpandPlaylists.IsChecked = settings.ExpandYouTubePlaylists;
             RefreshPlaylists(settings.Playlists.FirstOrDefault(p => p.Id == settings.SelectedPlaylistId) ?? settings.Playlists[0]);
             media.MediaOpened += (s, e) =>
             {
@@ -926,6 +927,21 @@ namespace ScheduleWidget
 
         private void Repeat_Click(object sender, RoutedEventArgs e) => SetRepeat(RepeatToggle.IsChecked == true);
 
+        private void SetExpandPlaylists(bool expand)
+        {
+            bool previous = settings.ExpandYouTubePlaylists;
+            settings.ExpandYouTubePlaylists = expand;
+            ExpandPlaylists.IsChecked = expand;
+            if (!loading && !save())
+            {
+                settings.ExpandYouTubePlaylists = previous;
+                ExpandPlaylists.IsChecked = previous;
+                MusicStatus.Text = "재생목록 링크 옵션을 저장하지 못했습니다. 다시 시도해 주세요.";
+            }
+        }
+
+        private void ExpandPlaylists_Click(object sender, RoutedEventArgs e) => SetExpandPlaylists(ExpandPlaylists.IsChecked == true);
+
         // 초기화 → 정말 초기화 → play options back to the defaults (playlists and tracks stay).
         private bool playOptionsResetArmed;
 
@@ -944,7 +960,7 @@ namespace ScheduleWidget
             SetRepeat(defaults.Repeat);
             SetShuffle(defaults.Shuffle);
             SetRepeatOne(defaults.RepeatOne);
-            ExpandPlaylists.IsChecked = true;
+            SetExpandPlaylists(defaults.ExpandYouTubePlaylists);
         }
 
         // Controls used by the mini window's player bar. PlaybackChanged fires whenever play state, track or mode changes.

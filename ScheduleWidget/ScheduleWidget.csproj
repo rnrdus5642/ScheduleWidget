@@ -133,7 +133,13 @@
     <Page Include="MiniWindow.xaml"><Generator>MSBuild:Compile</Generator></Page>
     <Compile Include="MiniWindow.xaml.cs"><DependentUpon>MiniWindow.xaml</DependentUpon></Compile>
     <Compile Include="MiniWindow.UpcomingPreview.cs"><DependentUpon>MiniWindow.xaml</DependentUpon></Compile>
-    <Compile Include="MiniWindow.AllSchedules.cs"><DependentUpon>MiniWindow.xaml</DependentUpon></Compile>
+    <Compile Include="MiniWindow.MonthCalendar.cs"><DependentUpon>MiniWindow.xaml</DependentUpon></Compile>
+    <Compile Include="MiniWindow.CalendarModes.cs"><DependentUpon>MiniWindow.xaml</DependentUpon></Compile>
+    <Compile Include="MiniWindow.RangeBars.cs"><DependentUpon>MiniWindow.xaml</DependentUpon></Compile>
+    <Compile Include="MiniWindow.ModeTransition.cs"><DependentUpon>MiniWindow.xaml</DependentUpon></Compile>
+    <Compile Include="Services\CalendarRangeLayout.cs" />
+    <Compile Include="MiniWindow.DisplayInput.cs"><DependentUpon>MiniWindow.xaml</DependentUpon></Compile>
+    <Compile Include="Services\BrowserWindowInputGuard.cs" />
     <Compile Include="MiniWindow.Appearance.cs"><DependentUpon>MiniWindow.xaml</DependentUpon></Compile>
     <Compile Include="MiniWindow.PetSettings.cs"><DependentUpon>MiniWindow.xaml</DependentUpon></Compile>
     <Page Include="ContactWindow.xaml"><Generator>MSBuild:Compile</Generator></Page>

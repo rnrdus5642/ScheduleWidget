@@ -167,6 +167,7 @@
                              Style="{StaticResource AuxTextBox}" AutomationProperties.Name="YouTube 링크"/>
                 </DockPanel>
                 <CheckBox x:Name="ExpandPlaylists" Content="재생목록 링크는 안에 있는 곡을 모두 따로 추가" IsChecked="True"
+                          Click="ExpandPlaylists_Click"
                           Margin="0,8,0,0" Style="{StaticResource AuxCheckBox}"
                           ToolTip="끄면 재생목록 전체를 한 항목으로 추가합니다. 자동 생성 믹스(RD…)는 곡별로 가져올 수 없습니다."/>
             </StackPanel>

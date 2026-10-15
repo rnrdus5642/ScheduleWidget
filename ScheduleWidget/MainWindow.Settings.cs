@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics;
@@ -21,6 +21,7 @@ namespace ScheduleWidget
         private PetSettingsWindow settingsPetEditor;
         private IPetSettingsHost settingsPetHost;
         private ComboBox settingsDayCount;
+        private bool settingsDayCountTouched, syncingSettingsDayCount;
         private CheckBox settingsPlayerVisible;
 
         private SettingsWindow UnifiedSettings => settingsHost as SettingsWindow;
@@ -117,13 +118,20 @@ namespace ScheduleWidget
             settingsDayCount = new ComboBox { Style = (Style)window.FindResource("AuxComboBox"), Margin = new Thickness(0, 0, 0, 16) };
             for (int day = 1; day <= 7; day++) settingsDayCount.Items.Add(new ComboBoxItem { Content = day + "일씩 표시", Tag = day });
             settingsDayCount.SelectedIndex = Math.Max(0, Math.Min(6, appData.MiniDayCount - 1));
+            settingsDayCountTouched = false;
+            settingsDayCount.SelectionChanged += (s, e) =>
+            {
+                if (!syncingSettingsDayCount && !_inlineSettingsLoading) settingsDayCountTouched = true;
+            };
             System.Windows.Automation.AutomationProperties.SetAutomationId(settingsDayCount, "SettingsDayCount");
-            var dayLabel = new TextBlock { Text = "달력에 표시할 기간", Margin = new Thickness(0, 0, 0, 8) };
+            var dayLabel = new TextBlock { Text = "기본 달력에 표시할 기간", Margin = new Thickness(0, 0, 0, 8) };
+            var monthHint = new TextBlock { Text = "월간 보기는 항상 한 달 전체를 표시합니다. 아래 항목은 기본 달력에 적용됩니다.",
+                TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 12), Style = (Style)window.FindResource("AuxCaption") };
             window.SetPage(SettingsPage.Appearance, SettingsScroll(SettingsStack(
                 TakeSettingsControl(SettingsThemeCard),
-                SettingsCard("달력", dayLabel, settingsDayCount, TakeSettingsControl(SettingsCalendarDdayRow), TakeSettingsControl(SettingsFlipLabel), TakeSettingsControl(InlineFlipEffectCombo)),
+                SettingsCard("기본 달력 (1~7일)", monthHint, dayLabel, settingsDayCount, TakeSettingsControl(SettingsCalendarDdayRow), TakeSettingsControl(SettingsFlipLabel), TakeSettingsControl(InlineFlipEffectCombo)),
                 TakeSettingsControl(SettingsOpacityCard), TakeSettingsControl(SettingsFontCard),
-                SettingsCard("전체 일정 색상", TakeSettingsControl(SettingsColorButtons), TakeSettingsControl(SettingsColorHint)))));
+                SettingsCard("달력·일정 색상", TakeSettingsControl(SettingsColorButtons), TakeSettingsControl(SettingsColorHint)))));
 
             settingsCharacterContent = new ContentControl();
             window.SetPage(SettingsPage.Characters, settingsCharacterContent);
@@ -157,6 +165,24 @@ namespace ScheduleWidget
             window.SetPage(SettingsPage.About, SettingsScroll(SettingsStack(
                 SettingsCard("ScheduleWidget", new TextBlock { Text = "바탕화면에서 일정을 확인하고 관리하는 달력 위젯입니다.", TextWrapping = TextWrapping.Wrap }, websiteLinks),
                 TakeSettingsControl(UpdateCard))));
+            UpdateAppearancePreview(_inlineSettingsDraft ?? appData.Appearance);
+        }
+
+        private void SyncSettingsDayCount()
+        {
+            if (settingsDayCount == null || settingsDayCountTouched || _inlineSettingsDraft == null || appData == null) return;
+            syncingSettingsDayCount = true;
+            try { settingsDayCount.SelectedIndex = Math.Max(0, Math.Min(6, appData.MiniDayCount - 1)); }
+            finally { syncingSettingsDayCount = false; }
+        }
+
+        private void UpdateAppearancePreview(AppearanceSettings appearance)
+        {
+            // The settings window's UI palette shadows the app-wide colors. The sample must show the user's actual colors.
+            SetBrush(SettingsFontPreview.Resources, "TextBrush", appearance.TextColor);
+            SetBrush(SettingsFontPreview.Resources, "SubTextBrush", appearance.SubTextColor);
+            SetBrush(SettingsFontPreview.Resources, "FutureBrush", appearance.FutureColor);
+            SetBrush(SettingsFontPreview.Resources, "CardBrush", appearance.CardColor);
         }
 
         private Button CreateWebsiteButton(string caption, string url)
@@ -250,6 +276,7 @@ namespace ScheduleWidget
             settingsConnectionsContent = null;
             settingsGoogleContent = null;
             settingsDayCount = null;
+            settingsDayCountTouched = syncingSettingsDayCount = false;
             settingsPlayerVisible = null;
         }
 
@@ -273,6 +300,7 @@ namespace ScheduleWidget
                 InlineBlockDDaySwitch.IsChecked = true;
                 InlineFlipEffectCombo.SelectedIndex = FlipEffectIndex(1);
                 settingsDayCount.SelectedIndex = 6;
+                settingsDayCountTouched = true;
                 _inlineSettingsLoading = false;
                 UpdateInlineSettingsLabels();
                 ApplyAppearance(_inlineSettingsDraft);

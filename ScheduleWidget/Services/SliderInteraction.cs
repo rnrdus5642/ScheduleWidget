@@ -175,8 +175,37 @@ namespace ScheduleWidget
             ratio = Math.Max(0, Math.Min(1, ratio));
             if (!horizontal)
                 ratio = 1 - ratio;
+            if (slider.IsDirectionReversed)
+                ratio = 1 - ratio;
 
-            slider.Value = slider.Minimum + (slider.Maximum - slider.Minimum) * ratio;
+            SetPointerValue(slider, slider.Minimum + (slider.Maximum - slider.Minimum) * ratio);
+        }
+
+        private static void SetPointerValue(Slider slider, double value)
+        {
+            if (double.IsNaN(value)) return;
+            value = Math.Max(slider.Minimum, Math.Min(slider.Maximum, value));
+            if (slider.IsSnapToTickEnabled)
+            {
+                double lower = slider.Minimum, upper = slider.Maximum;
+                if (slider.Ticks != null && slider.Ticks.Count > 0)
+                {
+                    foreach (double tick in slider.Ticks)
+                    {
+                        if (tick >= slider.Minimum && tick <= value && tick > lower) lower = tick;
+                        if (tick <= slider.Maximum && tick >= value && tick < upper) upper = tick;
+                    }
+                }
+                else if (slider.TickFrequency > 0)
+                {
+                    lower = slider.Minimum + Math.Floor((value - slider.Minimum) / slider.TickFrequency) * slider.TickFrequency;
+                    upper = Math.Min(slider.Maximum, lower + slider.TickFrequency);
+                }
+                // A direct Value assignment bypasses WPF's thumb-drag snapping. Keep track clicks and drags consistent.
+                if ((slider.Ticks?.Count ?? 0) > 0 || slider.TickFrequency > 0)
+                    value = value - lower < upper - value ? lower : upper;
+            }
+            slider.SetCurrentValue(Slider.ValueProperty, value);
         }
 
         private static T FindVisualChild<T>(DependencyObject root) where T : DependencyObject

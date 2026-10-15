@@ -1,4 +1,4 @@
-<Window x:Class="ScheduleWidget.MiniWindow"
+﻿<Window x:Class="ScheduleWidget.MiniWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:wv="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
@@ -62,6 +62,41 @@
                     <Setter Property="BorderBrush" Value="{DynamicResource MiniTodayBorderBrush}"/>
                 </DataTrigger>
             </Style.Triggers>
+        </Style>
+        <Style x:Key="RangeOverlay" TargetType="ItemsControl">
+            <Setter Property="ClipToBounds" Value="True"/>
+            <Setter Property="ItemsPanel"><Setter.Value><ItemsPanelTemplate><Canvas/></ItemsPanelTemplate></Setter.Value></Setter>
+            <Setter Property="ItemContainerStyle"><Setter.Value><Style TargetType="ContentPresenter">
+                <Setter Property="Canvas.Left" Value="{Binding Left}"/><Setter Property="Canvas.Top" Value="{Binding Top}"/>
+            </Style></Setter.Value></Setter>
+            <Setter Property="ItemTemplate"><Setter.Value><DataTemplate>
+                <Button Width="{Binding Width}" Height="{Binding Height}" Click="RangeBar_Click" MouseRightButtonUp="Block_RightClick"
+                        ToolTip="{Binding Hint}" AutomationProperties.Name="{Binding Hint}" Cursor="Hand"
+                        Foreground="{Binding Ink}" Background="{Binding Background}" FontSize="{Binding FontSize}">
+                    <Button.Template><ControlTemplate TargetType="Button">
+                        <Border x:Name="RangeFace" CornerRadius="{Binding Corners}" Background="{TemplateBinding Background}" Padding="5,1">
+                            <Grid VerticalAlignment="Center">
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                <TextBlock Text="{Binding Before}" Margin="0,0,3,0" FontWeight="Bold"/>
+                                <TextBlock x:Name="RangeTitle" Grid.Column="1" Text="{Binding Title}" TextTrimming="CharacterEllipsis">
+                                    <TextBlock.Style><Style TargetType="TextBlock"><Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsCompleted}" Value="True"><Setter Property="TextDecorations" Value="Strikethrough"/></DataTrigger>
+                                    </Style.Triggers></Style></TextBlock.Style>
+                                </TextBlock>
+                                <TextBlock Grid.Column="2" Text="{Binding DDay}" FontSize="10" Margin="5,0,0,0" VerticalAlignment="Center"/>
+                                <TextBlock Grid.Column="3" Text="{Binding After}" Margin="3,0,0,0" FontWeight="Bold"/>
+                            </Grid>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <DataTrigger Binding="{Binding IsCompleted}" Value="True"><Setter TargetName="RangeFace" Property="Opacity" Value="0.6"/></DataTrigger>
+                            <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="RangeFace" Property="Opacity" Value="0.85"/></Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="RangeFace" Property="BorderBrush" Value="{DynamicResource MiniFrameBrush}"/>
+                                <Setter TargetName="RangeFace" Property="BorderThickness" Value="1"/></Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate></Button.Template>
+                </Button>
+            </DataTemplate></Setter.Value></Setter>
         </Style>
         <local:KeepAllConverter x:Key="KeepAll"/>
         <!-- Apple-style dropdown chip: pearl pill, hairline ring, ink text, press = scale 0.95, focus = 2px focus blue. -->
@@ -159,6 +194,7 @@
     <Grid x:Name="OuterRoot">
     <!-- The board: calendar + music bar. Its margin leaves room for pets placed outside it. -->
     <Grid x:Name="MiniRoot" Margin="4" SizeChanged="MiniRoot_SizeChanged">
+    <Grid x:Name="CalendarBoardContent">
         <!-- One fixed-height strip; the thin seek track occupies its bottom edge. -->
         <Border x:Name="PlayerBar" Grid.Column="2" VerticalAlignment="Bottom" Height="{x:Static local:MiniWindow.PlayerBarHeight}" Margin="0,0,2,6"
                 Background="{DynamicResource MiniPaperBrush}" BorderBrush="{DynamicResource MiniFrameBrush}" BorderThickness="2.5" CornerRadius="8" SizeChanged="PlayerBar_SizeChanged">
@@ -255,7 +291,7 @@
               PreviewMouseLeftButtonDown="Calendar_PreviewMouseDown" PreviewMouseMove="Calendar_PreviewMouseMove">
             <Border Margin="0,8,0,0" CornerRadius="8" Background="{DynamicResource MiniPaperBrush}" BorderBrush="{DynamicResource MiniFrameBrush}" BorderThickness="2.5">
                 <Grid x:Name="CalendarSheet" SizeChanged="CalendarSheet_SizeChanged">
-                    <Grid.RowDefinitions><RowDefinition Height="30"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+                    <Grid.RowDefinitions><RowDefinition Height="{DynamicResource CalendarHeaderHeight}"/><RowDefinition Height="*"/></Grid.RowDefinitions>
                     <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                     <Border x:Name="CalendarHeader" Grid.ColumnSpan="2" Background="{DynamicResource MiniHeaderBrush}" CornerRadius="8,8,0,0" BorderBrush="{DynamicResource MiniFrameBrush}" BorderThickness="0,0,0,2">
                         <!-- Arrows at the far ends; today beside ‹, schedule list beside ›, period label centered. -->
@@ -279,13 +315,15 @@
                                     AutomationProperties.Name="표시할 날짜 수 선택">
                                 <TextBlock x:Name="WeekLabel" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource MiniInkBrush}" TextTrimming="CharacterEllipsis"/>
                             </Button>
-                            <!-- ⚙ settings (same as the menu's 설정), left of the TODO button. -->
+                            <TextBlock x:Name="MonthLabel" Grid.Column="2" Visibility="Collapsed" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                       FontSize="15" FontWeight="SemiBold" Foreground="{DynamicResource MiniInkBrush}"/>
+                            <!-- Settings and the month toggle. -->
                             <Button x:Name="HeaderSettingsButton" Grid.Column="3" Margin="0,0,1,0" Style="{StaticResource WeekArrow}" Click="Settings_Click" AutomationProperties.Name="설정">
                                 <TextBlock Text="⚙" FontFamily="Segoe UI Symbol" FontSize="13" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type Button}}}"/>
                             </Button>
-                            <!-- The full agenda expands inside the calendar. -->
-                            <Button x:Name="TodoButton" Grid.Column="4" Margin="0,0,2,0" Style="{StaticResource WeekArrow}" Click="ToggleAllSchedules_Click" ToolTip="전체 일정 펼치기" AutomationProperties.Name="전체 일정 펼치기">
-                                <Path Data="M1,2.5 L2.5,4 L5,1 M1,8.5 L2.5,10 L5,7 M7.5,2.5 L13,2.5 M7.5,8.5 L13,8.5" Width="14" Height="11"
+                            <!-- Toggle between the compact range and a complete month. -->
+                            <Button x:Name="MonthViewButton" Grid.Column="4" Margin="0,0,2,0" Style="{StaticResource WeekArrow}" Click="ToggleMonthView_Click" ToolTip="한 달 전체 보기" AutomationProperties.Name="한 달 전체 보기">
+                                <Path Data="M1,3 L13,3 13,13 1,13 Z M1,6 L13,6 M4,1 L4,4 M10,1 L10,4 M4,9 L5,9 M9,9 L10,9" Width="14" Height="14"
                                       Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type Button}}}" StrokeThickness="1.6"
                                       StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"/>
                             </Button>
@@ -301,8 +339,8 @@
                             <Button Style="{StaticResource DayButton}" Tag="{Binding Date}" Click="Day_Click"
                                     ToolTip="{Binding Hint}" ToolTipService.InitialShowDelay="250" AutomationProperties.Name="{Binding Hint}">
                                 <Grid>
-                                    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
-                                    <StackPanel VerticalAlignment="Top">
+                                    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                                    <StackPanel VerticalAlignment="Top" Height="{DynamicResource WeekDayHeadingHeight}">
                                         <TextBlock Text="{Binding Weekday}" HorizontalAlignment="Center" FontSize="10" Foreground="{Binding Ink}"/>
                                         <TextBlock Text="{Binding Day}" HorizontalAlignment="Center" FontSize="18" FontWeight="SemiBold" Foreground="{Binding DayInk}" Margin="0,1,0,0"/>
                                         <TextBlock Text="{Binding Holiday}" HorizontalAlignment="Center" FontSize="9" Foreground="{DynamicResource MiniHolidayBrush}" TextTrimming="CharacterEllipsis" Margin="0,1,0,0"
@@ -312,7 +350,7 @@
                                             </Style.Triggers></Style></TextBlock.Style>
                                         </TextBlock>
                                     </StackPanel>
-                                    <ItemsControl x:Name="DaySchedules" Grid.Row="1" ItemsSource="{Binding TaskBlocks}" Margin="0,5,0,0"
+                                    <ItemsControl x:Name="DaySchedules" Grid.Row="1" ItemsSource="{Binding TaskBlocks}" Margin="{Binding RangeInset}"
                                                   Tag="{Binding Date, NotifyOnTargetUpdated=True}" TargetUpdated="DaySchedules_DateChanged"
                                                   VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling"
                                                   VirtualizingPanel.ScrollUnit="Pixel" ScrollViewer.CanContentScroll="True">
@@ -350,69 +388,91 @@
                                             </Border>
                                         </DataTemplate></ItemsControl.ItemTemplate>
                                     </ItemsControl>
+                                    <TextBlock Grid.Row="2" Text="{Binding RangeOverflowLabel}" FontSize="10" Foreground="{DynamicResource AuxActionTextBrush}" TextTrimming="CharacterEllipsis">
+                                        <TextBlock.Style><Style TargetType="TextBlock"><Style.Triggers>
+                                            <DataTrigger Binding="{Binding HiddenRangeCount}" Value="0"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger>
+                                        </Style.Triggers></Style></TextBlock.Style>
+                                    </TextBlock>
                                 </Grid>
                             </Button>
                         </DataTemplate></ItemsControl.ItemTemplate>
                     </ItemsControl>
-                    <Border x:Name="AllSchedulesPanel" Grid.Row="1" Grid.Column="1" Visibility="Collapsed" Width="290" Margin="0,4,8,10"
-                            Background="{DynamicResource AgendaBackgroundBrush}" BorderBrush="{DynamicResource MiniFrameBrush}"
-                            BorderThickness="1" CornerRadius="6" Padding="9,6" ClipToBounds="True">
+                    <ItemsControl x:Name="WeekRanges" Grid.Row="1" Grid.ColumnSpan="2" Margin="8,4,8,10" Style="{StaticResource RangeOverlay}"
+                                  AutomationProperties.Name="여러 날 이어지는 일정"/>
+                    <Border x:Name="MonthCalendarPanel" Grid.Row="1" Grid.ColumnSpan="2" Visibility="Collapsed" Margin="8,3,8,8"
+                            Background="{DynamicResource BackgroundBrush}" CornerRadius="4" ClipToBounds="True">
                         <Grid>
-                            <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
-                            <Grid Margin="0,0,0,6">
-                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                    <TextBlock Text="전체 일정" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource MiniInkBrush}"/>
-                                    <TextBlock x:Name="AllSchedulesCount" FontSize="10" Foreground="{DynamicResource MiniMutedBrush}" Margin="6,0,0,0" VerticalAlignment="Center"/>
-                                </StackPanel>
-                                <Button x:Name="AllSchedulesAdd" Grid.Column="1" Style="{StaticResource WeekArrow}" Margin="4,0,2,0" Click="AllSchedulesAdd_Click"
-                                        ToolTip="새 일정" AutomationProperties.Name="전체 일정에서 새 일정 추가">
-                                    <Path Data="M1,6 L11,6 M6,1 L6,11" Width="12" Height="12" Stroke="{DynamicResource MiniInkBrush}" StrokeThickness="1.5"/>
-                                </Button>
-                                <Button x:Name="AllSchedulesClose" Grid.Column="2" Style="{StaticResource WeekArrow}" Click="AllSchedulesClose_Click"
-                                        ToolTip="전체 일정 접기" AutomationProperties.Name="전체 일정 접기">
-                                    <Path Data="M1,1 L11,11 M11,1 L1,11" Width="12" Height="12" Stroke="{DynamicResource MiniInkBrush}" StrokeThickness="1.5"/>
-                                </Button>
-                            </Grid>
-                            <ItemsControl x:Name="AllSchedulesList" Grid.Row="1" VirtualizingPanel.IsVirtualizing="True"
-                                          VirtualizingPanel.VirtualizationMode="Recycling" VirtualizingPanel.ScrollUnit="Pixel" ScrollViewer.CanContentScroll="True">
-                                <ItemsControl.Template><ControlTemplate TargetType="ItemsControl">
-                                    <ScrollViewer x:Name="AllSchedulesScroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
-                                                  CanContentScroll="True" PanningMode="VerticalOnly" Focusable="False"><ItemsPresenter/></ScrollViewer>
-                                </ControlTemplate></ItemsControl.Template>
-                                <ItemsControl.ItemsPanel><ItemsPanelTemplate><VirtualizingStackPanel/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                            <Grid.RowDefinitions><RowDefinition Height="26"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+                            <UniformGrid Rows="1" Columns="7" Margin="2,0">
+                                <TextBlock Text="월"/><TextBlock Text="화"/><TextBlock Text="수"/><TextBlock Text="목"/><TextBlock Text="금"/>
+                                <TextBlock Text="토" Foreground="{DynamicResource MiniSaturdayBrush}"/>
+                                <TextBlock Text="일" Foreground="{DynamicResource MiniHolidayBrush}"/>
+                                <UniformGrid.Resources><Style TargetType="TextBlock">
+                                    <Setter Property="FontSize" Value="11"/><Setter Property="Foreground" Value="{DynamicResource MiniMutedBrush}"/>
+                                    <Setter Property="VerticalAlignment" Value="Center"/><Setter Property="Margin" Value="7,0,0,0"/>
+                                </Style></UniformGrid.Resources>
+                            </UniformGrid>
+                            <ItemsControl x:Name="MonthDays" Grid.Row="1" AutomationProperties.Name="한 달 전체 달력" SizeChanged="CalendarSheet_SizeChanged">
+                                <ItemsControl.ItemsPanel><ItemsPanelTemplate><UniformGrid Columns="7"/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
                                 <ItemsControl.ItemTemplate><DataTemplate>
-                                    <Button Click="AllScheduleEdit_Click" MouseRightButtonUp="Block_RightClick" Margin="0,0,0,5" Padding="8,6"
-                                            Background="{Binding Background}" Foreground="{Binding Ink}" HorizontalContentAlignment="Stretch"
-                                            ToolTip="{Binding Hint}" AutomationProperties.Name="{Binding Hint}">
-                                        <Button.Template><ControlTemplate TargetType="Button">
-                                            <Border x:Name="ScheduleRow" CornerRadius="5" Background="{TemplateBinding Background}"
-                                                    BorderBrush="Transparent" BorderThickness="1" Padding="{TemplateBinding Padding}">
-                                                <ContentPresenter HorizontalAlignment="Stretch"/>
-                                            </Border>
-                                            <ControlTemplate.Triggers>
-                                                <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="ScheduleRow" Property="BorderBrush" Value="{DynamicResource MiniFrameBrush}"/></Trigger>
-                                                <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="ScheduleRow" Property="BorderBrush" Value="{DynamicResource MiniFrameBrush}"/></Trigger>
-                                                <Trigger Property="IsPressed" Value="True"><Setter TargetName="ScheduleRow" Property="Opacity" Value="0.8"/></Trigger>
-                                            </ControlTemplate.Triggers>
-                                        </ControlTemplate></Button.Template>
+                                    <Button Tag="{Binding Date}" Click="Day_Click" ToolTip="{Binding Hint}" ToolTipService.InitialShowDelay="250"
+                                            AutomationProperties.Name="{Binding Hint}" IsEnabled="{Binding IsValid}" ClipToBounds="True">
+                                        <Button.Style><Style TargetType="Button" BasedOn="{StaticResource DayButton}">
+                                            <Setter Property="Background" Value="{DynamicResource CardBrush}"/>
+                                            <Setter Property="Padding" Value="5,4"/><Setter Property="Margin" Value="2"/>
+                                            <Setter Property="VerticalContentAlignment" Value="Stretch"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsCurrentMonth}" Value="False"><Setter Property="Opacity" Value="0.5"/></DataTrigger>
+                                                <DataTrigger Binding="{Binding IsValid}" Value="False"><Setter Property="Visibility" Value="Hidden"/></DataTrigger>
+                                            </Style.Triggers>
+                                        </Style></Button.Style>
                                         <Grid>
-                                            <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-                                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                                            <TextBlock Text="{Binding Title}" FontSize="{DynamicResource AgendaTitleFontSize}" TextTrimming="CharacterEllipsis" Margin="0,0,8,0">
+                                            <Grid.RowDefinitions><RowDefinition Height="23"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                                            <Grid Margin="2,0,2,3">
+                                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                                <TextBlock Text="{Binding Day}" FontSize="14" FontWeight="SemiBold" Foreground="{Binding Ink}" VerticalAlignment="Center"/>
+                                                <Border Grid.Column="1" Background="{DynamicResource MiniHeaderBrush}" CornerRadius="6" Padding="4,0" VerticalAlignment="Center">
+                                                <Border.Style><Style TargetType="Border"><Style.Triggers>
+                                                    <DataTrigger Binding="{Binding HasSchedules}" Value="False"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger>
+                                                </Style.Triggers></Style></Border.Style>
+                                                    <TextBlock Text="{Binding CountLabel}" FontSize="9" Foreground="{DynamicResource MiniInkBrush}"/>
+                                                </Border>
+                                            </Grid>
+                                            <ItemsControl x:Name="MonthEvents" Grid.Row="1" ItemsSource="{Binding VisibleEvents}" VerticalAlignment="Top" Margin="{Binding RangeInset}">
+                                                <ItemsControl.ItemTemplate><DataTemplate>
+                                                    <Border Height="{DynamicResource MonthEventRowHeight}" Margin="0,0,0,2" Padding="4,1" CornerRadius="3"
+                                                            Background="{Binding Background}" BorderBrush="{Binding Accent}" BorderThickness="3,0,0,0"
+                                                            ToolTip="{Binding Hint}" MouseRightButtonUp="Block_RightClick">
+                                                        <Border.Style><Style TargetType="Border"><Style.Triggers>
+                                                            <DataTrigger Binding="{Binding IsCompleted}" Value="True"><Setter Property="Opacity" Value="0.6"/></DataTrigger>
+                                                        </Style.Triggers></Style></Border.Style>
+                                                        <Grid VerticalAlignment="Center">
+                                                            <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                                            <TextBlock Text="{Binding Time}" FontSize="10" Foreground="{Binding Ink}" Margin="0,0,4,0" VerticalAlignment="Center">
+                                                                <TextBlock.Style><Style TargetType="TextBlock"><Style.Triggers>
+                                                                    <DataTrigger Binding="{Binding HasTime}" Value="False"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger>
+                                                                </Style.Triggers></Style></TextBlock.Style>
+                                                            </TextBlock>
+                                                            <TextBlock x:Name="MonthEventTitle" Grid.Column="1" Text="{Binding Title}" FontSize="{DynamicResource TitleFontSize}"
+                                                                       Foreground="{Binding Ink}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center">
+                                                                <TextBlock.Style><Style TargetType="TextBlock"><Style.Triggers>
+                                                                    <DataTrigger Binding="{Binding IsCompleted}" Value="True"><Setter Property="TextDecorations" Value="Strikethrough"/></DataTrigger>
+                                                                </Style.Triggers></Style></TextBlock.Style>
+                                                            </TextBlock>
+                                                        </Grid>
+                                                    </Border>
+                                                </DataTemplate></ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                            <TextBlock Grid.Row="2" Text="{Binding OverflowLabel}" FontSize="10" Foreground="{DynamicResource AuxActionTextBrush}" Margin="2,1,0,0">
                                                 <TextBlock.Style><Style TargetType="TextBlock"><Style.Triggers>
-                                                    <DataTrigger Binding="{Binding IsCompleted}" Value="True"><Setter Property="TextDecorations" Value="Strikethrough"/><Setter Property="Opacity" Value="0.65"/></DataTrigger>
+                                                    <DataTrigger Binding="{Binding HasOverflow}" Value="False"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger>
                                                 </Style.Triggers></Style></TextBlock.Style>
                                             </TextBlock>
-                                            <TextBlock Grid.Column="1" Text="{Binding DDay}" Foreground="{Binding DDayInk}" FontSize="{DynamicResource AgendaDDayFontSize}" FontWeight="SemiBold" VerticalAlignment="Center"/>
-                                            <TextBlock Grid.Row="1" Grid.ColumnSpan="2" Text="{Binding Detail}" FontSize="10" Opacity="0.78" Margin="0,3,0,0" TextTrimming="CharacterEllipsis"/>
                                         </Grid>
                                     </Button>
                                 </DataTemplate></ItemsControl.ItemTemplate>
                             </ItemsControl>
-                            <TextBlock x:Name="AllSchedulesEmpty" Grid.Row="1" Text="등록된 일정이 없습니다.&#x0a;+ 버튼으로 일정을 추가하세요."
-                                       Foreground="{DynamicResource MiniMutedBrush}" FontSize="11" TextAlignment="Center" TextWrapping="Wrap"
-                                       HorizontalAlignment="Center" VerticalAlignment="Center" Margin="4"/>
+                            <ItemsControl x:Name="MonthRanges" Grid.Row="1" Style="{StaticResource RangeOverlay}" AutomationProperties.Name="월간 여러 날 일정"/>
                         </Grid>
                     </Border>
                 </Grid>
@@ -657,15 +717,18 @@
                         <ItemsControl x:Name="DaySchedules">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
-                                    <Grid Margin="0,5,0,5">
+                                    <Border x:Name="DetailCard" Style="{StaticResource TodoCard}" CornerRadius="5" Padding="8,6" Margin="0,3">
+                                    <Grid>
                                         <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                                         <StackPanel VerticalAlignment="Center">
-                                            <TextBlock Text="{Binding Title, Converter={StaticResource KeepAll}}" Foreground="{DynamicResource AuxInkBrush}" TextWrapping="Wrap" FontSize="13" Margin="0,0,8,0">
-                                                <TextBlock.Style><Style TargetType="TextBlock"><Style.Triggers>
-                                                    <DataTrigger Binding="{Binding IsCompleted}" Value="True"><Setter Property="TextDecorations" Value="Strikethrough"/></DataTrigger>
+                                            <TextBlock x:Name="DetailTitle" Text="{Binding Title, Converter={StaticResource KeepAll}}" Style="{StaticResource TodoTitle}"
+                                                       TextWrapping="Wrap" FontSize="{DynamicResource TitleFontSize}" Margin="0,0,8,0"/>
+                                            <TextBlock Text="{Binding DateString}" Style="{StaticResource TodoDate}" FontSize="11" Margin="0,3,0,0"/>
+                                            <TextBlock x:Name="DetailDDay" Text="{Binding DDay}" FontSize="{DynamicResource DDayFontSize}" Margin="0,3,0,0">
+                                                <TextBlock.Style><Style TargetType="TextBlock" BasedOn="{StaticResource TodoStatus}"><Style.Triggers>
+                                                    <DataTrigger Binding="{Binding HasCustomColor}" Value="True"><Setter Property="Foreground" Value="{Binding ReadableColor}"/></DataTrigger>
                                                 </Style.Triggers></Style></TextBlock.Style>
                                             </TextBlock>
-                                            <TextBlock Text="{Binding DateString}" Foreground="{DynamicResource AuxMutedBrush}" FontSize="11" Margin="0,3,0,0"/>
                                         </StackPanel>
                                         <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
                                             <Button Width="52" Height="26" Margin="6,0,0,0" Padding="2,0" FontSize="11"
@@ -687,6 +750,7 @@
                                                     Click="DeleteMiniSchedule_Click" ToolTip="한 번 더 누르면 삭제됩니다"/>
                                         </StackPanel>
                                     </Grid>
+                                    </Border>
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
@@ -757,6 +821,11 @@
             </Grid>
         </Popup>
     </Grid>
+    </Grid>
+        <Canvas x:Name="CalendarModeOverlay" Visibility="Collapsed" IsHitTestVisible="False">
+            <Image x:Name="CalendarModeSnapshot" Stretch="Fill"/>
+            <Image x:Name="CalendarModeNext" Stretch="Fill"/>
+        </Canvas>
         <!-- Pets float over the whole window: anywhere around the calendar (or on it). The WebView only draws them
              and never takes the mouse; the invisible PetHit boxes over each pet do (left click 캐릭터 선택, right click
              캐릭터 설정; dragging a pet only in 드래그로 위치 설정 — the window moves by the calendar's top band). -->

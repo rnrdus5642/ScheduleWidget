@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
@@ -18,6 +18,19 @@ namespace ScheduleWidget.Checks
         {
             var content = (FrameworkElement)mini.Content;
             content.Measure(new Size(800, 320)); content.Arrange(new Rect(0, 0, 800, 320)); content.UpdateLayout();
+            LayoutDayDetails(mini);
+        }
+        private static void LayoutDayDetails(MiniWindow mini)
+        {
+            var bubble = Control<FrameworkElement>(mini, "DayBubble");
+            bubble.Measure(new Size(bubble.Width, double.PositiveInfinity));
+            bubble.Arrange(new Rect(new Point(), bubble.DesiredSize)); bubble.UpdateLayout();
+        }
+        private static ItemsControl DayDetails(MiniWindow mini, DateTime date)
+        {
+            Call(mini, "PrepareDayDetails", date);
+            LayoutDayDetails(mini);
+            return Control<ItemsControl>(mini, "DaySchedules");
         }
         private static void SettingsAudit()
         {
@@ -51,39 +64,41 @@ namespace ScheduleWidget.Checks
                 });
             Cancel();
             Run("AUDIT 화면/미리보기 취소", () => Require(mini.ThemeName == "Light" && data.Appearance.ThemePreset == "Light", "Theme cancellation failed."));
-            settings = Open(); mini.SetAllSchedulesOpen(true); LayoutAudit(mini);
-            var agenda = Control<ItemsControl>(mini, "AllSchedulesList");
+            settings = Open(); mini.SetMonthViewOpen(true); LayoutAudit(mini);
+            var agenda = DayDetails(mini, DateTime.Today);
             Run("AUDIT 화면/투명도 실제 표시", () => {
                 Control<Slider>(main, "InlineOpacitySlider").Value = 45;
                 double opacity = 1;
-                for (DependencyObject node = Control<FrameworkElement>(mini, "AllSchedulesPanel"); node != null; node = VisualTreeHelper.GetParent(node))
+                for (DependencyObject node = Control<FrameworkElement>(mini, "MonthCalendarPanel"); node != null; node = VisualTreeHelper.GetParent(node))
                     if (node is UIElement element) opacity *= element.Opacity;
                 Require(Math.Abs(opacity - .45) < .01, "Visible agenda opacity remains " + opacity + "; only legacy MainBorder changes.");
             });
             Run("AUDIT 화면/제목 글자 크기 실제 표시", () => {
                 Control<Slider>(main, "InlineTitleFontSizeSlider").Value = 20; LayoutAudit(mini);
                 double actual = VisualDescendants<TextBlock>(agenda).First(t => t.Text == "Audit title").FontSize;
-                Require(actual == 20, "Agenda title font remains " + actual + ".");
+                Require(actual == 20, "Day detail title font remains " + actual + ".");
             });
             Run("AUDIT 화면/D-day 글자 크기 실제 표시", () => {
                 Control<Slider>(main, "InlineDDayFontSizeSlider").Value = 18; LayoutAudit(mini);
-                double actual = VisualDescendants<TextBlock>(agenda).First(t => t.Text == "D-day").FontSize;
-                Require(actual == 18, "Agenda D-day font remains " + actual + ".");
+                double actual = VisualDescendants<TextBlock>(agenda).First(t => t.Name == "DetailDDay" && t.Text == "D-day").FontSize;
+                Require(actual == 18, "Day detail D-day font remains " + actual + ".");
             });
             foreach (string property in new[] { "BackgroundColor", "CardColor", "TextColor", "TodayColor", "FutureColor", "PastColor" })
                 Run("AUDIT 화면/개별 색상 실제 표시 " + property, () => {
                     var draft = (AppearanceSettings)Field(main, "_inlineSettingsDraft");
                     typeof(AppearanceSettings).GetProperty(property).SetValue(draft, "#123456"); Call(main, "ApplyAppearance", draft); LayoutAudit(mini);
                     string actual;
-                    if (property == "BackgroundColor") actual = ((SolidColorBrush)Control<Border>(mini, "AllSchedulesPanel").Background).Color.ToString();
-                    else if (property == "CardColor") actual = (string)agenda.Items[0].GetType().GetProperty("Background").GetValue(agenda.Items[0]);
+                    if (property == "BackgroundColor") actual = ((SolidColorBrush)Control<Border>(mini, "MonthCalendarPanel").Background).Color.ToString();
+                    else if (property == "CardColor") actual = ((SolidColorBrush)VisualDescendants<Border>(agenda).First(b => b.Name == "DetailCard").Background).Color.ToString();
                     else {
+                        DayDetails(mini, DateTime.Today.AddDays(property == "FutureColor" ? 2 : property == "PastColor" ? -2 : 0));
                         string label = property == "TextColor" ? "Audit title" : property == "TodayColor" ? "D-day" : property == "FutureColor" ? "D-2" : "D+2";
-                        actual = ((SolidColorBrush)VisualDescendants<TextBlock>(agenda).First(t => t.Text == label).Foreground).Color.ToString();
+                        actual = ((SolidColorBrush)VisualDescendants<TextBlock>(agenda).First(t =>
+                            t.Text == label && t.Name == (property == "TextColor" ? "DetailTitle" : "DetailDDay")).Foreground).Color.ToString();
                     }
                     Require(actual.EndsWith("123456", StringComparison.OrdinalIgnoreCase), "Visible color remains " + actual + "; custom color is only applied to the retired view.");
                 });
-            Cancel(); mini.SetAllSchedulesOpen(false);
+            Cancel(); mini.SetMonthViewOpen(false);
             foreach (int days in Enumerable.Range(1, 7)) Run("AUDIT 화면/표시 일수 저장 " + days, () => {
                 Open(); ((ComboBox)Field(main, "settingsDayCount")).SelectedIndex = days - 1; Save();
                 Require(data.MiniDayCount == days && Control<ItemsControl>(mini, "WeekDays").Items.Count == days, "Day count not applied.");
@@ -95,7 +110,8 @@ namespace ScheduleWidget.Checks
             Run("AUDIT 화면/일정 블록 D-day 켜기 끄기", () => {
                 foreach (bool enabled in new[] { false, true }) { Open(); Control<System.Windows.Controls.Primitives.ToggleButton>(main, "InlineBlockDDaySwitch").IsChecked = enabled; Save();
                     var cells = Control<ItemsControl>(mini, "WeekDays").Items.Cast<MiniWindow.DayCell>();
-                    var block = cells.SelectMany(c => ((System.Collections.IEnumerable)c.TaskBlocks).Cast<object>()).First();
+                    var block = cells.SelectMany(c => ((System.Collections.IEnumerable)c.TaskBlocks).Cast<object>())
+                        .Single(b => ((ScheduleItem)b.GetType().GetProperty("Item").GetValue(b)).Title == "Audit title");
                     Require((string)block.GetType().GetProperty("DDay").GetValue(block) == (enabled ? "D-day" : ""), "Block D-day not applied."); }
             });
             Run("AUDIT 일반/항상 위 저장 및 창 속성", () => {
@@ -144,6 +160,7 @@ namespace ScheduleWidget.Checks
             SettingsRetryChecks(main, mini, data);
             ScheduleMenuChecks(main, mini, data);
             AppearancePersistenceCheck(main, mini, data);
+            HostedSettingsAudit(main, mini, data);
             ContactAudit(); PetAudit(); MusicAudit();
             Run("Personal character changes preserve other pets and shared placement", CharacterSettingScopes);
             Run("Provider tabs preserve independent drafts, recipients and saved credentials", ProviderSettingScopes);
@@ -228,12 +245,12 @@ namespace ScheduleWidget.Checks
                     SetField(main, "dataStore", new ControlledSettingsStore(originalStore));
                     Control<Slider>(main, "InlineTitleFontSizeSlider").Value = 24;
                     Control<Slider>(main, "InlineDDayFontSizeSlider").Value = 24;
-                    Require((double)mini.Resources["AgendaDDayFontSize"] == 24, "The largest D-day font was clamped below the slider's limit.");
+                    Require((double)mini.Resources["DDayFontSize"] == 24, "The largest D-day font was clamped below the slider's limit.");
                     ((ComboBox)Field(main, "settingsDayCount")).SelectedIndex = 4;
                     Call(main, "InlineSettingsApplyButton_Click", settings, ClickArgs());
                     Call(main, "CloseInlineSettings", false);
                     Require(data.Appearance.TitleFontSize == beforeFont && data.MiniDayCount == beforeDays &&
-                        (double)mini.Resources["AgendaTitleFontSize"] == beforeFont, "Cancel committed failed edits or left their preview on screen.");
+                        (double)mini.Resources["TitleFontSize"] == beforeFont, "Cancel committed failed edits or left their preview on screen.");
                 }
                 finally
                 {
@@ -280,14 +297,14 @@ namespace ScheduleWidget.Checks
                 {
                     SetField(mini, "blockItem", item);
                     Call(mini, "BlockColor_Click", mini, ClickArgs());
-                    mini.SetAllSchedulesOpen(true);
-                    var row = Control<ItemsControl>(mini, "AllSchedulesList").Items.Cast<object>()
-                        .Single(value => ReferenceEquals(value.GetType().GetProperty("Item").GetValue(value), item));
-                    Require(item.Color == "#102030" && (string)row.GetType().GetProperty("Ink").GetValue(row) == FeatureRules.ReadableText(item.Color), "Color menu did not update the item or its readable text.");
+                    mini.SetMonthViewOpen(true);
+                    var details = DayDetails(mini, item.StartDate.Value);
+                    var title = VisualDescendants<TextBlock>(details).First(t => t.Name == "DetailTitle" && t.DataContext == item);
+                    Require(item.Color == "#102030" && ((SolidColorBrush)title.Foreground).Color == (Color)ColorConverter.ConvertFromString(FeatureRules.ReadableText(item.Color)), "Color menu did not update the item or its readable text.");
                     Call(mini, "BlockDefaultColor_Click", mini, ClickArgs());
                     Require(item.Color == null, "Default color action did not clear the item override.");
                 }
-                finally { SetField(main, "colorPickerOverride", null); mini.SetAllSchedulesOpen(false); }
+                finally { SetField(main, "colorPickerOverride", null); mini.SetMonthViewOpen(false); }
             });
             Run("Schedule message action requests a draft and rejects a stale item", () =>
             {
@@ -329,11 +346,11 @@ namespace ScheduleWidget.Checks
                     var reloaded = new MiniWindow(loaded, () => true, () => { });
                     try
                     {
-                        reloaded.SetAllSchedulesOpen(true);
+                        reloaded.SetMonthViewOpen(true);
                         LayoutAudit(reloaded);
-                        var row = Control<ItemsControl>(reloaded, "AllSchedulesList").Items[0];
-                        Require(Control<FrameworkElement>(reloaded, "MiniRoot").Opacity == .6 && (double)reloaded.Resources["AgendaTitleFontSize"] == 19 &&
-                            (double)reloaded.Resources["AgendaDDayFontSize"] == 17 && (string)row.GetType().GetProperty("Background").GetValue(row) == "#314159", "A reopened calendar ignored saved appearance.");
+                        var cell = VisualDescendants<Button>(Control<ItemsControl>(reloaded, "MonthDays")).First();
+                        Require(Control<FrameworkElement>(reloaded, "MiniRoot").Opacity == .6 && (double)reloaded.Resources["TitleFontSize"] == 19 &&
+                            (double)reloaded.Resources["DDayFontSize"] == 17 && ((SolidColorBrush)cell.Background).Color.ToString().EndsWith("314159"), "A reopened calendar ignored saved appearance.");
                     }
                     finally { reloaded.Close(); }
                     OpenSettingsForCheck(main);
@@ -341,7 +358,7 @@ namespace ScheduleWidget.Checks
                     Control<Slider>(main, "InlineOpacitySlider").Value = 30;
                     Call(main, "CloseInlineSettings", false);
                     Require(data.Appearance.ThemePreset == "Light" && mini.ThemeName == "Light" && Control<FrameworkElement>(mini, "MiniRoot").Opacity == .6 &&
-                        ((SolidColorBrush)Control<Border>(mini, "AllSchedulesPanel").Background).Color.ToString().EndsWith("314159"), "Cancelling a later preview lost saved custom appearance.");
+                        ((SolidColorBrush)Control<Border>(mini, "MonthCalendarPanel").Background).Color.ToString().EndsWith("314159"), "Cancelling a later preview lost saved custom appearance.");
                 }
                 finally
                 {

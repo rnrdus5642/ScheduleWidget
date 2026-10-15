@@ -7,7 +7,7 @@ namespace ScheduleWidget
     {
         private AppearanceSettings scheduleAppearance = new AppearanceSettings();
 
-        // Calendar opacity and the full agenda's typography/colors follow the current settings preview.
+        // Month cells and day details share the saved appearance and live settings preview.
         public void ApplyAppearance(AppearanceSettings appearance, bool refresh = true)
         {
             appearance = appearance ?? new AppearanceSettings();
@@ -16,28 +16,28 @@ namespace ScheduleWidget
             scheduleAppearance = appearance;
             MiniRoot.Opacity = FiniteRange(appearance.Opacity, 0.3, 1, 1);
             if (flipWindow != null) flipWindow.Opacity = MiniRoot.Opacity;
-            Resources["AgendaTitleFontSize"] = FiniteRange(appearance.TitleFontSize, 10, 24, 14);
-            Resources["AgendaDDayFontSize"] = FiniteRange(appearance.DDayFontSize, 10, 24, 13);
-            var background = new SolidColorBrush((Color)ColorConverter.ConvertFromString(AgendaColor(appearance.BackgroundColor, theme.Paper)));
-            background.Freeze();
-            Resources["AgendaBackgroundBrush"] = background;
-            allSchedulesSignature = null;
+            Resources["TitleFontSize"] = FiniteRange(appearance.TitleFontSize, 10, 24, 14);
+            Resources["DDayFontSize"] = FiniteRange(appearance.DDayFontSize, 10, 24, 13);
+            void Brush(string key, string color, string fallback)
+            {
+                var brush = new SolidColorBrush((Color)ColorConverter.ConvertFromString(AppearanceColor(color, fallback)));
+                brush.Freeze();
+                Resources[key] = brush;
+            }
+            Brush("BackgroundBrush", appearance.BackgroundColor, theme.Paper);
+            Brush("CardBrush", appearance.CardColor, theme.Day);
+            Brush("TextBrush", appearance.TextColor, theme.Ink);
+            Brush("SubTextBrush", appearance.TextColor, theme.Ink);
+            Brush("TodayBrush", appearance.TodayColor, theme.Ink);
+            Brush("FutureBrush", appearance.FutureColor, theme.Ink);
+            Brush("PastBrush", appearance.PastColor, theme.Ink);
             if (refresh && themeChanged) Refresh();
-            else if (refresh) RefreshAllSchedules();
+            else if (refresh) RefreshMonthCalendar();
         }
 
         private static double FiniteRange(double value, double min, double max, double fallback) =>
             double.IsNaN(value) || double.IsInfinity(value) ? fallback : Math.Max(min, Math.Min(max, value));
 
-        private static string AgendaColor(string color, string fallback) => FeatureRules.IsColor(color) ? color : fallback;
-
-        private string AgendaStatusInk(ScheduleItem item)
-        {
-            if (FeatureRules.IsColor(item.Color)) return FeatureRules.ReadableText(item.Color);
-            if (item.IsCompleted || !item.StartDate.HasValue) return AgendaColor(scheduleAppearance.TextColor, theme.Ink);
-            string color = item.RemainingDays == 0 ? scheduleAppearance.TodayColor
-                : item.RemainingDays > 0 ? scheduleAppearance.FutureColor : scheduleAppearance.PastColor;
-            return AgendaColor(color, theme.Ink);
-        }
+        private static string AppearanceColor(string color, string fallback) => FeatureRules.IsColor(color) ? color : fallback;
     }
 }
