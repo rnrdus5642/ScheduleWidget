@@ -3210,20 +3210,29 @@ namespace ScheduleWidget
             if (e.Handled || closed || !PetsShown || CharacterHost.Visibility != Visibility.Visible) return;
             var source = e.OriginalSource as DependencyObject;
             var captured = Mouse.Captured as DependencyObject;
+            if (!ShouldRescuePetClick(source, captured, e.GetPosition(CharacterHost))) return;
             bool foreignCapture = captured != null && !IsWithin(captured, CharacterHost);
-            if (!foreignCapture && IsWithin(source, CharacterHost)) return; // the normal way in
-            Point at = e.GetPosition(CharacterHost);
-            var rects = PetRects();
-            bool inPet = rects.Any(r => r.Width > 0 && r.Contains(at));
-            if (!inPet) return;
-            bool inHitBox = new[] { PetHit0, PetHit1, PetHit2 }.Any(h => h.Visibility == Visibility.Visible &&
-                new Rect(Canvas.GetLeft(h), Canvas.GetTop(h), h.Width, h.Height).Contains(at));
-            bool bareBackground = source == null || source == this || source == OuterRoot;
-            if (!(foreignCapture && inHitBox) && !bareBackground) return; // e.g. the calendar under a pet's corner keeps its click
             PetLog.Write("pet-click", (right ? "right" : "left") + " rescued: " + (foreignCapture ? "capture held by " + captured.GetType().Name : "outside the hit box"));
             if (foreignCapture) Mouse.Capture(null);
             if (right) Character_RightClick(CharacterHost, e);
             else Character_MouseDown(CharacterHost, e);
+        }
+
+        private bool ShouldRescuePetClick(DependencyObject source, DependencyObject captured, Point at)
+        {
+            // Popup events can route through their logical owner while PopupRoot holds mouse capture.
+            // They belong to a separate visual tree: never reinterpret a popup button/input as a pet click,
+            // even if its screen position overlaps the pet. This includes a DatePicker's nested popup.
+            if (source != null && source != this && !IsWithin(source, OuterRoot)) return false;
+            bool foreignCapture = captured != null && !IsWithin(captured, CharacterHost);
+            if (!foreignCapture && IsWithin(source, CharacterHost)) return false; // the normal way in
+            var rects = PetRects();
+            bool inPet = rects.Any(r => r.Width > 0 && r.Contains(at));
+            if (!inPet) return false;
+            bool inHitBox = new[] { PetHit0, PetHit1, PetHit2 }.Any(h => h.Visibility == Visibility.Visible &&
+                new Rect(Canvas.GetLeft(h), Canvas.GetTop(h), h.Width, h.Height).Contains(at));
+            bool bareBackground = source == null || source == this || source == OuterRoot;
+            return (foreignCapture && inHitBox) || bareBackground;
         }
 
         private static bool IsWithin(DependencyObject node, DependencyObject ancestor)

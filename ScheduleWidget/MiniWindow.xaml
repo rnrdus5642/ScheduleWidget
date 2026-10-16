@@ -760,7 +760,7 @@
                     <!-- While a row's 삭제 waits for its second press: what that does on Google Calendar, for a linked schedule. -->
                     <TextBlock x:Name="DayDeleteNote" Visibility="Collapsed" Style="{StaticResource AuxCaption}" FontSize="11"
                                TextWrapping="Wrap" Margin="0,2,0,6"/>
-                    <Button Content="새 일정" Height="30" Padding="8,0" HorizontalAlignment="Left"
+                    <Button x:Name="NewMiniScheduleButton" Content="새 일정" Height="30" Padding="8,0" HorizontalAlignment="Left"
                             Style="{StaticResource AuxCompactButton}" Click="NewMiniSchedule_Click"/>
                     <StackPanel x:Name="MiniEditorPanel" Visibility="Collapsed">
                     <Separator Margin="0,8,0,7"/>

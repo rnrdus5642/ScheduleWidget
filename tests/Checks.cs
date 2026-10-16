@@ -446,6 +446,7 @@ namespace ScheduleWidget.Checks
                 Run("Character double-click selects its settings without opening the picker", () => PetClickRouting(clickMini, clickData));
                 Run("Display changes release pet graphics, coalesce and preserve user data", CharacterDisplayChanges);
                 Run("Repeated screen changes cancel stale pointer states without saving transitional geometry", DisplayPointerReset);
+                Run("Overlapping pets cannot steal new-schedule or nested popup clicks", PopupClicksOverPets);
                 Run("Compact calendar shows multiple schedules and scrolls every day independently", CalendarDayLists);
                 Run("Month calendar covers whole months, boundaries and schedule editing", MonthCalendar);
                 Run("Calendar modes resize, fit the screen and restore independent geometry", CalendarModeGeometry);
