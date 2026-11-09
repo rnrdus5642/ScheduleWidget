@@ -13,6 +13,7 @@ using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using System.Windows.Threading;
 using Newtonsoft.Json;
 
 namespace ScheduleWidget.Checks
@@ -21,6 +22,27 @@ namespace ScheduleWidget.Checks
     {
         private static string root;
         private static int passed, failed;
+
+        private static App CreateChecksApplication()
+        {
+            // Application's constructor queues startup. Input/IME checks need to pump the dispatcher,
+            // so remove its constructor startup operations before loading resources or creating any windows.
+            // This keeps the real single-instance check, user-data load and external services out of checks.
+            var dispatcher = Dispatcher.CurrentDispatcher;
+            var startup = new List<DispatcherOperation>();
+            DispatcherHookEventHandler capture = (sender, args) =>
+            {
+                if (args.Operation.Priority == DispatcherPriority.Send) startup.Add(args.Operation);
+            };
+            dispatcher.Hooks.OperationPosted += capture;
+            App app;
+            try { app = new App(); }
+            finally { dispatcher.Hooks.OperationPosted -= capture; }
+            Require(startup.Count > 0 && startup.All(operation => operation.Abort()), "Could not isolate the app's queued startup from UI checks.");
+            app.InitializeComponent();
+            app.ShutdownMode = ShutdownMode.OnExplicitShutdown;
+            return app;
+        }
 
         [STAThread]
         private static int Main(string[] args)
@@ -49,13 +71,20 @@ namespace ScheduleWidget.Checks
             Run("YouTube links reject unrelated and malformed URLs", YouTubeLinks);
             Run("Google sync only deletes owned unshared events", GoogleDeletion);
             Run("Google sync resolves local and remote edits", GoogleEdits);
+            GoogleCancellationRegression();
+            Run("Long timed multi-day reminders fit Kakao and preserve Unicode titles", ReminderLengthRegression);
             Run("Google account display works without Calendar metadata permission", GoogleAccountEmail);
             Run("Drive sync only deletes explicitly removed pets", DriveDeletion);
             Run("Default pet manifests and packaged assets load", PackagedAssets);
             Run("Updates reject a modified signed manifest", SignedUpdates);
+            Run("Updater restores failed partial copies, removes new fragments, and preserves intact locked files", UpdaterPartialCopyRollback);
+            Run("Cancelled character imports cannot publish prepared directories", CancelledCharacterPublish);
             Run("Global shortcuts reject unmodified typing keys", Shortcuts);
             Run("Automatic media policy follows active apps and preserves manual choices", AutomaticMediaSelection);
             Run("Fatal rendering errors are distinguished from recoverable COM errors", RenderingFailureClassification);
+            RenderRecoveryChecks();
+            Run("Invisible blank browser surfaces cannot intercept desktop icons", BrowserInputSurfaces);
+            Run("Browser input protection survives replacement surfaces and style resets", BrowserInputGuardRecovery);
             Run("WPF resources and six window layouts construct", WindowResources);
 
             Console.WriteLine("{0} passed, {1} failed.", passed, failed);
@@ -87,10 +116,13 @@ namespace ScheduleWidget.Checks
         private static void LegacyMigration()
         {
             string legacy = Path.Combine(root, "legacy.json");
-            File.WriteAllText(legacy, "{\"Schedules\":[{\"Title\":\"Same\",\"Period\":\"2026-10-08\"},{\"Title\":\"Same\",\"Period\":\"2026-10-08\"}]}");
+            File.WriteAllText(legacy, "{\"Schedules\":[{\"Title\":\"Same\",\"Period\":\"2026-10-08\"},{\"Title\":\"Same\",\"Period\":\"2026-10-08\"}],\"Appearance\":{\"TitleFontSize\":19,\"DDayFontSize\":17}}");
             var store = new DataManager(Path.Combine(root, "migrated"), legacy);
             var loaded = store.LoadData().Data;
             Require(loaded.Schedules.Count == 2, "Migration lost schedules.");
+            Require(loaded.Appearance.TitleFontSize == 19 && loaded.Appearance.MonthTitleFontSize == 19 && loaded.Appearance.DDayFontSize == 17 &&
+                loaded.Appearance.CompactTitleFontSize == 11 && loaded.Appearance.CompactDDayFontSize == 10,
+                "Older settings lost their monthly font or changed the compact calendar's previous sizes.");
             Require(loaded.Schedules.All(s => s.Id != Guid.Empty) && loaded.Schedules.Select(s => s.Id).Distinct().Count() == 2, "Schedule IDs are not unique.");
             Require(!File.Exists(legacy) && File.Exists(store.DataFilePath), "Legacy file was not migrated.");
             Require(store.LoadData().Data.Schedules.Select(s => s.Id).SequenceEqual(loaded.Schedules.Select(s => s.Id)), "IDs changed on reload.");
@@ -398,9 +430,7 @@ namespace ScheduleWidget.Checks
 
         private static void WindowResources()
         {
-            var app = new App();
-            app.InitializeComponent();
-            app.ShutdownMode = ShutdownMode.OnExplicitShutdown;
+            var app = CreateChecksApplication();
             var windows = new List<Window>();
             try
             {
@@ -447,12 +477,39 @@ namespace ScheduleWidget.Checks
                 Run("Display changes release pet graphics, coalesce and preserve user data", CharacterDisplayChanges);
                 Run("Repeated screen changes cancel stale pointer states without saving transitional geometry", DisplayPointerReset);
                 Run("Overlapping pets cannot steal new-schedule or nested popup clicks", PopupClicksOverPets);
+                Run("Offline status follows connection changes and releases its subscription", OfflineIndicatorTransitions);
+                Run("Offline status fits beside settings in compact and monthly calendars", OfflineIndicatorLayout);
+                Run("Enter saves calendar titles and times without duplicates or invalid input", CalendarScheduleEnter);
+                Run("IME Enter saves committed Korean text and respects editor cancellation", KoreanScheduleEnter);
+                Run("Enter adds and edits schedules in the list window", ListScheduleEnter);
+                Run("Failed schedule saves preserve drafts and retry without duplicates", ScheduleSaveRetryRegression);
+                Run("Failed mini saves can be cancelled and retried without persistence or sync leaks", ScheduleTransactionHardening);
+                Run("Failed delete and completion actions never send remote writes", RejectedScheduleActionsNeverSync);
+                Run("Unsaved Google stop and sign-out remain visible until a successful retry", GooglePersistenceWarnings);
+                Run("Auxiliary editors fit secondary monitors and restore size after temporary fitting", AuxiliaryPlacementRegression);
+                Run("Small secondary monitors keep settings and playlist save actions reachable", AuxiliaryEditorLayoutRegression);
+                Run("Disabling Google sync and closing the app cancel pending work without retry errors", GoogleWindowCancellationRegression);
                 Run("Compact calendar shows multiple schedules and scrolls every day independently", CalendarDayLists);
                 Run("Month calendar covers whole months, boundaries and schedule editing", MonthCalendar);
                 Run("Calendar modes resize, fit the screen and restore independent geometry", CalendarModeGeometry);
+                Run("Monitor resolution fitting preserves preferred geometry without drift", MonitorResolutionRestoration);
+                Run("Monitor reconnect restores preferred placement across app restarts", MonitorDisconnectAndRestart);
+                Run("Explicit moves and resizes update only the intended monitor", MonitorUserIntent);
+                Run("Monitor DPI and calendar modes preserve independent preferred heights", MonitorModesAndDpi);
+                Run("Legacy monitor layouts and transient display states preserve preferences", MonitorLegacyAndTransientStates);
+                Run("Monitor profiles validate and distinguish identical display names", MonitorDataValidation);
+                Run("Fitted moves preserve preferred size and unrelated displays do not disturb placement", MonitorFittedMovesAndOtherDisplays);
                 Run("Calendar keeps both horizontal edges fixed and uses free space above or below", CalendarAnchoredExpansion);
                 Run("Monthly schedule titles, times, colors and overflow remain accessible", MonthScheduleVisibility);
+                Run("Compact and monthly font sizes stay independent, including range bars and large text", CalendarModeFonts);
                 Run("Monthly mode preserves the basic calendar's pet scale", CalendarModePetScale);
+                Run("Calendar modes keep side pets still and top/bottom pets attached to their edges", CalendarPetEdgeAnchors);
+                Run("Inside pets remember independent mode positions across restarts and duplicate characters", CalendarPetModeMemory);
+                Run("Screen-edge corrections preserve preferred pet positions and size", CalendarPetScreenCorrection);
+                Run("Interrupted mode animations preserve the prepared pet placement", CalendarPetInterruptedMode);
+                Run("Repeated fractional-size mode switches do not accumulate pet drift", CalendarPetFractionalPositions);
+                Run("Legacy monthly placements survive their first mode round trip", CalendarPetLegacyMonth);
+                Run("Cancelling settings cannot overwrite another calendar mode's placement", CalendarPetSettingsCancellation);
                 Run("Range bars span dates, wrap at week boundaries and keep overlaps separate", CalendarRangeBars);
                 Run("Range overflow, editing and completion preserve the original schedule", CalendarRangeActions);
                 Run("Calendar mode animation keeps intermediate geometry out of saved settings", CalendarModeTransition);
@@ -464,6 +521,7 @@ namespace ScheduleWidget.Checks
                 Run("Late media subscription completion cannot restart hidden work", LateMediaSubscription);
                 Run("Audio volume events preserve mute and stop after disposal", VolumeEventCallbacks);
                 Run("Unified settings navigation, save, cancel and content lifecycle", () => UnifiedSettingsFlow(main, mini, data));
+                SettingsDismissalAudit();
                 SettingsAudit();
             }
             finally { app.Shutdown(); }
@@ -704,6 +762,8 @@ namespace ScheduleWidget.Checks
                 music.SetVolume(0);
                 music.PlayFromListAsync(track).GetAwaiter().GetResult();
                 Require(music.IsPlaying && music.PlayingTrack == track, "The isolated local track did not start.");
+                Require(Control<FrameworkElement>(music, "PlaybackControls").Visibility == Visibility.Collapsed,
+                    "Settings duplicate the calendar's playback controls.");
                 settings.SelectPage(SettingsPage.General);
                 Call(main, "PrepareSettingsPage", SettingsPage.General);
                 Require(!music.IsSettingsHosted && ReferenceEquals(music.Content, editor), "Leaving music did not return its existing player view.");
@@ -717,7 +777,10 @@ namespace ScheduleWidget.Checks
                 themes.SelectedIndex = 1; // preview Dark
                 if (round == 0)
                 {
-                    Call(main, "CloseInlineSettings", false);
+                    settings.CloseRequested += () => Call(main, "CloseInlineSettings", false);
+                    SetField(settings, "canDismissOverride", (Func<bool>)(() => true));
+                    Call(settings, "Settings_Deactivated", settings, EventArgs.Empty);
+                    Call(settings, "RecheckDismissal", null, EventArgs.Empty);
                     Require(data.Communication.TelegramChatId == null && data.Appearance.ThemePreset == "Light", "Closing settings saved pending connection or theme edits.");
                     Require(AuxTheme.Current == "Light", "Closing settings did not undo the theme preview.");
                 }

@@ -154,9 +154,29 @@ namespace ScheduleWidget
             item.Period + "|" + settings.DaysBefore + "|" +
             (TryScheduleTime(item.Time, out string time) ? "at" + time : settings.Hour + ":" + settings.Minute);
 
-        public static string ReminderMessage(ScheduleItem item) =>
-            "[할 일 알림] " + (item.Title ?? "").Substring(0, Math.Min(150, (item.Title ?? "").Length)) +
-            "\n마감: " + item.Period + (TryScheduleTime(item.Time, out string time) ? " " + time : "") +
-            (item.IsMultiDay ? " ~ " + item.EndDate.Value.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) : "") + " (" + item.DDay + ")";
+        public static string ReminderMessage(ScheduleItem item, int maximumLength = 4096)
+        {
+            const string prefix = "[할 일 알림] ";
+            string suffix = "\n마감: " + item.Period + (TryScheduleTime(item.Time, out string time) ? " " + time : "") +
+                (item.IsMultiDay ? " ~ " + item.EndDate.Value.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) : "") + " (" + item.DDay + ")";
+            int budget = maximumLength - prefix.Length - suffix.Length;
+            if (budget < 1) throw new ArgumentOutOfRangeException(nameof(maximumLength));
+            return prefix + MessageTitle(item.Title ?? "", Math.Min(150, budget)) + suffix;
+        }
+
+        private static string MessageTitle(string title, int length)
+        {
+            if (title.Length <= length) return title;
+            // Count against the complete message, without splitting emoji or combining characters.
+            var elements = StringInfo.GetTextElementEnumerator(title);
+            int kept = 0;
+            while (elements.MoveNext())
+            {
+                int next = elements.ElementIndex + elements.GetTextElement().Length;
+                if (next > length - 1) break;
+                kept = next;
+            }
+            return title.Substring(0, kept) + "…";
+        }
     }
 }

@@ -22,7 +22,6 @@ namespace ScheduleWidget
         private IPetSettingsHost settingsPetHost;
         private ComboBox settingsDayCount;
         private bool settingsDayCountTouched, syncingSettingsDayCount;
-        private CheckBox settingsPlayerVisible;
 
         private SettingsWindow UnifiedSettings => settingsHost as SettingsWindow;
 
@@ -58,7 +57,7 @@ namespace ScheduleWidget
             BuildUnifiedSettingsPages(window);
             window.PageChanged += PrepareSettingsPage;
             window.SaveRequested += () => InlineSettingsApplyButton_Click(window, new RoutedEventArgs());
-            window.CloseRequested += () => CloseInlineSettings(false);
+            window.CloseRequested += () => { if (ReferenceEquals(settingsHost, window)) CloseInlineSettings(false); };
             window.ResetRequested += ResetUnifiedSettingsPage;
             window.Closing += (s, e) =>
             {
@@ -110,6 +109,8 @@ namespace ScheduleWidget
 
         private void BuildUnifiedSettingsPages(SettingsWindow window)
         {
+            window.RetrySaveRequested += () => SaveDataSafely(false);
+            window.ShowPersistentWarning(GooglePersistenceWarning);
             window.SetPage(SettingsPage.General, SettingsScroll(SettingsStack(
                 TakeSettingsControl(SettingsStartupCard),
                 SettingsCard("창 표시", TakeSettingsControl(SettingsTopmostRow)),
@@ -122,37 +123,16 @@ namespace ScheduleWidget
             settingsDayCount.SelectionChanged += (s, e) =>
             {
                 if (!syncingSettingsDayCount && !_inlineSettingsLoading) settingsDayCountTouched = true;
+                UpdateCalendarSettingsPreviews();
             };
             System.Windows.Automation.AutomationProperties.SetAutomationId(settingsDayCount, "SettingsDayCount");
-            var dayLabel = new TextBlock { Text = "기본 달력에 표시할 기간", Margin = new Thickness(0, 0, 0, 8) };
-            var monthHint = new TextBlock { Text = "월간 보기는 항상 한 달 전체를 표시합니다. 아래 항목은 기본 달력에 적용됩니다.",
-                TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 12), Style = (Style)window.FindResource("AuxCaption") };
-            window.SetPage(SettingsPage.Appearance, SettingsScroll(SettingsStack(
-                TakeSettingsControl(SettingsThemeCard),
-                SettingsCard("기본 달력 (1~7일)", monthHint, dayLabel, settingsDayCount, TakeSettingsControl(SettingsCalendarDdayRow), TakeSettingsControl(SettingsFlipLabel), TakeSettingsControl(InlineFlipEffectCombo)),
-                TakeSettingsControl(SettingsOpacityCard), TakeSettingsControl(SettingsFontCard),
-                SettingsCard("달력·일정 색상", TakeSettingsControl(SettingsColorButtons), TakeSettingsControl(SettingsColorHint)))));
+            window.SetPage(SettingsPage.Appearance, BuildAppearanceSettingsPage(window));
 
             settingsCharacterContent = new ContentControl();
             window.SetPage(SettingsPage.Characters, settingsCharacterContent);
 
             settingsMusicContent = new ContentControl();
-            settingsPlayerVisible = new CheckBox { Content = "달력 아래 음악 막대 표시", IsChecked = appData.MiniPlayerVisible,
-                Style = (Style)window.FindResource("AuxCheckBox"), Margin = new Thickness(0, 0, 0, 16) };
-            System.Windows.Automation.AutomationProperties.SetAutomationId(settingsPlayerVisible, "SettingsPlayerVisible");
-            settingsPlayerVisible.Click += (s, e) =>
-            {
-                bool visible = settingsPlayerVisible.IsChecked == true;
-                if (miniWindow != null) miniWindow.SetPlayerVisible(visible);
-                else { appData.MiniPlayerVisible = visible; SaveDataSafely(); }
-            };
-            var music = new Grid();
-            music.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            music.RowDefinitions.Add(new RowDefinition());
-            music.Children.Add(settingsPlayerVisible);
-            Grid.SetRow(settingsMusicContent, 1);
-            music.Children.Add(settingsMusicContent);
-            window.SetPage(SettingsPage.Music, music);
+            window.SetPage(SettingsPage.Music, settingsMusicContent);
 
             settingsReminderContent = new ContentControl();
             window.SetPage(SettingsPage.Notifications, SettingsScroll(settingsReminderContent));
@@ -178,11 +158,7 @@ namespace ScheduleWidget
 
         private void UpdateAppearancePreview(AppearanceSettings appearance)
         {
-            // The settings window's UI palette shadows the app-wide colors. The sample must show the user's actual colors.
-            SetBrush(SettingsFontPreview.Resources, "TextBrush", appearance.TextColor);
-            SetBrush(SettingsFontPreview.Resources, "SubTextBrush", appearance.SubTextColor);
-            SetBrush(SettingsFontPreview.Resources, "FutureBrush", appearance.FutureColor);
-            SetBrush(SettingsFontPreview.Resources, "CardBrush", appearance.CardColor);
+            UpdateCalendarSettingsPreviews();
         }
 
         private Button CreateWebsiteButton(string caption, string url)
@@ -260,6 +236,7 @@ namespace ScheduleWidget
 
         private void ReleaseUnifiedSettingsContent()
         {
+            ReleaseAppearancePreview();
             if (musicWindow?.IsSettingsHosted == true)
             {
                 settingsMusicContent.Content = null;
@@ -276,8 +253,9 @@ namespace ScheduleWidget
             settingsConnectionsContent = null;
             settingsGoogleContent = null;
             settingsDayCount = null;
+            appearanceSections.Clear();
+            appearanceTabs.Clear();
             settingsDayCountTouched = syncingSettingsDayCount = false;
-            settingsPlayerVisible = null;
         }
 
         private void ResetUnifiedSettingsPage(SettingsPage page)
@@ -295,6 +273,9 @@ namespace ScheduleWidget
                 _inlineSettingsLoading = true;
                 InlinePresetCombo.SelectedIndex = FindPresetIndex("Light");
                 InlineOpacitySlider.Value = 100;
+                InlineCompactTitleFontSizeSlider.Value = defaults.CompactTitleFontSize;
+                InlineCompactDDayFontSizeSlider.Value = defaults.CompactDDayFontSize;
+                InlineMonthTitleFontSizeSlider.Value = defaults.EffectiveMonthTitleFontSize;
                 InlineTitleFontSizeSlider.Value = defaults.TitleFontSize;
                 InlineDDayFontSizeSlider.Value = defaults.DDayFontSize;
                 InlineBlockDDaySwitch.IsChecked = true;

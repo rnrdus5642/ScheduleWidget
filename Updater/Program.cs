@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Security.Cryptography;
 using System.Threading;
 
 namespace ScheduleWidget.Updater
@@ -107,12 +108,19 @@ namespace ScheduleWidget.Updater
         {
             private readonly string _app, _staging;
             private readonly List<string> _backedUp = new List<string>();   // relative paths copied into BackupDir
+            private readonly List<string> _attempted = new List<string>();  // a failed copy may have already changed its target
+            private readonly Action<string, string> _copy;
             public readonly List<string> Written = new List<string>();      // relative paths overwritten or created in the app dir
             private readonly HashSet<string> _created = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             private readonly List<string> _createdDirs = new List<string>();
             public string BackupDir;
 
-            public UpdateTransaction(string app, string staging) { _app = app; _staging = staging; }
+            public UpdateTransaction(string app, string staging)
+                : this(app, staging, (src, dst) => Retry(() => File.Copy(src, dst, true), "copy " + Path.GetFileName(dst))) { }
+
+            // Isolated checks inject the final result of a failed copy without filling the user's disk or waiting on real locks.
+            internal UpdateTransaction(string app, string staging, Action<string, string> copy)
+            { _app = app; _staging = staging; _copy = copy; }
 
             private IEnumerable<string> StagingFiles()
             {
@@ -159,8 +167,9 @@ namespace ScheduleWidget.Updater
                     string dir = Path.GetDirectoryName(dst);
                     if (!Directory.Exists(dir)) { Directory.CreateDirectory(dir); _createdDirs.Add(dir); }
                     bool existed = File.Exists(dst);
-                    Retry(() => File.Copy(src, dst, true), "copy " + rel);
+                    _attempted.Add(rel);
                     if (!existed) _created.Add(rel);
+                    _copy(src, dst);
                     Written.Add(rel);
                 }
             }
@@ -168,23 +177,44 @@ namespace ScheduleWidget.Updater
             public bool Rollback()
             {
                 bool ok = true;
-                foreach (var rel in Written)
+                foreach (var rel in _attempted)
                 {
                     if (!_created.Contains(rel)) continue;
                     try { Retry(() => File.Delete(Path.Combine(_app, rel)), "remove new " + rel); } catch (Exception ex) { ok = false; Log("rollback delete failed " + rel + ": " + ex.Message); }
                 }
-                var written = new HashSet<string>(Written, StringComparer.OrdinalIgnoreCase);
+                var attempted = new HashSet<string>(_attempted, StringComparer.OrdinalIgnoreCase);
                 foreach (var rel in _backedUp)
                 {
-                    if (!written.Contains(rel)) continue;   // never overwritten (e.g. the locked file that stopped the update)
-                    try { Retry(() => File.Copy(Path.Combine(BackupDir, rel), Path.Combine(_app, rel), true), "restore " + rel); }
-                    catch (Exception ex) { ok = false; Log("rollback restore failed " + rel + ": " + ex.Message); }
+                    if (!attempted.Contains(rel)) continue;
+                    string backup = Path.Combine(BackupDir, rel), target = Path.Combine(_app, rel);
+                    // A sharing violation at open usually left the original intact. Prove it before skipping restoration.
+                    if (SameContents(backup, target)) continue;
+                    try { Retry(() => File.Copy(backup, target, true), "restore " + rel); }
+                    catch (Exception ex)
+                    {
+                        if (!SameContents(backup, target)) { ok = false; Log("rollback restore failed " + rel + ": " + ex.Message); }
+                    }
                 }
                 foreach (var dir in Enumerable.Reverse(_createdDirs))
                 {
                     try { if (Directory.Exists(dir) && !Directory.EnumerateFileSystemEntries(dir).Any()) Directory.Delete(dir); } catch { }
                 }
                 return ok;
+            }
+
+            private static bool SameContents(string a, string b)
+            {
+                try
+                {
+                    using (var left = File.OpenRead(a))
+                    using (var right = File.OpenRead(b))
+                    {
+                        if (left.Length != right.Length) return false;
+                        using (var hash = SHA256.Create()) return hash.ComputeHash(left).SequenceEqual(hash.ComputeHash(right));
+                    }
+                }
+                catch (Exception error) when (error is IOException || error is UnauthorizedAccessException || error is System.Security.SecurityException)
+                { return false; }
             }
         }
 

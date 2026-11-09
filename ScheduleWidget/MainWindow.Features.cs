@@ -154,13 +154,14 @@ namespace ScheduleWidget
             {
                 miniWindow = new MiniWindow(appData, () =>
                 {
-                    bool saved = SaveDataSafely();
-                    RefreshScheduleList(); // while this window is hidden that only refreshes the mini window
+                    bool saved = SaveDataSafely(miniWindow?.PersistingScheduleChange != true); // Roll back schedule changes before showing their inline error.
+                    if (miniWindow?.PersistingScheduleChange != true) RefreshScheduleList();
                     UpdateMediaWatchVisibility();
                     return saved;
                 }, ShowMusic, player: this, settings: OpenSettingsFromMini);
                 ConnectScheduleActions(miniWindow);
                 miniWindow.SetReminderWarning(reminderErrorMessage);
+                miniWindow.SetGoogleSaveWarning(GooglePersistenceWarning);
                 if (_themeApplied) miniWindow.ApplyAppearance(_inlineSettingsDraft ?? appData.Appearance);
                 miniWindow.SlotsChanged += () => petCompanion?.ReloadCharacter(); // the same pets beside the TODO window
                 // Hide: release OS subscriptions. Showing the widget attaches them again and takes one fresh snapshot.
@@ -209,6 +210,7 @@ namespace ScheduleWidget
         private string previewLastSide;
         private int previewLastVertical, previewLastGap;
         private List<MiniPetSpot> previewLastSpots;
+        private bool previewLastPetMonth;
         private bool previewScaleConflict, previewVisibleConflict;
         private bool previewSideConflict, previewVerticalConflict, previewGapConflict, previewSpotsConflict;
         private bool previewApplying;
@@ -243,6 +245,7 @@ namespace ScheduleWidget
             previewLastVertical = appData.MiniCharacterVertical;
             previewLastGap = appData.MiniCharacterGap;
             previewLastSpots = (appData.MiniPetSpots ?? new List<MiniPetSpot>()).Select(MiniWindow.CopySpot).ToList();
+            previewLastPetMonth = appData.MiniMonthView;
         }
 
         private void MiniPetsChangedWhileSettingsOpen()
@@ -267,7 +270,7 @@ namespace ScheduleWidget
             if (appData.MiniCharacterSide != previewLastSide) { previewSideConflict = true; previewSpotsConflict = true; }
             if (appData.MiniCharacterVertical != previewLastVertical) { previewVerticalConflict = true; previewSpotsConflict = true; }
             if (appData.MiniCharacterGap != previewLastGap) { previewGapConflict = true; previewSpotsConflict = true; }
-            if (!SameMiniSpots(appData.MiniPetSpots, previewLastSpots)) previewSpotsConflict = true;
+            if (appData.MiniMonthView != previewLastPetMonth || !SameMiniSpots(appData.MiniPetSpots, previewLastSpots)) previewSpotsConflict = true;
         }
 
         private static bool SameMiniSpots(IEnumerable<MiniPetSpot> a, IEnumerable<MiniPetSpot> b)
@@ -730,9 +733,17 @@ namespace ScheduleWidget
 
         public void ExitApplication()
         {
-            closingApp = true;
+            PrepareForExit();
             trayService.Dispose();
             Application.Current.Shutdown();
+        }
+
+        internal void PrepareForExit()
+        {
+            if (closingApp) return;
+            closingApp = true;
+            googleSignIn?.Cancel();
+            CancelGoogleWork();
         }
 
         private void ExitApplication_Click(object sender, RoutedEventArgs e) => ExitApplication();
@@ -756,6 +767,7 @@ namespace ScheduleWidget
         {
             window.ScheduleColorRequested += ChangeScheduleColor;
             window.ScheduleMessageRequested += ShareSchedule;
+            window.ScheduleChangeCompleted += RefreshScheduleList;
         }
 
         private void ShareSchedule(ScheduleItem item)
@@ -767,9 +779,13 @@ namespace ScheduleWidget
         private void CompleteSchedule_Click(object sender, RoutedEventArgs e)
         {
             var item = GetScheduleItemFromContextMenu(sender);
-            if (item == null) return;
-            item.IsCompleted = !item.IsCompleted;
-            SaveDataSafely();
+            if (item == null || !appData.Schedules.Contains(item)) return;
+            if (!ScheduleChanges.Update(item, () => item.IsCompleted = !item.IsCompleted, () => SaveDataSafely(false)))
+            {
+                AddSaveError.Text = "저장하지 못해 완료 상태를 바꾸지 않았습니다. 다시 시도해 주세요.";
+                AddSaveError.Visibility = Visibility.Visible;
+            }
+            else AddSaveError.Visibility = Visibility.Collapsed;
             RefreshScheduleList();
         }
 
@@ -804,9 +820,7 @@ namespace ScheduleWidget
             if (item == null || !appData.Schedules.Contains(item)) return;
             string color = PickColor(item.Color ?? appData.Appearance.CardColor);
             if (color == null) return;
-            string previous = item.Color;
-            item.Color = color;
-            if (!SaveDataSafely()) item.Color = previous;
+            ShowScheduleChangeResult(ScheduleChanges.Update(item, () => item.Color = color, () => SaveDataSafely(false)));
             RefreshScheduleList();
         }
 
@@ -814,20 +828,15 @@ namespace ScheduleWidget
         {
             var item = GetScheduleItemFromContextMenu(sender);
             if (item == null) return;
-            string previous = item.Color;
-            item.Color = null;
-            if (!SaveDataSafely()) item.Color = previous;
+            ShowScheduleChangeResult(ScheduleChanges.Update(item, () => item.Color = null, () => SaveDataSafely(false)));
             RefreshScheduleList();
         }
 
-        private void AppearanceColor_Click(object sender, RoutedEventArgs e)
+        private void ShowScheduleChangeResult(bool saved)
         {
-            if (_inlineSettingsDraft == null) return;
-            var property = typeof(AppearanceSettings).GetProperty((string)((Button)sender).Tag);
-            string color = PickColor((string)property.GetValue(_inlineSettingsDraft));
-            if (color == null) return;
-            property.SetValue(_inlineSettingsDraft, color);
-            ApplyAppearance(_inlineSettingsDraft);
+            AddSaveError.Text = "저장하지 못해 변경 전 상태로 복원했습니다. 다시 시도해 주세요.";
+            AddSaveError.Visibility = saved ? Visibility.Collapsed : Visibility.Visible;
+            miniWindow?.SetScheduleSaveWarning(saved ? null : AddSaveError.Text);
         }
 
         // The Codex characters were copied, replaced or removed (Codex installed, updated or uninstalled: CodexPets): the pets
@@ -871,7 +880,7 @@ namespace ScheduleWidget
                         if (reminderRetries.TryGetValue(retryKey, out DateTime retry) && retry > DateTime.Now) continue;
                         try
                         {
-                            string message = FeatureRules.ReminderMessage(item);
+                            string message = FeatureRules.ReminderMessage(item, channel == "Kakao" ? CommunicationService.KakaoMessageLimit : 4096);
                             if (channel == "Desktop") trayService.Notify("할 일 마감 알림", message);
                             else if (channel == "Telegram") await communicationService.SendTelegramAsync(appData.Communication, message);
                             else await communicationService.SendKakaoAsync(appData.Communication, message, true);

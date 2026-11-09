@@ -418,6 +418,7 @@ namespace ScheduleWidget
             if (data.WindowState == null) data.WindowState = new WindowStateData();
             if (data.WindowState.MonitorStates == null)
                 data.WindowState.MonitorStates = new Dictionary<string, MonitorStateData>();
+            CalendarPlacementPolicy.Normalize(data);
             if (data.Schedules == null) data.Schedules = new List<ScheduleItem>();
             if (data.Appearance == null) data.Appearance = new AppearanceSettings();
             if (data.Communication == null) data.Communication = new CommunicationSettings();
@@ -462,6 +463,12 @@ namespace ScheduleWidget
             // copy); at most 100 kept.
             data.MiniPetSpotsByCharacter = NormalizeSpotMemory(data.MiniPetSpotsByCharacter, data);
             data.CompanionPetSpotsByCharacter = NormalizeSpotMemory(data.CompanionPetSpotsByCharacter, data);
+            foreach (var layout in new[] { data.MiniCompactPetLayout, data.MiniMonthPetLayout })
+            {
+                if (layout == null) continue; // A missing mode has never had its own placement; initialize on first switch.
+                layout.Spots = NormalizeSpots(layout.Spots);
+                layout.ByCharacter = NormalizeSpotMemory(layout.ByCharacter, data);
+            }
             data.Music.Volume = ClampFinite(data.Music.Volume, 0, 1, 0.5);
             data.Music.VolumeBeforeMute = data.Music.VolumeBeforeMute > 0.001 ? ClampFinite(data.Music.VolumeBeforeMute, 0.01, 1, 0.5) : 0.5;
             if (data.Music.Playlists == null) data.Music.Playlists = new List<MusicPlaylist>();
@@ -545,8 +552,14 @@ namespace ScheduleWidget
             if (!FeatureRules.IsColor(data.Appearance.FutureColor)) data.Appearance.FutureColor = defaults.FutureColor;
             if (!FeatureRules.IsColor(data.Appearance.PastColor)) data.Appearance.PastColor = defaults.PastColor;
             data.Appearance.Opacity = ClampFinite(data.Appearance.Opacity, 0.3, 1.0, defaults.Opacity);
+            data.Appearance.CompactTitleFontSize = ClampFinite(
+                data.Appearance.CompactTitleFontSize, 10, 24, defaults.CompactTitleFontSize);
+            data.Appearance.CompactDDayFontSize = ClampFinite(
+                data.Appearance.CompactDDayFontSize, 10, 24, defaults.CompactDDayFontSize);
             data.Appearance.TitleFontSize = ClampFinite(
                 data.Appearance.TitleFontSize, 10, 24, defaults.TitleFontSize);
+            data.Appearance.MonthTitleFontSize = ClampFinite(
+                data.Appearance.EffectiveMonthTitleFontSize, 10, 24, data.Appearance.TitleFontSize);
             data.Appearance.DDayFontSize = ClampFinite(
                 data.Appearance.DDayFontSize, 10, 24, defaults.DDayFontSize);
 

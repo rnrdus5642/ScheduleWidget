@@ -363,6 +363,14 @@ namespace ScheduleWidget
         // Character files (up to 30 MB) go up and down on their own client: a slow link gets minutes, not 30 seconds.
         private static readonly HttpClient TransferClient = new HttpClient { Timeout = TimeSpan.FromMinutes(10) };
         private readonly HttpClient client, transferClient;
+        private readonly GoogleOperations operations = new GoogleOperations();
+        internal void CancelPendingOperations()
+        {
+            operations.Cancel();
+            accessToken = null;
+            petFolderId = null;
+            lastFullRead = DateTime.MinValue;
+        }
         private string accessToken;
         private DateTime accessTokenExpires;
         // The whole event list is read at the first sync after start and once a day; the syncs in between read only what
@@ -478,41 +486,55 @@ namespace ScheduleWidget
         /// <summary>Opens Google sign-in in the browser and waits (up to 5 minutes) for the answer on a loopback port.</summary>
         public async Task SignInAsync(GoogleCalendarSettings settings, CancellationToken cancel)
         {
-            var app = LoadClient() ?? throw new InvalidOperationException(
-                "이 앱에는 구글 연동용 OAuth 클라이언트가 들어 있지 않습니다. README의 '구글 캘린더 연동 준비'를 따라 한 번만 넣어 주세요.");
-            string verifier = RandomToken(48), state = RandomToken(24);
-            string challenge;
-            using (var sha = SHA256.Create()) challenge = Base64Url(sha.ComputeHash(Encoding.ASCII.GetBytes(verifier)));
-
-            var listener = new TcpListener(IPAddress.Loopback, 0) { ExclusiveAddressUse = true }; // no other program can share the port
-            listener.Start();
-            try
+            CancelPendingOperations();
+            using (operations.Begin(cancel))
             {
-                string redirect = "http://127.0.0.1:" + ((IPEndPoint)listener.LocalEndpoint).Port + "/";
-                string url = "https://accounts.google.com/o/oauth2/v2/auth?response_type=code&access_type=offline&prompt=consent" +
-                    "&client_id=" + Uri.EscapeDataString(app.Item1) + "&redirect_uri=" + Uri.EscapeDataString(redirect) +
-                    "&scope=" + Uri.EscapeDataString(Scope) + "&code_challenge=" + challenge +
-                    "&code_challenge_method=S256&state=" + state;
-                Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
-
-                string code = await WaitForCodeAsync(listener, state, cancel);
-                JObject token = await PostFormAsync("https://oauth2.googleapis.com/token", new Dictionary<string, string>
+                try
                 {
-                    ["grant_type"] = "authorization_code", ["code"] = code, ["redirect_uri"] = redirect,
-                    ["client_id"] = app.Item1, ["client_secret"] = app.Item2, ["code_verifier"] = verifier
-                });
-                string refresh = (string)token["refresh_token"];
-                if (string.IsNullOrWhiteSpace(refresh)) throw new InvalidOperationException("구글이 연동 토큰을 주지 않았습니다. 다시 로그인해 주세요.");
-                UseAccessToken(token);
-                settings.ProtectedRefreshToken = SecretStore.Protect(refresh);
-                // The account: the e-mail in Google's answer, else UserInfo using the same email permission; null when
-                // neither can be read, so a passing error is never taken for another account. Signing in turns nothing on:
-                // the switches in 설정 do.
-                settings.Account = EmailOf(token["id_token"]) ?? await ReadAccountAsync();
-                petFolderId = null; // another account has its own Drive folder
-                lastFullRead = DateTime.MinValue;
+                    operations.Check();
+                    var app = LoadClient() ?? throw new InvalidOperationException(
+                        "이 앱에는 구글 연동용 OAuth 클라이언트가 들어 있지 않습니다. README의 '구글 캘린더 연동 준비'를 따라 한 번만 넣어 주세요.");
+                    string verifier = RandomToken(48), state = RandomToken(24);
+                    string challenge;
+                    using (var sha = SHA256.Create()) challenge = Base64Url(sha.ComputeHash(Encoding.ASCII.GetBytes(verifier)));
+
+                    var listener = new TcpListener(IPAddress.Loopback, 0) { ExclusiveAddressUse = true }; // no other program can share the port
+                    listener.Start();
+                    try
+                    {
+                        string redirect = "http://127.0.0.1:" + ((IPEndPoint)listener.LocalEndpoint).Port + "/";
+                        string url = "https://accounts.google.com/o/oauth2/v2/auth?response_type=code&access_type=offline&prompt=consent" +
+                            "&client_id=" + Uri.EscapeDataString(app.Item1) + "&redirect_uri=" + Uri.EscapeDataString(redirect) +
+                            "&scope=" + Uri.EscapeDataString(Scope) + "&code_challenge=" + challenge +
+                            "&code_challenge_method=S256&state=" + state;
+                        Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
+
+                        string code = await WaitForCodeAsync(listener, state, operations.Token);
+                        operations.Check();
+                        JObject token = await PostFormAsync("https://oauth2.googleapis.com/token", new Dictionary<string, string>
+                        {
+                            ["grant_type"] = "authorization_code", ["code"] = code, ["redirect_uri"] = redirect,
+                            ["client_id"] = app.Item1, ["client_secret"] = app.Item2, ["code_verifier"] = verifier
+                        });
+                        operations.Check();
+                        string refresh = (string)token["refresh_token"];
+                        if (string.IsNullOrWhiteSpace(refresh)) throw new InvalidOperationException("구글이 연동 토큰을 주지 않았습니다. 다시 로그인해 주세요.");
+                        UseAccessToken(token);
+                        // The account: the e-mail in Google's answer, else UserInfo using the same email permission; null when
+                        // neither can be read, so a passing error is never taken for another account. Signing in turns nothing on:
+                        // the switches in 설정 do.
+                        string account = EmailOf(token["id_token"]) ?? await ReadAccountAsync();
+                        operations.Check();
+                        settings.ProtectedRefreshToken = SecretStore.Protect(refresh);
+                        settings.Account = account;
+                        petFolderId = null; // another account has its own Drive folder
+                        lastFullRead = DateTime.MinValue;
+                    }
+                    finally { listener.Stop(); }
+                }
+                catch (Exception error) when (!SystemMediaService.IsFatal(error))
+                { operations.Check(); throw; }
             }
-            finally { listener.Stop(); }
         }
 
         // The "email" claim of the ID token Google sends with the sign-in answer (straight from Google over HTTPS, so it is
@@ -595,8 +617,9 @@ namespace ScheduleWidget
             return null;
         }
 
-        public async Task SignOutAsync(GoogleCalendarSettings settings)
+        public async Task<bool> SignOutAsync(GoogleCalendarSettings settings)
         {
+            CancelPendingOperations();
             string refresh = null;
             try { refresh = SecretStore.Unprotect(settings.ProtectedRefreshToken); } catch (InvalidOperationException) { }
             settings.ProtectedRefreshToken = null;
@@ -608,14 +631,15 @@ namespace ScheduleWidget
             accessToken = null; // SyncedEventIds / LinkedAccount stay: the same account signing in again carries on
             petFolderId = null;
             lastFullRead = DateTime.MinValue;
-            if (string.IsNullOrWhiteSpace(refresh)) return;
+            if (string.IsNullOrWhiteSpace(refresh)) return true;
             // The token goes in the POST body, never in the URL (URLs end up in logs and proxies).
             try
             {
                 using (var form = new FormUrlEncodedContent(new Dictionary<string, string> { ["token"] = refresh }))
-                using (await client.PostAsync("https://oauth2.googleapis.com/revoke", form)) { }
+                using (var response = await client.PostAsync("https://oauth2.googleapis.com/revoke", form))
+                    return response.IsSuccessStatusCode;
             }
-            catch (Exception ex) when (ex is HttpRequestException || ex is TaskCanceledException) { } // local sign-out still happened
+            catch (Exception ex) when (ex is HttpRequestException || ex is TaskCanceledException) { return false; } // local sign-out still happened
         }
 
         // ---- sync ----
@@ -631,219 +655,236 @@ namespace ScheduleWidget
         /// </summary>
         public async Task<GoogleSyncResult> SyncAsync(GoogleCalendarSettings settings, List<ScheduleItem> schedules, Action ownChanges = null)
         {
-            var result = new GoogleSyncResult();
-            string before = SettingsKey(settings);
-            await EnsureAccessTokenAsync(settings);
-            DateTime today = DateTime.Today;
-            DateTime? readBefore = LastReadStart(settings);
-            bool full = lastFullRead.Date != today || !readBefore.HasValue || settings.OwnershipVersion < 1;
-            // Taken before reading: whatever changes on Google from now on is read by the next sync, however long this one runs.
-            DateTime readStarted = DateTime.UtcNow;
-            List<GoogleEvent> remote;
-            // A few minutes back from the last read's start: this PC's clock and Google's may differ a little.
-            try { remote = await ReadEventsAsync(today, full ? null : readBefore?.AddMinutes(-10)); }
-            catch (GoogleRequestException ex) when (!full && ex.Status == HttpStatusCode.Gone)
+            using (operations.Begin())
             {
-                full = true; // Google no longer answers "what changed" from that long ago: read everything
-                remote = await ReadEventsAsync(today, null);
-            }
-            var linked = new HashSet<string>(schedules.Where(s => !string.IsNullOrEmpty(s.GoogleEventId)).Select(s => s.GoogleEventId));
-            var owned = new HashSet<string>(settings.OwnedEventIds ?? new List<string>());
-            GoogleCalendarSync.UpdateOwnership(owned, remote, GoogleCalendarSync.MadeHereIds(schedules), legacy: full && settings.OwnershipVersion < 1);
-            var hidden = new Dictionary<string, string>(settings.HiddenEvents ?? new Dictionary<string, string>());
-            var plan = GoogleCalendarSync.Plan(schedules, remote, settings.SyncedEventIds, today, owned, hidden);
-            var synced = new HashSet<string>(settings.SyncedEventIds ?? new List<string>());
-            // Ids of this PC's schedules while this sync runs: one the user deletes before it ends must stay "synced", so the
-            // next sync handles the delete (dropping it here brought the deleted schedule back from Google).
-            var ours = new HashSet<string>(linked);
-
-            // A schedule waiting for its event: the id is chosen before the request and kept on it, so a lost answer never
-            // makes a second copy (sent again, Google's 409 links it to the event made the first time).
-            void Pending(ScheduleItem item, string id)
-            {
-                item.GoogleEventId = id;
-                item.GoogleSyncedHash = null;
-                item.GoogleSyncedPeriod = null;
-                synced.Add(id);
-                owned.Add(id);
-                ours.Add(id);
-                result.DataChanged = true;
-            }
-            void Drop(string id)
-            {
-                synced.Remove(id);
-                owned.Remove(id);
-                ours.Remove(id);
-            }
-
-            var read = new HashSet<string>(remote.Select(e => e.Id));
-            foreach (string id in plan.DeleteRemote)
-            {
-                synced.Remove(id);
-                owned.Remove(id);
-                // Not read this time (outside the read range — e.g. an older version's event from months ago — or unchanged
-                // since the last read): looked at first. One that got guests or became a repeating event on Google meanwhile
-                // stays there, out of the widget only; one already gone there needs nothing.
-                if (!read.Contains(id))
-                {
-                    JObject there = null;
-                    bool looked = true;
-                    try { there = await SendAsync(HttpMethod.Get, EventUrl(id), null, allowMissing: true); }
-                    catch (GoogleRequestException ex) when (ex.IsRefusal) { looked = false; } // cannot look: deleted as planned
-                    if (looked && (there == null || Text(there["status"]) == "cancelled")) continue;
-                    if (looked && (IsShared(there) || there["recurrence"] != null || there["recurringEventId"] != null))
-                    {
-                        hidden[id] = TryParseEvent(there)?.LastPeriod;
-                        continue;
-                    }
-                }
-                try { await SendAsync(new HttpMethod("DELETE"), EventUrl(id), null, allowMissing: true); }
-                catch (GoogleRequestException ex) when (ex.IsRefusal) { hidden[id] = null; result.Refused++; } // Google keeps it: out of the widget only
-            }
-            foreach (var pair in plan.Unlink)
-            {
-                synced.Remove(pair.Key);
-                owned.Remove(pair.Key);
-                hidden[pair.Key] = pair.Value;
-            }
-
-            var fresh = new HashSet<ScheduleItem>(plan.NewId);
-            var insert = new List<ScheduleItem>(plan.Insert);
-            foreach (var item in plan.Patch)
-            {
-                if (!schedules.Contains(item)) continue; // deleted meanwhile: the next sync takes care of it
-                string hash = GoogleCalendarSync.Hash(item);
-                if (plan.Remote.TryGetValue(item, out GoogleEvent there) && item.GoogleEndMinutes != there.EndMinutes)
-                {
-                    item.GoogleEndMinutes = there.EndMinutes; // its length on Google now: a move keeps it
-                    result.DataChanged = true;
-                }
-                JObject answer;
                 try
                 {
-                    JObject body = PatchBody(item, owned.Contains(item.GoogleEventId));
-                    if (body.Count == 0) { MarkSynced(item, hash); result.DataChanged = true; continue; }
-                    ownChanges?.Invoke();
-                    answer = await SendAsync(new HttpMethod("PATCH"), EventUrl(item.GoogleEventId), body, allowMissing: true);
-                }
-                catch (Exception ex) when (IsRefusal(ex)) { Refuse(item, hash, result); continue; }
-                if (answer == null || Text(answer["status"]) == "cancelled")
-                {
-                    // Gone on Google meanwhile: the edited schedule is added again, under a new id (a deleted one stays taken).
-                    fresh.Add(item);
-                    insert.Add(item);
-                    continue;
-                }
-                Accept(item, answer, hash, result);
-            }
+                    operations.Check();
+                    var result = new GoogleSyncResult();
+                    string before = SettingsKey(settings);
+                    await EnsureAccessTokenAsync(settings);
+                    operations.Check();
+                    DateTime today = DateTime.Today;
+                    DateTime? readBefore = LastReadStart(settings);
+                    bool full = lastFullRead.Date != today || !readBefore.HasValue || settings.OwnershipVersion < 1;
+                    // Taken before reading: whatever changes on Google from now on is read by the next sync, however long this one runs.
+                    DateTime readStarted = DateTime.UtcNow;
+                    List<GoogleEvent> remote;
+                    // A few minutes back from the last read's start: this PC's clock and Google's may differ a little.
+                    try { remote = await ReadEventsAsync(today, full ? null : readBefore?.AddMinutes(-10)); }
+                    catch (GoogleRequestException ex) when (!full && ex.Status == HttpStatusCode.Gone)
+                    {
+                        full = true; // Google no longer answers "what changed" from that long ago: read everything
+                        remote = await ReadEventsAsync(today, null);
+                    }
+                    operations.Check();
+                    var linked = new HashSet<string>(schedules.Where(s => !string.IsNullOrEmpty(s.GoogleEventId)).Select(s => s.GoogleEventId));
+                    var owned = new HashSet<string>(settings.OwnedEventIds ?? new List<string>());
+                    GoogleCalendarSync.UpdateOwnership(owned, remote, GoogleCalendarSync.MadeHereIds(schedules), legacy: full && settings.OwnershipVersion < 1);
+                    var hidden = new Dictionary<string, string>(settings.HiddenEvents ?? new Dictionary<string, string>());
+                    var plan = GoogleCalendarSync.Plan(schedules, remote, settings.SyncedEventIds, today, owned, hidden);
+                    var synced = new HashSet<string>(settings.SyncedEventIds ?? new List<string>());
+                    // Ids of this PC's schedules while this sync runs: one the user deletes before it ends must stay "synced", so the
+                    // next sync handles the delete (dropping it here brought the deleted schedule back from Google).
+                    var ours = new HashSet<string>(linked);
 
-            int sent = 0;
-            foreach (var item in insert)
-            {
-                if (!schedules.Contains(item)) continue; // deleted meanwhile
-                if (sent >= MaxInsertsPerSync) { result.More = true; break; }
-                if (sent++ > 0 && InsertPacing > TimeSpan.Zero)
-                {
-                    ownChanges?.Invoke();
-                    await Task.Delay(InsertPacing); // a first sync can add hundreds: Google limits how fast events are made
-                    if (!schedules.Contains(item)) continue;
-                }
-                string hash = GoogleCalendarSync.Hash(item);
-                string old = item.GoogleEventId;
-                string id = fresh.Contains(item) ? GoogleCalendarSync.NewEventId() : old ?? GoogleCalendarSync.EventIdFor(item);
-                if (old != null && old != id && !schedules.Any(s => s != item && s.GoogleEventId == old)) Drop(old);
-                Pending(item, id);
-                ownChanges?.Invoke();
-                JObject answer = null;
-                bool adopted = false;
-                try { answer = await SendAsync(HttpMethod.Post, EventsUrl, InsertBody(item, id), allowMissing: false); }
-                catch (GoogleRequestException ex) when (ex.Status == HttpStatusCode.Conflict)
-                {
-                    // The id is taken: by this app's own earlier request (its answer never came), or by an event deleted since.
-                    answer = await SendAsync(HttpMethod.Get, EventUrl(id), null, allowMissing: true);
-                    adopted = answer != null && Text(answer["status"]) != "cancelled";
-                    if (!adopted) answer = null;
-                }
-                catch (Exception ex) when (IsRefusal(ex)) { Refuse(item, hash, result); continue; }
-                if (answer == null)
-                {
-                    Drop(id);
-                    id = GoogleCalendarSync.NewEventId();
-                    Pending(item, id);
-                    ownChanges?.Invoke();
-                    try { answer = await SendAsync(HttpMethod.Post, EventsUrl, InsertBody(item, id), allowMissing: false); }
-                    catch (Exception ex) when (IsRefusal(ex)) { Refuse(item, hash, result); continue; }
-                }
-                string given = Text(answer["id"]);
-                if (!string.IsNullOrEmpty(given) && given != id) { Drop(id); id = given; Pending(item, id); } // Google chose its own id
-                GoogleEvent made = TryParseEvent(answer);
-                if (made != null && made.Shared) owned.Remove(id);
-                if (adopted && made != null)
-                {
-                    // Linked to the event made the first time: whatever differs from it now goes up with the next sync.
-                    item.GoogleRefusedHash = null;
-                    item.GoogleEndMinutes = made.EndMinutes;
-                    item.GoogleSyncedHash = GoogleCalendarSync.Hash(made);
-                    item.GoogleSyncedPeriod = made.Period;
-                }
-                else Accept(item, answer, hash, result);
-            }
+                    // A schedule waiting for its event: the id is chosen before the request and kept on it, so a lost answer never
+                    // makes a second copy (sent again, Google's 409 links it to the event made the first time).
+                    void Pending(ScheduleItem item, string id)
+                    {
+                        item.GoogleEventId = id;
+                        item.GoogleSyncedHash = null;
+                        item.GoogleSyncedPeriod = null;
+                        synced.Add(id);
+                        owned.Add(id);
+                        ours.Add(id);
+                        result.DataChanged = true;
+                    }
+                    void Drop(string id)
+                    {
+                        synced.Remove(id);
+                        owned.Remove(id);
+                        ours.Remove(id);
+                    }
 
-            foreach (var pair in plan.UpdateLocal)
-            {
-                // Edited here while the requests above were out: this PC wins — keep the edit (it goes up next sync).
-                if (GoogleCalendarSync.Hash(pair.Key) != pair.Key.GoogleSyncedHash) { synced.Add(pair.Value.Id); continue; }
-                result.ListChanged |= ApplyRemote(pair.Key, pair.Value);
-                result.DataChanged = true;
-                synced.Add(pair.Value.Id);
+                    var read = new HashSet<string>(remote.Select(e => e.Id));
+                    foreach (string id in plan.DeleteRemote)
+                    {
+                        synced.Remove(id);
+                        owned.Remove(id);
+                        // Not read this time (outside the read range — e.g. an older version's event from months ago — or unchanged
+                        // since the last read): looked at first. One that got guests or became a repeating event on Google meanwhile
+                        // stays there, out of the widget only; one already gone there needs nothing.
+                        if (!read.Contains(id))
+                        {
+                            JObject there = null;
+                            bool looked = true;
+                            try { there = await SendAsync(HttpMethod.Get, EventUrl(id), null, allowMissing: true); }
+                            catch (GoogleRequestException ex) when (ex.IsRefusal) { looked = false; } // cannot look: deleted as planned
+                            operations.Check();
+                            if (looked && (there == null || Text(there["status"]) == "cancelled")) continue;
+                            if (looked && (IsShared(there) || there["recurrence"] != null || there["recurringEventId"] != null))
+                            {
+                                hidden[id] = TryParseEvent(there)?.LastPeriod;
+                                continue;
+                            }
+                        }
+                        try { await SendAsync(new HttpMethod("DELETE"), EventUrl(id), null, allowMissing: true); }
+                        catch (GoogleRequestException ex) when (ex.IsRefusal) { hidden[id] = null; result.Refused++; } // Google keeps it: out of the widget only
+                        operations.Check();
+                    }
+                    foreach (var pair in plan.Unlink)
+                    {
+                        synced.Remove(pair.Key);
+                        owned.Remove(pair.Key);
+                        hidden[pair.Key] = pair.Value;
+                    }
+
+                    var fresh = new HashSet<ScheduleItem>(plan.NewId);
+                    var insert = new List<ScheduleItem>(plan.Insert);
+                    foreach (var item in plan.Patch)
+                    {
+                        if (!schedules.Contains(item)) continue; // deleted meanwhile: the next sync takes care of it
+                        string hash = GoogleCalendarSync.Hash(item);
+                        if (plan.Remote.TryGetValue(item, out GoogleEvent there) && item.GoogleEndMinutes != there.EndMinutes)
+                        {
+                            item.GoogleEndMinutes = there.EndMinutes; // its length on Google now: a move keeps it
+                            result.DataChanged = true;
+                        }
+                        JObject answer;
+                        try
+                        {
+                            JObject body = PatchBody(item, owned.Contains(item.GoogleEventId));
+                            if (body.Count == 0) { MarkSynced(item, hash); result.DataChanged = true; continue; }
+                            ownChanges?.Invoke();
+                            answer = await SendAsync(new HttpMethod("PATCH"), EventUrl(item.GoogleEventId), body, allowMissing: true);
+                            operations.Check();
+                        }
+                        catch (Exception ex) when (IsRefusal(ex)) { Refuse(item, hash, result); continue; }
+                        if (answer == null || Text(answer["status"]) == "cancelled")
+                        {
+                            // Gone on Google meanwhile: the edited schedule is added again, under a new id (a deleted one stays taken).
+                            fresh.Add(item);
+                            insert.Add(item);
+                            continue;
+                        }
+                        Accept(item, answer, hash, result);
+                    }
+
+                    int sent = 0;
+                    foreach (var item in insert)
+                    {
+                        if (!schedules.Contains(item)) continue; // deleted meanwhile
+                        if (sent >= MaxInsertsPerSync) { result.More = true; break; }
+                        if (sent++ > 0 && InsertPacing > TimeSpan.Zero)
+                        {
+                            ownChanges?.Invoke();
+                            await Task.Delay(InsertPacing, operations.Token); // a first sync can add hundreds: Google limits how fast events are made
+                            operations.Check();
+                            if (!schedules.Contains(item)) continue;
+                        }
+                        string hash = GoogleCalendarSync.Hash(item);
+                        string old = item.GoogleEventId;
+                        string id = fresh.Contains(item) ? GoogleCalendarSync.NewEventId() : old ?? GoogleCalendarSync.EventIdFor(item);
+                        if (old != null && old != id && !schedules.Any(s => s != item && s.GoogleEventId == old)) Drop(old);
+                        Pending(item, id);
+                        ownChanges?.Invoke();
+                        JObject answer = null;
+                        bool adopted = false;
+                        try { answer = await SendAsync(HttpMethod.Post, EventsUrl, InsertBody(item, id), allowMissing: false); }
+                        catch (GoogleRequestException ex) when (ex.Status == HttpStatusCode.Conflict)
+                        {
+                            // The id is taken: by this app's own earlier request (its answer never came), or by an event deleted since.
+                            answer = await SendAsync(HttpMethod.Get, EventUrl(id), null, allowMissing: true);
+                            operations.Check();
+                            adopted = answer != null && Text(answer["status"]) != "cancelled";
+                            if (!adopted) answer = null;
+                        }
+                        catch (Exception ex) when (IsRefusal(ex)) { Refuse(item, hash, result); continue; }
+                        if (answer == null)
+                        {
+                            Drop(id);
+                            id = GoogleCalendarSync.NewEventId();
+                            Pending(item, id);
+                            ownChanges?.Invoke();
+                            try { answer = await SendAsync(HttpMethod.Post, EventsUrl, InsertBody(item, id), allowMissing: false); }
+                            catch (Exception ex) when (IsRefusal(ex)) { Refuse(item, hash, result); continue; }
+                        }
+                        operations.Check();
+                        string given = Text(answer["id"]);
+                        if (!string.IsNullOrEmpty(given) && given != id) { Drop(id); id = given; Pending(item, id); } // Google chose its own id
+                        GoogleEvent made = TryParseEvent(answer);
+                        if (made != null && made.Shared) owned.Remove(id);
+                        if (adopted && made != null)
+                        {
+                            // Linked to the event made the first time: whatever differs from it now goes up with the next sync.
+                            item.GoogleRefusedHash = null;
+                            item.GoogleEndMinutes = made.EndMinutes;
+                            item.GoogleSyncedHash = GoogleCalendarSync.Hash(made);
+                            item.GoogleSyncedPeriod = made.Period;
+                        }
+                        else Accept(item, answer, hash, result);
+                    }
+
+                    foreach (var pair in plan.UpdateLocal)
+                    {
+                        // Edited here while the requests above were out: this PC wins — keep the edit (it goes up next sync).
+                        if (GoogleCalendarSync.Hash(pair.Key) != pair.Key.GoogleSyncedHash) { synced.Add(pair.Value.Id); continue; }
+                        result.ListChanged |= ApplyRemote(pair.Key, pair.Value);
+                        result.DataChanged = true;
+                        synced.Add(pair.Value.Id);
+                    }
+                    foreach (var pair in plan.UpdateLength)
+                    {
+                        if (GoogleCalendarSync.Hash(pair.Key) != pair.Key.GoogleSyncedHash || pair.Key.GoogleEndMinutes == pair.Value.EndMinutes) continue;
+                        pair.Key.GoogleEndMinutes = pair.Value.EndMinutes; // lengthened or shortened on Google: a later move keeps the new length
+                        result.DataChanged = true;
+                    }
+                    // Inserts above may have adopted an event whose POST response was lost. It was already
+                    // included in the pre-request AddLocal plan, so keep it out if linked or still pending here.
+                    var linkedIds = new HashSet<string>(StringComparer.Ordinal);
+                    foreach (var item in schedules)
+                        linkedIds.Add(string.IsNullOrEmpty(item.GoogleEventId) ? GoogleCalendarSync.EventIdFor(item) : item.GoogleEventId);
+                    foreach (var item in insert)
+                        if (!fresh.Contains(item)) linkedIds.Add(GoogleCalendarSync.EventIdFor(item)); // the schedule may have been deleted while a request was out
+                    foreach (var e in plan.AddLocal)
+                    {
+                        if (ours.Contains(e.Id) || !linkedIds.Add(e.Id)) continue;
+                        var item = new ScheduleItem { GoogleEventId = e.Id };
+                        ApplyRemote(item, e);
+                        schedules.Add(item);
+                        synced.Add(e.Id);
+                        result.DataChanged = result.ListChanged = true;
+                    }
+                    // Last, once every request went through (a sync cut short must not leave them looking "deleted here"): a
+                    // repeating date an older version read up to two years ahead leaves the list and comes back 8 weeks before.
+                    foreach (var item in plan.Prune)
+                    {
+                        if (GoogleCalendarSync.Hash(item) != item.GoogleSyncedHash || !schedules.Remove(item)) continue;
+                        Drop(item.GoogleEventId);
+                        result.DataChanged = result.ListChanged = true;
+                    }
+                    var now = new HashSet<string>(schedules.Where(s => !string.IsNullOrEmpty(s.GoogleEventId)).Select(s => s.GoogleEventId));
+                    synced.UnionWith(now);
+                    // Keep what is here now, plus what was here during this sync and got deleted meanwhile (handled next sync).
+                    settings.SyncedEventIds = synced.Where(id => now.Contains(id) || ours.Contains(id)).OrderBy(id => id, StringComparer.Ordinal).ToList();
+                    var kept = new HashSet<string>(settings.SyncedEventIds);
+                    settings.OwnedEventIds = owned.Where(kept.Contains).OrderBy(id => id, StringComparer.Ordinal).ToList();
+                    settings.HiddenEvents = TrimHidden(hidden, kept, remote, full, today);
+                    settings.LastSync = DateTime.Now;
+                    settings.ReadStartedUtc = readStarted; // only once everything went through: a sync cut short is read again from before
+                    if (full)
+                    {
+                        lastFullRead = DateTime.Now;
+                        settings.OwnershipVersion = 1;
+                    }
+                    if (SettingsKey(settings) != before) result.DataChanged = true;
+                    ownChanges?.Invoke();
+                    return result;
+                }
+                catch (Exception error) when (!SystemMediaService.IsFatal(error))
+                { operations.Check(); throw; }
             }
-            foreach (var pair in plan.UpdateLength)
-            {
-                if (GoogleCalendarSync.Hash(pair.Key) != pair.Key.GoogleSyncedHash || pair.Key.GoogleEndMinutes == pair.Value.EndMinutes) continue;
-                pair.Key.GoogleEndMinutes = pair.Value.EndMinutes; // lengthened or shortened on Google: a later move keeps the new length
-                result.DataChanged = true;
-            }
-            // Inserts above may have adopted an event whose POST response was lost. It was already
-            // included in the pre-request AddLocal plan, so keep it out if linked or still pending here.
-            var linkedIds = new HashSet<string>(StringComparer.Ordinal);
-            foreach (var item in schedules)
-                linkedIds.Add(string.IsNullOrEmpty(item.GoogleEventId) ? GoogleCalendarSync.EventIdFor(item) : item.GoogleEventId);
-            foreach (var item in insert)
-                if (!fresh.Contains(item)) linkedIds.Add(GoogleCalendarSync.EventIdFor(item)); // the schedule may have been deleted while a request was out
-            foreach (var e in plan.AddLocal)
-            {
-                if (ours.Contains(e.Id) || !linkedIds.Add(e.Id)) continue;
-                var item = new ScheduleItem { GoogleEventId = e.Id };
-                ApplyRemote(item, e);
-                schedules.Add(item);
-                synced.Add(e.Id);
-                result.DataChanged = result.ListChanged = true;
-            }
-            // Last, once every request went through (a sync cut short must not leave them looking "deleted here"): a
-            // repeating date an older version read up to two years ahead leaves the list and comes back 8 weeks before.
-            foreach (var item in plan.Prune)
-            {
-                if (GoogleCalendarSync.Hash(item) != item.GoogleSyncedHash || !schedules.Remove(item)) continue;
-                Drop(item.GoogleEventId);
-                result.DataChanged = result.ListChanged = true;
-            }
-            var now = new HashSet<string>(schedules.Where(s => !string.IsNullOrEmpty(s.GoogleEventId)).Select(s => s.GoogleEventId));
-            synced.UnionWith(now);
-            // Keep what is here now, plus what was here during this sync and got deleted meanwhile (handled next sync).
-            settings.SyncedEventIds = synced.Where(id => now.Contains(id) || ours.Contains(id)).OrderBy(id => id, StringComparer.Ordinal).ToList();
-            var kept = new HashSet<string>(settings.SyncedEventIds);
-            settings.OwnedEventIds = owned.Where(kept.Contains).OrderBy(id => id, StringComparer.Ordinal).ToList();
-            settings.HiddenEvents = TrimHidden(hidden, kept, remote, full, today);
-            settings.LastSync = DateTime.Now;
-            settings.ReadStartedUtc = readStarted; // only once everything went through: a sync cut short is read again from before
-            if (full)
-            {
-                lastFullRead = DateTime.Now;
-                settings.OwnershipVersion = 1;
-            }
-            if (SettingsKey(settings) != before) result.DataChanged = true;
-            ownChanges?.Invoke();
-            return result;
         }
 
         private static string EventUrl(string id) => EventsUrl + "/" + Uri.EscapeDataString(id);
@@ -922,128 +963,154 @@ namespace ScheduleWidget
         /// </summary>
         public async Task<GooglePetSyncResult> SyncPetsAsync(GoogleCalendarSettings settings)
         {
-            var result = new GooglePetSyncResult();
-            string before = SettingsKey(settings);
-            await EnsureAccessTokenAsync(settings);
-            string folder = await PetFolderAsync();
-            Dictionary<string, DrivePet> remote;
-            try { remote = await ListPetFilesAsync(folder); }
-            catch (GoogleRequestException ex) when (ex.Status == HttpStatusCode.NotFound)
+            using (operations.Begin())
             {
-                petFolderId = null; // the folder is gone: found or made again
-                folder = await PetFolderAsync();
-                remote = await ListPetFilesAsync(folder);
-            }
-            // Older versions kept no record of a character deleted here (a synced one missing here was deleted on Drive by their
-            // next sync). The first character sync of this version sorts those out once (CharacterCatalog.RememberOldDeletions);
-            // from then on only a character deleted in 캐릭터 선택 is deleted on Drive.
-            bool sortOld = !settings.PetDeletionsSorted;
-            var syncedBefore = (settings.SyncedPetIds ?? new List<string>()).ToList();
-            LocalPets here = await Task.Run(() =>
-            {
-                if (sortOld) CharacterCatalog.RememberOldDeletions(syncedBefore);
-                return LocalPets.Read();
-            });
-            settings.PetDeletionsSorted = true;
-            var ids = StringComparer.OrdinalIgnoreCase; // IDs are folder names here (Windows ignores case)
-            var refused = new HashSet<string>(settings.RefusedPetDeletes ?? new List<string>(), ids);
-            var plan = PetSyncPlan.Build(here.Names, remote.ToDictionary(r => r.Key, r => r.Value.Name), settings.SyncedPetIds, here.BuiltInNames,
-                here.Deleted, here.Present, refused);
-            foreach (string id in plan.SameNameNotUploaded) result.SameNameNotBackedUp.Add(here.Names[id]);
-            string skipped = string.Join(",", plan.SameNameNotUploaded) + "|" + string.Join(",", plan.SameNameNotDownloaded);
-            if (skipped != lastSameNameLog)
-            {
-                lastSameNameLog = skipped; // logged when it changes, not on every 5-minute sync
-                if (skipped != "|") PetLog.Write("pet-sync-same-name", "not uploaded: " + string.Join(", ", plan.SameNameNotUploaded.Select(id => id + " (" + here.Names[id] + ")")) +
-                    "; not downloaded: " + string.Join(", ", plan.SameNameNotDownloaded.Select(id => id + " (" + remote[id].Name + ")")));
-            }
-            var synced = new HashSet<string>(settings.SyncedPetIds ?? new List<string>(), ids);
-            var failed = new HashSet<string>(settings.FailedPetFiles ?? new List<string>());
-            // Deleted here and not on Drive (or here again): nothing left to delete.
-            var settled = here.Deleted.Where(id => !remote.ContainsKey(id) || here.Names.ContainsKey(id)).ToList();
+                try
+                {
+                    operations.Check();
+                    var result = new GooglePetSyncResult();
+                    string before = SettingsKey(settings);
+                    await EnsureAccessTokenAsync(settings);
+                    operations.Check();
+                    string folder = await PetFolderAsync();
+                    operations.Check();
+                    Dictionary<string, DrivePet> remote;
+                    try { remote = await ListPetFilesAsync(folder); }
+                    catch (GoogleRequestException ex) when (ex.Status == HttpStatusCode.NotFound)
+                    {
+                        petFolderId = null; // the folder is gone: found or made again
+                        folder = await PetFolderAsync();
+                        remote = await ListPetFilesAsync(folder);
+                    }
+                    operations.Check();
+                    // Older versions kept no record of a character deleted here (a synced one missing here was deleted on Drive by their
+                    // next sync). The first character sync of this version sorts those out once (CharacterCatalog.RememberOldDeletions);
+                    // from then on only a character deleted in 캐릭터 선택 is deleted on Drive.
+                    bool sortOld = !settings.PetDeletionsSorted;
+                    var syncedBefore = (settings.SyncedPetIds ?? new List<string>()).ToList();
+                    LocalPets here = await Task.Run(() =>
+                    {
+                        operations.Check();
+                        if (sortOld) CharacterCatalog.RememberOldDeletions(syncedBefore);
+                        return LocalPets.Read();
+                    }, operations.Token);
+                    operations.Check();
+                    settings.PetDeletionsSorted = true;
+                    var ids = StringComparer.OrdinalIgnoreCase; // IDs are folder names here (Windows ignores case)
+                    var refused = new HashSet<string>(settings.RefusedPetDeletes ?? new List<string>(), ids);
+                    var plan = PetSyncPlan.Build(here.Names, remote.ToDictionary(r => r.Key, r => r.Value.Name), settings.SyncedPetIds, here.BuiltInNames,
+                        here.Deleted, here.Present, refused);
+                    foreach (string id in plan.SameNameNotUploaded) result.SameNameNotBackedUp.Add(here.Names[id]);
+                    string skipped = string.Join(",", plan.SameNameNotUploaded) + "|" + string.Join(",", plan.SameNameNotDownloaded);
+                    if (skipped != lastSameNameLog)
+                    {
+                        lastSameNameLog = skipped; // logged when it changes, not on every 5-minute sync
+                        if (skipped != "|") PetLog.Write("pet-sync-same-name", "not uploaded: " + string.Join(", ", plan.SameNameNotUploaded.Select(id => id + " (" + here.Names[id] + ")")) +
+                            "; not downloaded: " + string.Join(", ", plan.SameNameNotDownloaded.Select(id => id + " (" + remote[id].Name + ")")));
+                    }
+                    var synced = new HashSet<string>(settings.SyncedPetIds ?? new List<string>(), ids);
+                    var failed = new HashSet<string>(settings.FailedPetFiles ?? new List<string>());
+                    // Deleted here and not on Drive (or here again): nothing left to delete.
+                    var settled = here.Deleted.Where(id => !remote.ContainsKey(id) || here.Names.ContainsKey(id)).ToList();
 
-            foreach (string id in plan.DeleteRemote)
-            {
-                try
-                {
-                    await SendAsync(new HttpMethod("DELETE"), DriveFiles + "/" + Uri.EscapeDataString(remote[id].FileId), null, allowMissing: true);
-                    result.Deleted++;
-                }
-                catch (GoogleRequestException ex) when (ex.IsRefusal)
-                {
-                    // Drive keeps it (not asked again): remembered, so it is never downloaded back here either.
-                    Fail(result, ex);
-                    refused.Add(id);
-                }
-                synced.Remove(id);
-                settled.Add(id);
-            }
-            CharacterCatalog.ForgetDeleted(settled);
-            foreach (string id in plan.Upload)
-            {
-                string zip = TempZip();
-                try
-                {
-                    string name = await Task.Run(() =>
+                    foreach (string id in plan.DeleteRemote)
                     {
-                        var entry = CharacterCatalog.Read(Path.Combine(CharacterCatalog.PetDirectory, id, "pet.json"));
-                        CharacterCatalog.Export(entry, zip);
-                        return entry.Name;
-                    });
-                    await UploadPetAsync(folder, id, name, zip);
-                    synced.Add(id);
-                    result.Uploaded++;
-                }
-                catch (Exception ex) when (IsPetFailure(ex)) { Fail(result, ex); }
-                finally { TryDeleteFile(zip); }
-            }
-            var builtInNamed = new HashSet<string>(plan.DownloadUnlessBuiltIn, ids);
-            foreach (string id in plan.Download.Concat(plan.DownloadUnlessBuiltIn))
-            {
-                DrivePet file = remote[id];
-                if (failed.Contains(file.Mark)) continue; // failed before as it is: tried again once it changes on Drive
-                string zip = TempZip();
-                try
-                {
-                    await DownloadAsync(DriveFiles + "/" + Uri.EscapeDataString(file.FileId) + "?alt=media", zip, 30L * 1024 * 1024);
-                    // A Codex character's very sheet (whatever its name) is never brought in: the Codex characters come only
-                    // from the installed Codex. Skipped like a copy (not a failure; looked at again once that file changes).
-                    // A default character's very sheet (기본 캐릭터, whatever its name) is already here: skipped the same way.
-                    if (await Task.Run(() => CharacterCatalog.ZipHasCodexSheet(zip) || CharacterCatalog.ZipHasDefaultSheet(zip)))
-                    {
-                        failed.Add(file.Mark);
-                        continue;
+                        try
+                        {
+                            await SendAsync(new HttpMethod("DELETE"), DriveFiles + "/" + Uri.EscapeDataString(remote[id].FileId), null, allowMissing: true);
+                            operations.Check();
+                            result.Deleted++;
+                        }
+                        catch (GoogleRequestException ex) when (ex.IsRefusal)
+                        {
+                            // Drive keeps it (not asked again): remembered, so it is never downloaded back here either.
+                            Fail(result, ex);
+                            refused.Add(id);
+                        }
+                        synced.Remove(id);
+                        settled.Add(id);
                     }
-                    if (builtInNamed.Contains(id) && await Task.Run(() => CharacterCatalog.ZipCopiesBuiltIn(zip)))
+                    CharacterCatalog.ForgetDeleted(settled);
+                    foreach (string id in plan.Upload)
                     {
-                        // Just a copy of the built-in of that name: not brought in twice (not a failure; looked at again only
-                        // once that file changes on Drive).
-                        failed.Add(file.Mark);
-                        continue;
+                        string zip = TempZip();
+                        try
+                        {
+                            string name = await Task.Run(() =>
+                            {
+                                operations.Check();
+                                var entry = CharacterCatalog.Read(Path.Combine(CharacterCatalog.PetDirectory, id, "pet.json"));
+                                CharacterCatalog.Export(entry, zip);
+                                return entry.Name;
+                            }, operations.Token);
+                            operations.Check();
+                            await UploadPetAsync(folder, id, name, zip);
+                            operations.Check();
+                            synced.Add(id);
+                            result.Uploaded++;
+                        }
+                        catch (Exception ex) when (IsPetFailure(ex)) { Fail(result, ex); }
+                        finally { TryDeleteFile(zip); }
                     }
-                    await Task.Run(() => CharacterCatalog.Import(zip, null, id));
-                    synced.Add(id);
-                    result.Downloaded++;
+                    var builtInNamed = new HashSet<string>(plan.DownloadUnlessBuiltIn, ids);
+                    foreach (string id in plan.Download.Concat(plan.DownloadUnlessBuiltIn))
+                    {
+                        DrivePet file = remote[id];
+                        if (failed.Contains(file.Mark)) continue; // failed before as it is: tried again once it changes on Drive
+                        string zip = TempZip();
+                        try
+                        {
+                            await DownloadAsync(DriveFiles + "/" + Uri.EscapeDataString(file.FileId) + "?alt=media", zip, 30L * 1024 * 1024);
+                            operations.Check();
+                            // A Codex character's very sheet (whatever its name) is never brought in: the Codex characters come only
+                            // from the installed Codex. Skipped like a copy (not a failure; looked at again once that file changes).
+                            // A default character's very sheet (기본 캐릭터, whatever its name) is already here: skipped the same way.
+                            bool builtInSheet = await Task.Run(() => CharacterCatalog.ZipHasCodexSheet(zip) || CharacterCatalog.ZipHasDefaultSheet(zip), operations.Token);
+                            operations.Check();
+                            if (builtInSheet)
+                            {
+                                failed.Add(file.Mark);
+                                continue;
+                            }
+                            bool builtInCopy = builtInNamed.Contains(id) && await Task.Run(() => CharacterCatalog.ZipCopiesBuiltIn(zip), operations.Token);
+                            operations.Check();
+                            if (builtInCopy)
+                            {
+                                // Just a copy of the built-in of that name: not brought in twice (not a failure; looked at again only
+                                // once that file changes on Drive).
+                                failed.Add(file.Mark);
+                                continue;
+                            }
+                            operations.Check();
+                            await Task.Run(() => { operations.Check(); CharacterCatalog.Import(zip, null, id, operations.Token); }, operations.Token);
+                            operations.Check();
+                            synced.Add(id);
+                            result.Downloaded++;
+                        }
+                        catch (Exception ex) when (IsPetFailure(ex))
+                        {
+                            Fail(result, ex);
+                            failed.Add(file.Mark);
+                        }
+                        finally { TryDeleteFile(zip); }
+                    }
+                    foreach (string id in here.Names.Keys) if (remote.ContainsKey(id)) synced.Add(id);
+                    var nowLocal = new HashSet<string>(await Task.Run(() => CharacterCatalog.ImportedIds()), ids);
+                    operations.Check();
+                    var deletedThere = new HashSet<string>(plan.DeleteRemote, ids);
+                    // Keep an ID while the character is here or on Drive; forget it once it is gone from both.
+                    settings.SyncedPetIds = synced.Where(id => nowLocal.Contains(id) || (remote.ContainsKey(id) && !deletedThere.Contains(id)))
+                        .OrderBy(id => id, StringComparer.Ordinal).ToList();
+                    // A refused delete is kept while its file is on Drive and the character is not here again.
+                    settings.RefusedPetDeletes = refused.Where(id => remote.ContainsKey(id) && !nowLocal.Contains(id)).OrderBy(id => id, StringComparer.Ordinal).ToList();
+                    var marks = new HashSet<string>(remote.Values.Select(f => f.Mark));
+                    settings.FailedPetFiles = failed.Where(marks.Contains).OrderBy(m => m, StringComparer.Ordinal).ToList(); // only while that file is there
+                    result.Changed = result.Downloaded > 0 || SettingsKey(settings) != before;
+                    return result;
                 }
-                catch (Exception ex) when (IsPetFailure(ex))
-                {
-                    Fail(result, ex);
-                    failed.Add(file.Mark);
-                }
-                finally { TryDeleteFile(zip); }
+                catch (Exception error) when (!SystemMediaService.IsFatal(error))
+                { operations.Check(); throw; }
             }
-            foreach (string id in here.Names.Keys) if (remote.ContainsKey(id)) synced.Add(id);
-            var nowLocal = new HashSet<string>(await Task.Run(() => CharacterCatalog.ImportedIds()), ids);
-            var deletedThere = new HashSet<string>(plan.DeleteRemote, ids);
-            // Keep an ID while the character is here or on Drive; forget it once it is gone from both.
-            settings.SyncedPetIds = synced.Where(id => nowLocal.Contains(id) || (remote.ContainsKey(id) && !deletedThere.Contains(id)))
-                .OrderBy(id => id, StringComparer.Ordinal).ToList();
-            // A refused delete is kept while its file is on Drive and the character is not here again.
-            settings.RefusedPetDeletes = refused.Where(id => remote.ContainsKey(id) && !nowLocal.Contains(id)).OrderBy(id => id, StringComparer.Ordinal).ToList();
-            var marks = new HashSet<string>(remote.Values.Select(f => f.Mark));
-            settings.FailedPetFiles = failed.Where(marks.Contains).OrderBy(m => m, StringComparer.Ordinal).ToList(); // only while that file is there
-            result.Changed = result.Downloaded > 0 || SettingsKey(settings) != before;
-            return result;
         }
 
         // A problem with one character (its file, its upload, …): counted, and the others go on. Signing in again, Google's
@@ -1095,21 +1162,25 @@ namespace ScheduleWidget
 
         private async Task<string> PetFolderAsync()
         {
+            operations.Check();
             // The folder found before is checked again every half hour: trashed or deleted meanwhile, it is found or made anew.
             if (petFolderId != null && DateTime.UtcNow - petFolderChecked < TimeSpan.FromMinutes(30)) return petFolderId;
             if (petFolderId != null)
             {
                 JObject known = await SendAsync(HttpMethod.Get, DriveFiles + "/" + Uri.EscapeDataString(petFolderId) + "?fields=id,trashed", null, allowMissing: true);
+                operations.Check();
                 if (known != null && !IsTrue(known["trashed"])) { petFolderChecked = DateTime.UtcNow; return petFolderId; }
                 petFolderId = null;
             }
             string query = "mimeType='application/vnd.google-apps.folder' and name='" + PetFolderName + "' and trashed=false";
             JObject found = await SendAsync(HttpMethod.Get, DriveFiles + "?pageSize=10&fields=files(id)&q=" + Uri.EscapeDataString(query), null, allowMissing: false);
+            operations.Check();
             string id = Text((found["files"] as JArray)?.FirstOrDefault()?["id"]);
             if (id == null)
             {
                 JObject created = await SendAsync(HttpMethod.Post, DriveFiles + "?fields=id",
                     new JObject { ["name"] = PetFolderName, ["mimeType"] = "application/vnd.google-apps.folder" }, allowMissing: false);
+                operations.Check();
                 id = Text(created["id"]) ?? throw new InvalidOperationException("구글 드라이브에 캐릭터 폴더를 만들지 못했습니다.");
             }
             petFolderId = id;
@@ -1199,17 +1270,20 @@ namespace ScheduleWidget
                     while (true)
                     {
                         // A transfer that stalls for a minute is given up (the response stream has no timeout of its own).
-                        Task<int> reading = source.ReadAsync(buffer, 0, buffer.Length);
-                        if (await Task.WhenAny(reading, Task.Delay(TimeSpan.FromMinutes(1))) != reading)
+                        operations.Check();
+                        Task<int> reading = source.ReadAsync(buffer, 0, buffer.Length, operations.Token);
+                        if (await Task.WhenAny(reading, Task.Delay(TimeSpan.FromMinutes(1), operations.Token)) != reading)
                         {
                             _ = reading.ContinueWith(t => t.Exception, TaskContinuationOptions.OnlyOnFaulted);
+                            operations.Check();
                             throw new InvalidOperationException("구글 드라이브에서 캐릭터 파일을 받다가 멈췄습니다. 다음 동기화 때 다시 받습니다.");
                         }
                         int read = await reading;
+                        operations.Check();
                         if (read <= 0) break;
                         total += read;
                         if (total > limit) throw new InvalidOperationException("구글 드라이브의 캐릭터 파일이 너무 큽니다.");
-                        await target.WriteAsync(buffer, 0, read);
+                        await target.WriteAsync(buffer, 0, read, operations.Token);
                     }
                 }
             }
@@ -1219,11 +1293,13 @@ namespace ScheduleWidget
         // down (minutes allowed; a transfer that takes too long fails on its own, not the whole sync).
         private async Task<HttpResponseMessage> SendRawAsync(HttpRequestMessage request, bool transfer)
         {
+            operations.Check();
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
             HttpResponseMessage response;
-            try { response = await (transfer ? transferClient : client).SendAsync(request, HttpCompletionOption.ResponseHeadersRead); }
+            try { response = await (transfer ? transferClient : client).SendAsync(request, HttpCompletionOption.ResponseHeadersRead, operations.Token); }
             catch (HttpRequestException ex) { throw new GoogleConnectionException("구글에 연결할 수 없습니다. 인터넷 연결을 확인해 주세요.", ex); }
-            catch (TaskCanceledException ex) { throw new InvalidOperationException("구글 드라이브 전송이 너무 오래 걸려 중단했습니다. 다음 동기화 때 다시 시도합니다.", ex); }
+            catch (TaskCanceledException ex) when (!operations.Token.IsCancellationRequested) { throw new InvalidOperationException("구글 드라이브 전송이 너무 오래 걸려 중단했습니다. 다음 동기화 때 다시 시도합니다.", ex); }
+            if (operations.Token.IsCancellationRequested) { response.Dispose(); operations.Check(); }
             if (response.IsSuccessStatusCode) return response;
             using (response) await ThrowForStatusAsync(response, request.RequestUri);
             return null;
@@ -1525,6 +1601,7 @@ namespace ScheduleWidget
 
         private async Task EnsureAccessTokenAsync(GoogleCalendarSettings settings)
         {
+            operations.Check();
             if (accessToken != null && DateTime.UtcNow < accessTokenExpires) return;
             var app = LoadClient() ?? throw new InvalidOperationException("이 앱에는 구글 연동용 OAuth 클라이언트가 들어 있지 않습니다.");
             string refresh;
@@ -1540,6 +1617,7 @@ namespace ScheduleWidget
                 });
             }
             catch (GoogleAuthRejectedException) { throw new GoogleSignInRequiredException(); }
+            operations.Check();
             UseAccessToken(token);
             string rotated = Text(token["refresh_token"]);
             if (!string.IsNullOrWhiteSpace(rotated)) settings.ProtectedRefreshToken = SecretStore.Protect(rotated);
@@ -1547,6 +1625,7 @@ namespace ScheduleWidget
 
         private void UseAccessToken(JObject token)
         {
+            operations.Check();
             accessToken = Text(token["access_token"]) ?? throw new InvalidOperationException("구글 인증 응답을 읽지 못했습니다.");
             long seconds = token["expires_in"]?.Type == JTokenType.Integer ? (long)token["expires_in"] : 3600;
             accessTokenExpires = DateTime.UtcNow.AddSeconds(Math.Max(60, Math.Min(86400, seconds) - 120));
@@ -1554,12 +1633,14 @@ namespace ScheduleWidget
 
         private async Task<JObject> PostFormAsync(string url, Dictionary<string, string> form)
         {
+            operations.Check();
             try
             {
                 using (var content = new FormUrlEncodedContent(form))
-                using (var response = await client.PostAsync(url, content))
+                using (var response = await client.PostAsync(url, content, operations.Token))
                 {
                     string text = await response.Content.ReadAsStringAsync();
+                    operations.Check();
                     if (response.StatusCode == HttpStatusCode.BadRequest || response.StatusCode == HttpStatusCode.Unauthorized)
                         throw new GoogleAuthRejectedException();
                     if (!response.IsSuccessStatusCode) throw new InvalidOperationException("구글 인증 실패 (HTTP " + (int)response.StatusCode + ").");
@@ -1567,24 +1648,27 @@ namespace ScheduleWidget
                 }
             }
             catch (HttpRequestException ex) { throw new GoogleConnectionException("구글에 연결할 수 없습니다. 인터넷 연결을 확인해 주세요.", ex); }
-            catch (TaskCanceledException ex) { throw new GoogleConnectionException("구글 응답이 늦어 중단했습니다.", ex); }
+            catch (TaskCanceledException ex) when (!operations.Token.IsCancellationRequested) { throw new GoogleConnectionException("구글 응답이 늦어 중단했습니다.", ex); }
             catch (JsonException ex) { throw new InvalidOperationException("구글 인증 응답을 읽지 못했습니다.", ex); }
         }
 
         // One Google API request. The answer is read and parsed off the UI thread; the caller's code resumes where it was.
         private async Task<JObject> SendAsync(HttpMethod method, string url, JObject body, bool allowMissing)
         {
+            operations.Check();
             try
             {
                 using (var request = new HttpRequestMessage(method, url))
                 {
                     request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
                     if (body != null) request.Content = new StringContent(body.ToString(Formatting.None), Encoding.UTF8, "application/json");
-                    using (var response = await client.SendAsync(request).ConfigureAwait(false))
+                    using (var response = await client.SendAsync(request, operations.Token).ConfigureAwait(false))
                     {
+                        operations.Check();
                         if (allowMissing && (response.StatusCode == HttpStatusCode.NotFound || response.StatusCode == HttpStatusCode.Gone)) return null;
                         if (!response.IsSuccessStatusCode) await ThrowForStatusAsync(response, request.RequestUri).ConfigureAwait(false);
                         string text = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+                        operations.Check();
                         // Keep dates as the strings Google sent (with their offsets); ParseEvent reads them itself.
                         return string.IsNullOrWhiteSpace(text) ? new JObject()
                             : JsonConvert.DeserializeObject<JObject>(text, new JsonSerializerSettings { DateParseHandling = DateParseHandling.None });
@@ -1592,7 +1676,7 @@ namespace ScheduleWidget
                 }
             }
             catch (HttpRequestException ex) { throw new GoogleConnectionException("구글에 연결할 수 없습니다. 인터넷 연결을 확인해 주세요.", ex); }
-            catch (TaskCanceledException ex) { throw new GoogleConnectionException("구글 응답이 늦어 중단했습니다.", ex); }
+            catch (TaskCanceledException ex) when (!operations.Token.IsCancellationRequested) { throw new GoogleConnectionException("구글 응답이 늦어 중단했습니다.", ex); }
             catch (JsonException ex) { throw new InvalidOperationException("구글 응답을 읽지 못했습니다.", ex); }
         }
 

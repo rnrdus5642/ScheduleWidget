@@ -174,6 +174,11 @@ namespace ScheduleWidget.Checks
                 MiniMonthBoard = new MonitorStateData { Left = 100, Top = 60, Width = 1101.83, Height = 754.08 },
                 MiniBoard = new MonitorStateData { Left = 400, Top = 600, Width = 793.88, Height = 315.05 } };
             var mini = new MiniWindow(data, () => true, () => { });
+            // Direct RenderTargetBitmap and a VisualBrush rasterize text differently at the desktop's fractional DPI.
+            // Keep this unshown pixel-fidelity fixture at 96 DPI; fractional geometry is checked separately below.
+            typeof(VisualTreeHelper).GetMethod("SetRootDpi", System.Reflection.BindingFlags.Static |
+                System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic)
+                .Invoke(null, new object[] { mini, new DpiScale(1, 1) });
             SetField(mini, "calendarWorkAreaOverride", (Func<Rect>)(() => new Rect(0, 0, 1920, 1080)));
             try
             {

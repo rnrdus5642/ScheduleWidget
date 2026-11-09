@@ -18,6 +18,7 @@ namespace ScheduleWidget
         public const uint MOD_NOREPEAT = 0x4000;
         [DllImport("user32.dll")] public static extern IntPtr GetFocus();
         [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
+        [DllImport("user32.dll")] public static extern bool IsWindowEnabled(IntPtr window);
         [DllImport("user32.dll")] private static extern bool SetForegroundWindow(IntPtr window);
         [DllImport("user32.dll")] private static extern IntPtr GetShellWindow();
         [DllImport("user32.dll")] private static extern IntPtr GetWindow(IntPtr window, uint command);
@@ -244,6 +245,20 @@ namespace ScheduleWidget
                 pid == (uint)System.Diagnostics.Process.GetCurrentProcess().Id;
         }
 
+        // Follow children and owners towards this window, not its root owner: the calendar owns settings,
+        // but clicking the calendar is still an outside click. Native dialogs and WPF popups may own more dialogs.
+        internal static bool IsWindowOrOwnedBy(IntPtr window, IntPtr owner)
+        {
+            if (window == IntPtr.Zero || owner == IntPtr.Zero) return false;
+            window = GetAncestor(window, 2 /* GA_ROOT */);
+            for (int depth = 0; window != IntPtr.Zero && depth < 64; depth++)
+            {
+                if (window == owner) return true;
+                window = GetWindow(window, 4 /* GW_OWNER */);
+            }
+            return false;
+        }
+
         /// <summary>Return a widget to the desktop without hiding it or changing its saved pin preference.</summary>
         public static void LowerToDesktop(System.Windows.Window window)
         {
@@ -375,11 +390,12 @@ namespace ScheduleWidget
         [DllImport("user32.dll")] private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
         [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern int GetClassName(IntPtr hWnd, System.Text.StringBuilder name, int size);
         [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern int GetWindowText(IntPtr hWnd, System.Text.StringBuilder text, int size);
+        [DllImport("user32.dll")] private static extern bool GetLayeredWindowAttributes(IntPtr window, out uint colorKey, out byte alpha, out uint flags);
 
-        private const int WS_EX_TRANSPARENT = 0x20, WS_EX_LAYERED = 0x80000;
+        private const int WS_EX_TRANSPARENT = 0x20, WS_EX_LAYERED = 0x80000, WS_EX_NOACTIVATE = 0x08000000;
 
         /// <summary>
-        /// Makes the browser process's own see-through top-level windows whose title contains <paramref name="titlePart"/>
+        /// Makes the browser process's own pet surfaces and invisible, nonactivating about:blank placeholders
         /// click-through (WS_EX_TRANSPARENT on top of their WS_EX_LAYERED). A WebView2 composition view keeps such a window
         /// over the view's area; when Windows raised it above the window showing the view (the desktop activated, …) it took
         /// every click there. Returns how many windows it changed.
@@ -405,7 +421,15 @@ namespace ScheduleWidget
             if (name.ToString() != "Chrome_WidgetWin_1") return false;
             var title = new System.Text.StringBuilder(512);
             GetWindowText(window, title, title.Capacity);
-            return title.ToString().IndexOf(titlePart, StringComparison.OrdinalIgnoreCase) >= 0;
+            string page = title.ToString();
+            if (page.IndexOf(titlePart, StringComparison.OrdinalIgnoreCase) >= 0) return true;
+            // Display recovery can leave a composition surface at about:blank, covering the desktop well beyond the pet.
+            // Observed on Windows 11: even with native alpha 0, its renderer child received clicks on desktop icons.
+            // Protect only this browser's invisible, nonactivating placeholder; ordinary blank pages and the gallery keep input.
+            if (!string.Equals(page, "about:blank", StringComparison.OrdinalIgnoreCase)) return false;
+            int style = GetWindowLong(window, GWL_EXSTYLE);
+            return (style & (WS_EX_LAYERED | WS_EX_NOACTIVATE)) == (WS_EX_LAYERED | WS_EX_NOACTIVATE) &&
+                GetLayeredWindowAttributes(window, out _, out byte alpha, out uint flags) && (flags & 2 /* LWA_ALPHA */) != 0 && alpha == 0;
         }
 
         internal static bool MakePetBrowserWindowClickThrough(IntPtr window, uint browserProcessId, string titlePart)

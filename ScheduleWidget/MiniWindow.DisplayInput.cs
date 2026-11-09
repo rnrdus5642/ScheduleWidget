@@ -23,6 +23,7 @@ namespace ScheduleWidget
                 screenInputLayoutPending |= resizingBoard || draggingPet >= 0;
                 windowDragging = movingWindow = beginningDrag = resizingBoard = false;
                 draggingPet = pressedPetSlot = previousPetClickSlot = -1;
+                monitorDragTarget = null;
                 pressedPetClickCount = 0;
                 pressPoint = null;
                 gripStartPets = null;

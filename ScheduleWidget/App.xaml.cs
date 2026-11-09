@@ -145,16 +145,24 @@ namespace ScheduleWidget
             e.Handled = true;
             if (closingForErrors) return;
             ErrorLog.Write("ui", e.Exception);
-            // A dead WPF render thread cannot recover by handling the next twenty window messages. Close once;
-            // the error dialog's message pump must not flood the log while the user is reading the message.
             bool renderFailure = IsRenderThreadFailure(e.Exception);
+            if (renderFailure)
+            {
+                closingForErrors = true;
+                // A dead render thread can also block Window.Close and the UI error dialog. Launch a separate
+                // process first; it waits for this one and can finish shutdown if saving gets stuck.
+                ThreadPool.QueueUserWorkItem(_ => { Thread.Sleep(9000); Environment.Exit(1); });
+                RenderRecovery.TryStartRecovery();
+                if (MainWindow is ScheduleWidget.MainWindow window) window.SaveForRenderRecovery();
+                Environment.Exit(1); // Do not enter WPF shutdown/layout again with a dead render partition.
+                return;
+            }
             // Keep going after startup, unless errors keep coming (the same failure every frame): then stop instead of looping.
             if ((DateTime.Now - recentErrorsSince).TotalMinutes >= 1) { recentErrorsSince = DateTime.Now; recentErrors = 0; }
             bool running = this.MainWindow is ScheduleWidget.MainWindow main && main.StartupCompleted;
-            if (!renderFailure && running && ++recentErrors <= 20) return;
+            if (running && ++recentErrors <= 20) return;
             closingForErrors = true;
-            string message = renderFailure ? "화면을 그리는 중 오류가 발생해 앱을 종료합니다."
-                : running ? "오류가 계속 발생해 앱을 종료합니다." : "앱을 시작하는 중 오류가 발생해 종료합니다.";
+            string message = running ? "오류가 계속 발생해 앱을 종료합니다." : "앱을 시작하는 중 오류가 발생해 종료합니다.";
             MessageBox.Show(message + Environment.NewLine +
                 e.Exception.Message + Environment.NewLine + Environment.NewLine + "자세한 내용: " + ErrorLog.FilePath,
                 "일정 위젯", MessageBoxButton.OK, MessageBoxImage.Error);

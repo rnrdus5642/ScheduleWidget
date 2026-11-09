@@ -133,7 +133,7 @@ namespace ScheduleWidget
                     bool updated = mediaTimelineOverride != null ? mediaTimelineOverride(externalSources) : SystemMediaService.RefreshTimelines(externalSources);
                     bool sourceChanged = ApplyAutomaticMusicSource(DateTime.UtcNow);
                     if (sourceChanged || before != Before()) MusicWindow.RaisePlaybackChanged();
-                    else if (updated && appData?.MiniPlayerVisible == true) miniWindow?.UpdateSeek();
+                    else if (updated) miniWindow?.UpdateSeek();
                     if (sourceChanged) await EnsureExternalVolumeWatchAsync();
                 }
             }
@@ -167,7 +167,6 @@ namespace ScheduleWidget
 
         private void UpdateMediaWatchVisibility()
         {
-            if (appData?.MiniPlayerVisible == false) { ResetExternalVolumeWatch(); return; }
             if (mediaWatchActive) EnsureExternalVolumeWatchSoon();
         }
 
@@ -193,7 +192,7 @@ namespace ScheduleWidget
 
         private async Task EnsureExternalVolumeWatchAsync()
         {
-            if (!UseExternal || appData?.MiniPlayerVisible == false) { ResetExternalVolumeWatch(); return; }
+            if (!UseExternal) { ResetExternalVolumeWatch(); return; }
             string app = selectedExternalApp;
             if (volumeOpeningApp == app) return;
             if (externalVolumeWatch != null && externalVolumeApp == app && externalVolumeWatch.CurrentVolume.HasValue) return;

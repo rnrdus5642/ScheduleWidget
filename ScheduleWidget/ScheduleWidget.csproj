@@ -6,6 +6,7 @@
     <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
     <ProjectGuid>{5913BFF5-EC75-4A28-B574-8A0F45801E0B}</ProjectGuid>
     <OutputType>WinExe</OutputType>
+    <StartupObject>ScheduleWidget.Program</StartupObject>
     <RootNamespace>ScheduleWidget</RootNamespace>
     <AssemblyName>ScheduleWidget</AssemblyName>
     <TargetFrameworkVersion>v4.7.2</TargetFrameworkVersion>
@@ -85,13 +86,17 @@
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </ApplicationDefinition>
+    <Compile Include="Program.cs" />
+    <Compile Include="Services\RenderRecovery.cs" />
     <Compile Include="Services\DataManager.cs" />
+    <Compile Include="Services\ScheduleChanges.cs" />
     <Compile Include="Services\IAppDataStore.cs" />
     <Compile Include="Services\SettingsContentLease.cs" />
     <Compile Include="Services\NativeMethods.cs" />
     <Compile Include="Services\StartupService.cs" />
     <Compile Include="Services\SliderInteraction.cs" />
     <Compile Include="Services\ChromelessWindow.cs" />
+    <Compile Include="Services\AuxiliaryWindowPlacement.cs" />
     <Compile Include="Services\AuxTheme.cs" />
     <Compile Include="Services\CubicBezierEase.cs" />
     <Compile Include="Services\HotKeyGesture.cs" />
@@ -99,19 +104,24 @@
     <Compile Include="Services\ErrorLog.cs" />
     <Compile Include="Services\SafeDatePicker.cs" />
     <Compile Include="Services\GoogleCalendarService.cs" />
+    <Compile Include="Services\GoogleOperations.cs" />
     <Compile Include="Services\MediaAppActivator.cs" />
     <Compile Include="Services\TypingInput.cs" />
     <Compile Include="Models\ScheduleModels.cs" />
+    <Compile Include="Models\CalendarMonitorLayout.cs" />
     <Compile Include="Models\AppearanceSettings.cs" />
     <Compile Include="Models\FeatureSettings.cs" />
     <Page Include="Styles\AuxiliaryStyles.xaml"><Generator>MSBuild:Compile</Generator></Page>
     <Compile Include="MainWindow.Features.cs" />
+    <Compile Include="MainWindow.ScheduleEditing.cs" />
     <Compile Include="MainWindow.MediaSource.cs" />
     <Compile Include="MainWindow.MediaWatch.cs" />
     <Compile Include="MainWindow.Settings.cs" />
+    <Compile Include="MainWindow.AppearanceSettings.cs" />
     <Page Include="SettingsWindow.xaml"><Generator>MSBuild:Compile</Generator></Page>
     <Compile Include="SettingsWindow.xaml.cs"><DependentUpon>SettingsWindow.xaml</DependentUpon></Compile>
     <Compile Include="MainWindow.Google.cs" />
+    <Compile Include="MainWindow.GooglePersistence.cs" />
     <Compile Include="MainWindow.Update.cs" />
     <Compile Include="MainWindow.UpdateNotice.cs" />
     <Page Include="UpdateConfirmationWindow.xaml"><Generator>MSBuild:Compile</Generator></Page>
@@ -140,15 +150,30 @@
     <Compile Include="MiniWindow.RangeBars.cs"><DependentUpon>MiniWindow.xaml</DependentUpon></Compile>
     <Compile Include="MiniWindow.ModeTransition.cs"><DependentUpon>MiniWindow.xaml</DependentUpon></Compile>
     <Compile Include="Services\CalendarRangeLayout.cs" />
+    <Compile Include="Services\DisplayMonitors.cs" />
+    <Compile Include="Services\CalendarPlacementPolicy.cs" />
     <Compile Include="MiniWindow.DisplayInput.cs"><DependentUpon>MiniWindow.xaml</DependentUpon></Compile>
     <Compile Include="Services\BrowserWindowInputGuard.cs" />
+    <Compile Include="Services\InternetConnectionMonitor.cs" />
+    <Compile Include="Services\EnterKeySubmit.cs" />
+    <Compile Include="MiniWindow.Connectivity.cs"><DependentUpon>MiniWindow.xaml</DependentUpon></Compile>
+    <Compile Include="MiniWindow.MonitorPlacement.cs"><DependentUpon>MiniWindow.xaml</DependentUpon></Compile>
     <Compile Include="MiniWindow.Appearance.cs"><DependentUpon>MiniWindow.xaml</DependentUpon></Compile>
+    <Compile Include="MiniWindow.ScheduleEditing.cs"><DependentUpon>MiniWindow.xaml</DependentUpon></Compile>
+    <Compile Include="MiniWindow.Warnings.cs"><DependentUpon>MiniWindow.xaml</DependentUpon></Compile>
+    <Compile Include="MiniWindow.WeekAnimation.cs"><DependentUpon>MiniWindow.xaml</DependentUpon></Compile>
+    <Compile Include="MiniWindow.MusicBar.cs"><DependentUpon>MiniWindow.xaml</DependentUpon></Compile>
+    <Compile Include="MiniWindow.CharacterRecovery.cs"><DependentUpon>MiniWindow.xaml</DependentUpon></Compile>
+    <Compile Include="MiniWindow.AppearancePreview.cs"><DependentUpon>MiniWindow.xaml</DependentUpon></Compile>
     <Compile Include="MiniWindow.PetSettings.cs"><DependentUpon>MiniWindow.xaml</DependentUpon></Compile>
+    <Compile Include="MiniWindow.PetModes.cs"><DependentUpon>MiniWindow.xaml</DependentUpon></Compile>
     <Page Include="ContactWindow.xaml"><Generator>MSBuild:Compile</Generator></Page>
     <Compile Include="ContactWindow.xaml.cs"><DependentUpon>ContactWindow.xaml</DependentUpon></Compile>
     <Compile Include="ContactWindow.Connections.cs"><DependentUpon>ContactWindow.xaml</DependentUpon></Compile>
     <Page Include="MusicWindow.xaml"><Generator>MSBuild:Compile</Generator></Page>
     <Compile Include="MusicWindow.xaml.cs"><DependentUpon>MusicWindow.xaml</DependentUpon></Compile>
+    <Page Include="PlaylistEditorWindow.xaml"><Generator>MSBuild:Compile</Generator></Page>
+    <Compile Include="PlaylistEditorWindow.xaml.cs"><DependentUpon>PlaylistEditorWindow.xaml</DependentUpon></Compile>
     <Page Include="CharacterWindow.xaml"><Generator>MSBuild:Compile</Generator></Page>
     <Compile Include="CharacterWindow.xaml.cs"><DependentUpon>CharacterWindow.xaml</DependentUpon></Compile>
     <Page Include="PetSettingsWindow.xaml"><Generator>MSBuild:Compile</Generator></Page>

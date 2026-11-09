@@ -17,11 +17,15 @@ namespace ScheduleWidget
             bool hasRanges = weekRangeSegments.Count > 0;
             double heading = dayCells.Any(c => c.Holiday != null) ? 54 : 40;
             Resources["WeekDayHeadingHeight"] = hasRanges ? heading : double.NaN;
-            const double pitch = 25, barHeight = 22;
+            double font = FiniteRange(scheduleAppearance.CompactTitleFontSize, 10, 24, 11);
+            double statusFont = data.MiniBlockDDayVisible ? FiniteRange(scheduleAppearance.CompactDDayFontSize, 10, 24, 10) : 10;
+            double barHeight = Math.Max(22, Math.Ceiling(Math.Max(font, statusFont) * 1.3) + 6);
+            double pitch = barHeight + 3;
             double top = heading + 11.5;
             double height = WeekDays.ActualHeight;
             // Leave space for a normal task and the overflow link; the day popup always contains every item.
-            int capacity = Math.Max(0, (int)Math.Floor((height - top - 48) / pitch));
+            double taskSpace = Math.Max(48, Math.Ceiling(font * 1.25) * 2 + statusFont + 10);
+            int capacity = Math.Max(0, (int)Math.Floor((height - top - taskSpace) / pitch));
             var shown = weekRangeSegments.Where(s => s.Lane < capacity).ToList();
             for (int column = 0; column < dayCells.Count; column++)
             {
@@ -31,7 +35,7 @@ namespace ScheduleWidget
                 dayCells[column].HiddenRangeCount = weekRangeSegments.Count(s => s.Covers(column)) - covering.Count;
             }
             double width = WeekDays.ActualWidth / dayCells.Count;
-            WeekRanges.ItemsSource = shown.Select(s => MakeRangeBar(s, width, height, top, 6.5, pitch, barHeight, 11)).ToList();
+            WeekRanges.ItemsSource = shown.Select(s => MakeRangeBar(s, width, height, top, 6.5, pitch, barHeight, font)).ToList();
         }
 
         private void UpdateMonthRangeLayout(int capacity, double rowHeight, double gridHeight, double font)

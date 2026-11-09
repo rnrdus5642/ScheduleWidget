@@ -29,6 +29,7 @@ namespace ScheduleWidget
 
     public sealed class CommunicationService
     {
+        public const int KakaoMessageLimit = 200;
         private static readonly HttpClient SharedClient = new HttpClient(new HttpClientHandler { AllowAutoRedirect = false })
             { Timeout = TimeSpan.FromSeconds(20) };
         private readonly HttpClient client;
@@ -53,7 +54,7 @@ namespace ScheduleWidget
 
         public async Task SendKakaoAsync(CommunicationSettings settings, string text, bool toSelf = false)
         {
-            if (string.IsNullOrWhiteSpace(text) || text.Length > 200)
+            if (string.IsNullOrWhiteSpace(text) || text.Length > KakaoMessageLimit)
                 throw new InvalidOperationException("카카오톡 메시지는 1~200자로 입력해 주세요.");
             if (!Uri.TryCreate(settings.KakaoLinkUrl, UriKind.Absolute, out Uri link) ||
                 link.Scheme != "https" || !string.IsNullOrEmpty(link.UserInfo))

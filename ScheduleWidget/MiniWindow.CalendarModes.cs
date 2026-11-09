@@ -67,6 +67,7 @@ namespace ScheduleWidget
         private Rect CalendarWorkArea(MonitorStateData preferred = null)
         {
             if (calendarWorkAreaOverride != null) return calendarWorkAreaOverride();
+            if (monitorApplyTarget != null) return monitorApplyTarget.WorkArea;
             var dpi = VisualTreeHelper.GetDpi(this);
             if (ValidCalendarBoard(preferred))
             {
@@ -156,11 +157,13 @@ namespace ScheduleWidget
             if (handle != IntPtr.Zero)
             {
                 var dpi = VisualTreeHelper.GetDpi(this);
+                double scaleX = monitorApplyTarget?.ScaleX ?? dpi.DpiScaleX;
+                double scaleY = monitorApplyTarget?.ScaleY ?? dpi.DpiScaleY;
                 // A layered window must move and resize together: four WPF property assignments expose its old
                 // small surface at the new position while the remaining native messages are still being handled.
-                if (NativeMethods.SetWindowPos(handle, IntPtr.Zero, (int)Math.Round(bounds.Left * dpi.DpiScaleX),
-                    (int)Math.Round(bounds.Top * dpi.DpiScaleY), (int)Math.Round(bounds.Width * dpi.DpiScaleX),
-                    (int)Math.Round(bounds.Height * dpi.DpiScaleY), NativeMethods.SWP_NOACTIVATE | SwpNoZOrder | SwpNoOwnerZOrder)) return;
+                if (NativeMethods.SetWindowPos(handle, IntPtr.Zero, (int)Math.Round(bounds.Left * scaleX),
+                    (int)Math.Round(bounds.Top * scaleY), (int)Math.Round(bounds.Width * scaleX),
+                    (int)Math.Round(bounds.Height * scaleY), NativeMethods.SWP_NOACTIVATE | SwpNoZOrder | SwpNoOwnerZOrder)) return;
             }
             Left = bounds.Left; Top = bounds.Top; Width = bounds.Width; Height = bounds.Height;
         }

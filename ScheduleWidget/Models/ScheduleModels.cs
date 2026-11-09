@@ -40,6 +40,9 @@ namespace ScheduleWidget
         // Saved sizes and last-used positions (for startup). Mode switches grow/shrink around the current board.
         public MonitorStateData MiniMonthBoard { get; set; }
         public bool MiniMonthView { get; set; }
+        // User-authored monitor preferences stay separate from the currently fitted MiniBoard/MiniMonthBoard.
+        public string MiniPreferredMonitorId { get; set; }
+        public Dictionary<string, CalendarMonitorLayout> MiniMonitorLayouts { get; set; } = new Dictionary<string, CalendarMonitorLayout>();
         // Kept for older data readers. The calendar is now the primary window; the list opens beside it.
         public bool MiniMode { get; set; } = true;
         // 미니 달력에 한 번에 보여 줄 날짜 수(1~7일).
@@ -48,7 +51,7 @@ namespace ScheduleWidget
         public int MiniCharacterScale { get; set; } = 100;
         // 미니 창에 캐릭터를 표시할지 여부. 숨기면 달력만 표시합니다.
         public bool MiniCharacterVisible { get; set; } = true;
-        // 미니 창 달력 아래 음악 조작 막대를 표시할지 여부.
+        // 구버전 창 배치 복원용으로만 보존합니다. 현재 달력의 음악 막대는 항상 표시합니다.
         public bool MiniPlayerVisible { get; set; } = true;
         // 원본 일정 창·미니 창을 모든 창 위에 표시할지 여부. 기본은 다른 앱 뒤(바탕화면 바로 위).
         public bool AlwaysOnTop { get; set; }
@@ -82,6 +85,9 @@ namespace ScheduleWidget
         public List<MiniPetSpot> MiniPetSpots { get; set; } = new List<MiniPetSpot>();
         // 캐릭터별 마지막 위치: a character put back (바꾸기 / 추가) returns to where it last stood. Key = CharacterCatalog.SelectionKey.
         public Dictionary<string, MiniPetSpot> MiniPetSpotsByCharacter { get; set; } = new Dictionary<string, MiniPetSpot>();
+        // MiniPetSpots remains the active placement, including settings previews. Inactive modes keep independent copies.
+        [JsonProperty(NullValueHandling = NullValueHandling.Ignore)] public MiniPetLayout MiniCompactPetLayout { get; set; }
+        [JsonProperty(NullValueHandling = NullValueHandling.Ignore)] public MiniPetLayout MiniMonthPetLayout { get; set; }
         // TODO 창 옆 캐릭터(👤)의 배치: 달력 대신 TODO 창을 기준으로 하므로 미니 창과 따로 저장합니다(처음에는 기본 배치).
         // 캐릭터·동작·크기·보이기는 미니 창과 같습니다.
         public string CompanionCharacterSide { get; set; } = "Left";
@@ -92,6 +98,12 @@ namespace ScheduleWidget
         // 업데이트 알림 말풍선의 "하루 동안 안 보기": 이 시각까지 말풍선을 띄우지 않습니다(없으면 바로 표시).
         public DateTime? UpdateNoticeSnoozedUntil { get; set; }
         // (Data files of earlier versions may hold an "Update" object — 업데이트 settings no longer exist; it is ignored on load.)
+    }
+
+    public class MiniPetLayout
+    {
+        public List<MiniPetSpot> Spots { get; set; } = new List<MiniPetSpot>();
+        public Dictionary<string, MiniPetSpot> ByCharacter { get; set; } = new Dictionary<string, MiniPetSpot>();
     }
 
     public class MiniPetSpot

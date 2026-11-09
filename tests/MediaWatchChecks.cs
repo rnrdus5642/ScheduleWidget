@@ -29,7 +29,7 @@ namespace ScheduleWidget.Checks
         {
             var main = new MainWindow();
             ((TrayService)Field(main, "trayService")).Dispose();
-            SetField(main, "appData", new AppData { StartupEnabled = false, BringToFrontHotKeyEnabled = false, MiniPlayerVisible = true });
+            SetField(main, "appData", new AppData { StartupEnabled = false, BringToFrontHotKeyEnabled = false, MiniPlayerVisible = false });
             SetField(main, "dataStore", Store(folder));
             return main;
         }

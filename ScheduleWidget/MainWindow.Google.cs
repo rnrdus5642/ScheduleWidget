@@ -17,6 +17,7 @@ namespace ScheduleWidget
         private readonly GoogleCalendarService googleCalendar = new GoogleCalendarService();
         private DispatcherTimer googlePeriodicTimer, googleSoonTimer;
         private bool googleSyncing, googleSyncAgain;
+        private int googleWorkGeneration;
         private bool googleOwnSave;       // a sync is saving what it brought: not an edit to send back
         private long? googleLastSignature;
         private string googleLastError;   // schedules / sign-in
@@ -32,6 +33,14 @@ namespace ScheduleWidget
         private bool GooglePetsOn => GoogleConnected && GoogleSettings.PetsEnabled;
         private bool GoogleActive => GoogleCalendarOn || GooglePetsOn;
 
+        private void CancelGoogleWork()
+        {
+            googleWorkGeneration++;
+            googleSyncAgain = false;
+            googleSoonTimer?.Stop();
+            googleCalendar.CancelPendingOperations();
+        }
+
         private void StartGoogleCalendar()
         {
             googlePeriodicTimer = new DispatcherTimer { Interval = TimeSpan.FromMinutes(5) };
@@ -41,7 +50,7 @@ namespace ScheduleWidget
             // A character imported or deleted here → keep Drive in step soon (not the characters a Drive sync itself brought).
             Action petsChanged = () => Dispatcher.BeginInvoke(new Action(() =>
             {
-                if (!googleSyncing && GooglePetsOn && CharacterCatalog.Version != googlePetsVersion) RequestGoogleSync(now: false);
+                if (!closingApp && !googleSyncing && GooglePetsOn && CharacterCatalog.Version != googlePetsVersion) RequestGoogleSync(now: false);
             }));
             CharacterCatalog.Changed += petsChanged;
             Closed += (s, e) => { googlePeriodicTimer.Stop(); googleSoonTimer.Stop(); googleSignIn?.Cancel(); CharacterCatalog.Changed -= petsChanged; };
@@ -99,7 +108,7 @@ namespace ScheduleWidget
         // now: at once (else in a few seconds). After failed syncs nothing starts before the pause is over.
         private void RequestGoogleSync(bool now)
         {
-            if (!GoogleActive || googleSoonTimer == null) return;
+            if (closingApp || !GoogleActive || googleSoonTimer == null) return;
             TimeSpan wait = googleRetryAt - DateTime.UtcNow;
             if (now && wait <= TimeSpan.FromSeconds(1)) { RunGoogleSync(); return; }
             googleSoonTimer.Stop();
@@ -109,9 +118,10 @@ namespace ScheduleWidget
 
         private async void RunGoogleSync()
         {
-            if (!GoogleActive) return;
+            if (closingApp || !GoogleActive) return;
             if (googleSyncing) { googleSyncAgain = true; return; }
             googleSyncing = true;
+            int generation = googleWorkGeneration;
             bool failed = false, more = false;
             TimeSpan? googleWait = null;
             try
@@ -126,19 +136,24 @@ namespace ScheduleWidget
                         Action ownChanges = () => googleLastSignature = ScheduleSignature();
                         ownChanges();
                         GoogleSyncResult result = await googleCalendar.SyncAsync(GoogleSettings, appData.Schedules, ownChanges);
+                        if (closingApp || generation != googleWorkGeneration) return;
                         googleLastError = null;
                         more = result.More;
                         // Saved and redrawn only when something changed (a sync every 5 minutes mostly finds nothing new).
                         if (result.DataChanged) SaveGoogleSyncResult();
                         if (result.ListChanged) RefreshScheduleList();
                     }
+                    catch (Exception ex) when (!SystemMediaService.IsFatal(ex) && (closingApp || generation != googleWorkGeneration))
+                    { throw new OperationCanceledException(); }
                     catch (GoogleSignInRequiredException) { throw; }
                     catch (GoogleRateLimitException ex) { googleLastError = ex.Message; failed = true; googleWait = ex.RetryAfter; }
                     catch (InvalidOperationException ex) { googleLastError = ex.Message; failed = true; } // offline etc.: tried again after a pause
-                    finally { googleLastSignature = ScheduleSignature(); } // what this sync saw: only a later edit starts one sooner
+                    finally { if (!closingApp && generation == googleWorkGeneration) googleLastSignature = ScheduleSignature(); }
                 }
                 if (GooglePetsOn) await SyncPetsWithDrive();
             }
+            catch (OperationCanceledException) { } // Disabled, signed out, or closing: no error or retry penalty.
+            catch (Exception ex) when (!SystemMediaService.IsFatal(ex) && (closingApp || generation != googleWorkGeneration)) { }
             catch (GoogleSignInRequiredException ex)
             {
                 // The saved sign-in stopped working: back to signed out (switches keep their choice for the next sign-in).
@@ -157,11 +172,20 @@ namespace ScheduleWidget
             finally
             {
                 googleSyncing = false;
-                NoteGoogleSyncResult(failed, googleWait);
-                UpdateGoogleUi();
-                if (googleSyncAgain || more) { googleSyncAgain = false; RequestGoogleSync(now: false); } // more new schedules wait: next batch soon
-                else if (GoogleCalendarOn && ScheduleSignature() != googleLastSignature) RequestGoogleSync(now: false); // edited during the sync
-                else if (GooglePetsOn && CharacterCatalog.Version != googlePetsVersion) RequestGoogleSync(now: false); // a character changed meanwhile
+                if (!closingApp && generation != googleWorkGeneration)
+                {
+                    UpdateGoogleUi();
+                    // A different channel may still be enabled, or the user enabled sync again while cancellation completed.
+                    if (GoogleActive) RequestGoogleSync(now: false);
+                }
+                else if (!closingApp)
+                {
+                    NoteGoogleSyncResult(failed, googleWait);
+                    UpdateGoogleUi();
+                    if (googleSyncAgain || more) { googleSyncAgain = false; RequestGoogleSync(now: false); } // more new schedules wait: next batch soon
+                    else if (GoogleCalendarOn && ScheduleSignature() != googleLastSignature) RequestGoogleSync(now: false); // edited during the sync
+                    else if (GooglePetsOn && CharacterCatalog.Version != googlePetsVersion) RequestGoogleSync(now: false); // a character changed meanwhile
+                }
             }
         }
 
@@ -180,19 +204,24 @@ namespace ScheduleWidget
         // 캐릭터도 구글 드라이브에 보관: its problems show on their own line and never stop the calendar.
         private async Task SyncPetsWithDrive()
         {
+            int generation = googleWorkGeneration;
             int seen = CharacterCatalog.Version;
             try
             {
                 GooglePetSyncResult result = await googleCalendar.SyncPetsAsync(GoogleSettings);
+                if (closingApp || generation != googleWorkGeneration) return;
                 // The characters this sync brought are not a change to send back; one imported or deleted by the user
                 // meanwhile is (then the version differs and another sync follows).
                 seen += result.Downloaded;
                 googlePetStatus = PetSyncStatus(result);
                 if (result.Changed) SaveGoogleSyncResult();
             }
+            catch (Exception ex) when (!SystemMediaService.IsFatal(ex) && (closingApp || generation != googleWorkGeneration))
+            { throw new OperationCanceledException(); }
             catch (GoogleSignInRequiredException) { throw; }
+            catch (OperationCanceledException) { throw; }
             catch (Exception ex) when (!(ex is OutOfMemoryException)) { googlePetStatus = ex.Message; } // shown on its own line; retried next sync
-            finally { googlePetsVersion = seen; }
+            finally { if (!closingApp && generation == googleWorkGeneration) googlePetsVersion = seen; }
         }
 
         private static string PetSyncStatus(GooglePetSyncResult result)
@@ -253,16 +282,20 @@ namespace ScheduleWidget
         {
             var settings = GoogleSettings;
             if (settings == null) return;
-            if (googleSignIn != null) { googleSignIn.Cancel(); return; } // 로그인 취소
+            if (googleSignIn != null) { googleSignIn.Cancel(); CancelGoogleWork(); return; } // 로그인 취소
             if (GoogleConnected) { await SignOutOfGoogle(); return; }    // 로그아웃
             if (GoogleCalendarService.LoadClient() == null && !PickGoogleClientFile()) { UpdateGoogleUi(); return; }
 
-            googleSignIn = new CancellationTokenSource();
+            CancelGoogleWork();
+            var signIn = new CancellationTokenSource();
+            googleSignIn = signIn;
             googleLastError = null;
             UpdateGoogleUi();
             try
             {
-                await googleCalendar.SignInAsync(settings, googleSignIn.Token);
+                await googleCalendar.SignInAsync(settings, signIn.Token);
+                signIn.Token.ThrowIfCancellationRequested();
+                if (closingApp) return;
                 // Another Google account: its calendar starts from this PC's schedules. An account that could not be read (or
                 // the "구글 계정" placeholder an older version saved then) is never taken for another one.
                 bool Known(string account) => !string.IsNullOrWhiteSpace(account) && account != "구글 계정";
@@ -273,21 +306,22 @@ namespace ScheduleWidget
                 googleSignIn = null;
                 googleFailures = 0;
                 googleRetryAt = DateTime.MinValue;
-                SaveDataSafely(false);
+                SaveGooglePreferences();
                 UpdateGoogleTimers();
                 if (GoogleActive) RunGoogleSync(); // switches left ON from before sign-out resume at once
             }
             catch (Exception ex) when (!(ex is OutOfMemoryException)) // async void: nothing may escape (socket / browser / file errors …)
             {
-                bool cancelled = googleSignIn?.IsCancellationRequested == true;
+                bool cancelled = signIn.IsCancellationRequested || ex is OperationCanceledException || closingApp;
                 if (!cancelled && IsLoaded)
                     MessageBox.Show(Window.GetWindow(GoogleSignInButton) ?? this, "구글 로그인에 실패했습니다.\n" + ex.Message,
                         "구글 연동", MessageBoxButton.OK, MessageBoxImage.Warning);
             }
             finally
             {
-                googleSignIn = null;
-                UpdateGoogleUi();
+                if (ReferenceEquals(googleSignIn, signIn)) googleSignIn = null;
+                signIn.Dispose();
+                if (!closingApp) UpdateGoogleUi();
             }
         }
 
@@ -329,12 +363,7 @@ namespace ScheduleWidget
                 "구글에서 로그아웃할까요?\n앱·구글 캘린더·드라이브의 일정과 캐릭터는 그대로 남습니다.", "구글 연동",
                 MessageBoxButton.OKCancel, MessageBoxImage.Question);
             if (answer != MessageBoxResult.OK) return;
-            await googleCalendar.SignOutAsync(GoogleSettings);
-            // The schedules keep their Google links: signing in to the same account again carries on where it stopped.
-            googleLastError = googlePetStatus = null;
-            SaveDataSafely(false);
-            UpdateGoogleTimers();
-            UpdateGoogleUi();
+            await CompleteGoogleSignOutAsync();
         }
 
         private void GoogleCalendarSwitch_Click(object sender, RoutedEventArgs e)
@@ -342,9 +371,10 @@ namespace ScheduleWidget
             if (GoogleSettings == null) return;
             if (!GoogleConnected) { UpdateGoogleUi(); return; }
             GoogleSettings.Enabled = GoogleCalendarSwitch.IsChecked == true;
+            if (!GoogleSettings.Enabled) CancelGoogleWork();
             googleLastError = null;
             googleRetryAt = DateTime.MinValue; // turned on: try at once
-            SaveDataSafely(false);
+            SaveGooglePreferences();
             UpdateGoogleTimers();
             if (GoogleSettings.Enabled) RequestGoogleSync(now: true);
             UpdateGoogleUi();
@@ -355,9 +385,10 @@ namespace ScheduleWidget
             if (GoogleSettings == null) return;
             if (!GoogleConnected) { UpdateGoogleUi(); return; }
             GoogleSettings.PetsEnabled = GooglePetsSwitch.IsChecked == true;
+            if (!GoogleSettings.PetsEnabled) CancelGoogleWork();
             googlePetStatus = null;
             googleRetryAt = DateTime.MinValue;
-            SaveDataSafely(false);
+            SaveGooglePreferences();
             UpdateGoogleTimers();
             if (GoogleSettings.PetsEnabled) RequestGoogleSync(now: true);
             UpdateGoogleUi();

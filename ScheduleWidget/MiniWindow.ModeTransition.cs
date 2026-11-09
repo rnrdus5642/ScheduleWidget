@@ -108,6 +108,7 @@ namespace ScheduleWidget
 
         private void BeginCalendarModeTransition(bool open, MonitorStateData from, MonitorStateData to, ImageSource snapshot)
         {
+            if (pendingCalendarPetLayout == null) PrepareCalendarPetMode(from, to, open);
             int generation = ++modeTransitionGeneration;
             CancelModeCoverFade();
             SetCurrentValue(ModeTransitionProgressProperty, 0.0);
@@ -122,7 +123,7 @@ namespace ScheduleWidget
             {
                 foreach (var rect in PetRects())
                     if (rect.Width > 0 && rect.Height > 0) modeOverlayPixels.Union(PetScreenPixels(rect));
-                foreach (var rect in PetBoardRects(to.Width, to.Height))
+                foreach (var rect in PetBoardRects(to.Width, to.Height, placement: pendingCalendarPetLayout?.Spots, screenBoard: to))
                     if (rect.Width > 0 && rect.Height > 0)
                         modeOverlayPixels.Union(new Rect((to.Left + rect.Left) * dpi.DpiScaleX, (to.Top + rect.Top) * dpi.DpiScaleY,
                             rect.Width * dpi.DpiScaleX, rect.Height * dpi.DpiScaleY));
@@ -322,6 +323,7 @@ namespace ScheduleWidget
         {
             if (modeTransitionPrepared || modeTransitionTo == null) return;
             modeTransitionPrepared = true;
+            ActivateCalendarPetMode(modeTransitionOpen);
             data.MiniMonthView = modeTransitionOpen;
             ApplyCalendarModeVisibility(modeTransitionOpen);
             MiniRoot.Opacity = 0;
@@ -393,6 +395,7 @@ namespace ScheduleWidget
             modeTransitionClock.Stop();
             PetLog.Write("calendar-mode", "transition frames=" + modeTransitionFrames + ", ms=" + modeTransitionClock.ElapsedMilliseconds);
             modeTransitionTo = modeTransitionFrom = null;
+            pendingCalendarPetLayout = null;
             MiniRoot.Opacity = modeBoardOpacity; MiniRoot.IsHitTestVisible = modeBoardHitTest;
             CharacterHost.Opacity = modePetsOpacity;
             changingCalendarMode = false;

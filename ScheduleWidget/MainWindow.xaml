@@ -184,15 +184,20 @@
                             <RowDefinition Height="42"/>
                             <RowDefinition Height="42"/>
                             <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
                         </Grid.RowDefinitions>
+
+                        <TextBlock x:Name="AddSaveError" Grid.Row="4" Visibility="Collapsed" TextWrapping="Wrap"
+                                   Margin="0,6,0,0" Foreground="#C24135" FontSize="11"
+                                   Text="저장하지 못했습니다. 입력 내용은 유지되니 다시 시도해 주세요."/>
 
                         <TextBox x:Name="TitleInput"
                                  Grid.Row="0"
                                  Height="34"
                                  Style="{StaticResource WidgetTextBox}"
                                  FontSize="12"
-                                 ToolTip="일정 제목"
-                                 KeyDown="TitleInput_KeyDown"/>
+                                 ToolTip="일정 제목 · Enter로 추가"
+                                 PreviewKeyDown="AddScheduleInput_PreviewKeyDown"/>
 
                         <Grid Grid.Row="1"
                               Margin="0,6,0,0">
@@ -422,7 +427,7 @@
                                      IsEnabled="False"
                                      Style="{StaticResource WidgetTextBox}"
                                      HorizontalContentAlignment="Center"
-                                     ToolTip="HH:mm"/>
+                                     ToolTip="HH:mm · Enter로 추가" PreviewKeyDown="AddScheduleInput_PreviewKeyDown"/>
                         </Grid>
                         <!-- 종료 날짜 (여러 날 only): the calendar button picks the range's last day. -->
                         <Border x:Name="AddEndRow"
@@ -592,15 +597,15 @@
                                     </Grid>
                                     <Grid x:Name="SettingsCalendarDdayRow" Margin="0,10,0,0">
                                         <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                                        <TextBlock Text="일정 블록에 D-day 표시 (달력)" Foreground="{DynamicResource AuxInkBrush}" FontSize="14" VerticalAlignment="Center"
-                                                   TextWrapping="Wrap" ToolTip="미니 달력의 일정 블록 윗줄 오른쪽에 D-3 · D-day · D+2처럼 남은 날짜를 표시합니다."/>
+                                        <TextBlock Text="일정에 D-Day 표시" Foreground="{DynamicResource AuxInkBrush}" FontSize="14" VerticalAlignment="Center"
+                                                   TextWrapping="Wrap"/>
                                         <ToggleButton x:Name="InlineBlockDDaySwitch" Grid.Column="1" Margin="10,0,0,0" Style="{StaticResource AuxOnOffSwitch}" VerticalAlignment="Center"
+                                                      Checked="AppearanceBlockDDayChanged" Unchecked="AppearanceBlockDDayChanged"
                                                       AutomationProperties.Name="일정 블록에 D-day 표시 켜기/끄기"/>
                                     </Grid>
                                     <!-- How the mini calendar turns to another week (‹ / ›). Tag = the saved MiniFlipEffect value. -->
-                                    <TextBlock x:Name="SettingsFlipLabel" Text="넘김 애니메이션 (달력)" Foreground="{DynamicResource AuxInkBrush}" FontSize="14" Margin="0,10,0,6"
-                                               ToolTip="미니 달력에서 다른 주로 넘길 때의 움직임입니다."/>
-                                    <ComboBox x:Name="InlineFlipEffectCombo" Height="34" Style="{StaticResource AuxComboBox}" AutomationProperties.Name="넘김 애니메이션">
+                                    <TextBlock x:Name="SettingsFlipLabel" Text="달력 애니메이션 효과" Foreground="{DynamicResource AuxInkBrush}" FontSize="14" Margin="0,14,0,6" TextWrapping="Wrap"/>
+                                    <ComboBox x:Name="InlineFlipEffectCombo" Height="34" Style="{StaticResource AuxComboBox}" AutomationProperties.Name="달력 애니메이션 효과">
                                         <ComboBoxItem Content="효과 1 · 위로 넘기기" Tag="1"/>
                                         <ComboBoxItem Content="효과 2 · 모서리 넘기기" Tag="2"/>
                                         <ComboBoxItem Content="효과 3 · 위로 넘기기 (뒷면 1/3)" Tag="3"/>
@@ -640,15 +645,6 @@
                                     </Grid>
                                 </StackPanel>
                             </Border>
-                            <UniformGrid x:Name="SettingsColorButtons" Columns="2" Margin="0,0,0,10">
-                                <Button Content="월간 배경" Tag="BackgroundColor" Height="36" Margin="2" Style="{StaticResource AuxUtilityButton}" Click="AppearanceColor_Click"/>
-                                <Button Content="카드 배경" Tag="CardColor" Height="36" Margin="2" Style="{StaticResource AuxUtilityButton}" Click="AppearanceColor_Click"/>
-                                <Button Content="제목 글자" Tag="TextColor" Height="36" Margin="2" Style="{StaticResource AuxUtilityButton}" Click="AppearanceColor_Click"/>
-                                <Button Content="오늘 D-day" Tag="TodayColor" Height="36" Margin="2" Style="{StaticResource AuxUtilityButton}" Click="AppearanceColor_Click"/>
-                                <Button Content="예정 D-day" Tag="FutureColor" Height="36" Margin="2" Style="{StaticResource AuxUtilityButton}" Click="AppearanceColor_Click"/>
-                                <Button Content="지난 D-day" Tag="PastColor" Height="36" Margin="2" Style="{StaticResource AuxUtilityButton}" Click="AppearanceColor_Click"/>
-                            </UniformGrid>
-                            <TextBlock x:Name="SettingsColorHint" Text="배경·제목 색상은 월간 달력과 일정 상세에, D-day 색상은 일정 상세에 적용됩니다. 개별 일정은 우클릭 → 색상에서 바꾸며, 글자는 배경에 맞춰 자동으로 정해집니다." TextWrapping="Wrap" Style="{StaticResource AuxCaption}" Margin="6,0,6,12"/>
                             <Border x:Name="SettingsOpacityCard" Style="{StaticResource AuxRoundSection}" Padding="14,12" Margin="0,0,0,10">
                                 <StackPanel>
                                     <Grid Margin="0,0,0,7">
@@ -656,7 +652,7 @@
                                             <ColumnDefinition Width="*"/>
                                             <ColumnDefinition Width="Auto"/>
                                         </Grid.ColumnDefinitions>
-                                        <TextBlock Text="달력·음악 막대 투명도"
+                                        <TextBlock Text="투명도"
                                                     Foreground="{DynamicResource AuxInkBrush}"
                                                    FontWeight="SemiBold"/>
                                         <TextBlock x:Name="InlineOpacityValueText"
@@ -666,6 +662,7 @@
                                                    FontWeight="SemiBold"/>
                                     </Grid>
                                     <Slider x:Name="InlineOpacitySlider"
+                                            AutomationProperties.Name="투명도"
                                             Minimum="30"
                                             Maximum="100"
                                             TickFrequency="5"
@@ -684,9 +681,6 @@
                                             <TextBlock Text="테마"
                                                         Style="{StaticResource AuxSectionTitle}"
                                                         FontSize="17"/>
-                                            <TextBlock Text="위젯의 분위기를 선택하세요."
-                                                        Style="{StaticResource AuxCaption}"
-                                                        Margin="0,3,0,0"/>
                                         </StackPanel>
                                     </StackPanel>
                                     <ComboBox x:Name="InlinePresetCombo"
@@ -705,59 +699,74 @@
                                 </StackPanel>
                             </Border>
 
-                            <Border x:Name="SettingsFontCard" Style="{StaticResource AuxRoundSection}" Padding="14,12">
+                            <Border x:Name="SettingsCompactFontCard" Style="{StaticResource AuxRoundSection}" Padding="18,16" Margin="0,0,0,10">
                                 <StackPanel>
-                                    <TextBlock Text="월간·상세 일정 글자 크기"
+                                    <TextBlock Text="글자 크기" Style="{StaticResource AuxSectionTitle}" Margin="0,0,0,10"/>
+                                    <Grid MinHeight="36" Margin="0,0,0,5">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="112"/><ColumnDefinition Width="*"/><ColumnDefinition Width="36"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Text="일정 글자 크기" Foreground="{DynamicResource AuxInkBrush}" VerticalAlignment="Center"/>
+                                        <Slider x:Name="InlineCompactTitleFontSizeSlider" Grid.Column="1" Minimum="10" Maximum="24"
+                                                TickFrequency="1" IsSnapToTickEnabled="True" IsMoveToPointEnabled="True"
+                                                local:SliderInteraction.EnableMouseDrag="True" Foreground="{DynamicResource AuxActionBrush}"
+                                                VerticalAlignment="Center" ValueChanged="InlineFontSizeSlider_ValueChanged"
+                                                AutomationProperties.Name="기본 모드 제목 글자 크기"/>
+                                        <TextBlock x:Name="InlineCompactTitleFontSizeText" Grid.Column="2" TextAlignment="Right"
+                                                   Foreground="{DynamicResource AuxActionTextBrush}" VerticalAlignment="Center"/>
+                                    </Grid>
+                                    <Grid x:Name="SettingsCompactDdaySizeRow" MinHeight="36">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="112"/><ColumnDefinition Width="*"/><ColumnDefinition Width="36"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Text="D-Day 크기" Foreground="{DynamicResource AuxInkBrush}" VerticalAlignment="Center"/>
+                                        <Slider x:Name="InlineCompactDDayFontSizeSlider" Grid.Column="1" Minimum="10" Maximum="24"
+                                                TickFrequency="1" IsSnapToTickEnabled="True" IsMoveToPointEnabled="True"
+                                                local:SliderInteraction.EnableMouseDrag="True" Foreground="{DynamicResource AuxActionBrush}"
+                                                VerticalAlignment="Center" ValueChanged="InlineFontSizeSlider_ValueChanged"
+                                                AutomationProperties.Name="기본 모드 D-Day 글자 크기"/>
+                                        <TextBlock x:Name="InlineCompactDDayFontSizeText" Grid.Column="2" TextAlignment="Right"
+                                                   Foreground="{DynamicResource AuxActionTextBrush}" VerticalAlignment="Center"/>
+                                    </Grid>
+                                </StackPanel>
+                            </Border>
+
+                            <Border x:Name="SettingsMonthFontCard" Style="{StaticResource AuxRoundSection}" Padding="18,16">
+                                <StackPanel>
+                                    <TextBlock Text="글자 크기" Style="{StaticResource AuxSectionTitle}" Margin="0,0,0,10"/>
+                                    <Grid MinHeight="36" Margin="0,0,0,14">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="112"/><ColumnDefinition Width="*"/><ColumnDefinition Width="36"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Text="일정 글자 크기" Foreground="{DynamicResource AuxInkBrush}" VerticalAlignment="Center"/>
+                                        <Slider x:Name="InlineMonthTitleFontSizeSlider" Grid.Column="1" Minimum="10" Maximum="24"
+                                                TickFrequency="1" IsSnapToTickEnabled="True" IsMoveToPointEnabled="True"
+                                                local:SliderInteraction.EnableMouseDrag="True" Foreground="{DynamicResource AuxActionBrush}"
+                                                VerticalAlignment="Center" ValueChanged="InlineFontSizeSlider_ValueChanged"
+                                                AutomationProperties.Name="한 달 보기 일정 글자 크기"/>
+                                        <TextBlock x:Name="InlineMonthTitleFontSizeText" Grid.Column="2" TextAlignment="Right"
+                                                   Foreground="{DynamicResource AuxActionTextBrush}" VerticalAlignment="Center"/>
+                                    </Grid>
+                                </StackPanel>
+                            </Border>
+
+                            <Border x:Name="SettingsFontCard" Style="{StaticResource AuxRoundSection}" Padding="18,16">
+                                <StackPanel>
+                                    <TextBlock Text="글자 크기"
                                                Style="{StaticResource AuxSectionTitle}"
                                                FontSize="17"
                                                Margin="0,0,0,10"/>
-                                    <Border x:Name="SettingsFontPreview" Background="{DynamicResource CardBrush}"
-                                            BorderBrush="{DynamicResource CardBorderBrush}"
-                                            BorderThickness="1"
-                                            CornerRadius="3"
-                                            Padding="10,8"
-                                            Margin="0,0,0,10">
-                                        <Grid>
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="*"/>
-                                                <ColumnDefinition Width="Auto"/>
-                                            </Grid.ColumnDefinitions>
-                                            <StackPanel VerticalAlignment="Center">
-                                                <TextBlock Text="보고서 제출"
-                                                           FontSize="{DynamicResource TitleFontSize}"
-                                                           FontWeight="SemiBold"
-                                                           Foreground="{DynamicResource TextBrush}"
-                                                           TextTrimming="CharacterEllipsis"
-                                                           TextWrapping="NoWrap"/>
-                                                <TextBlock Text="09.06 (일)"
-                                                           FontSize="10"
-                                                           Foreground="{DynamicResource SubTextBrush}"
-                                                           Margin="0,3,0,0"/>
-                                            </StackPanel>
-                                            <Border Grid.Column="1"
-                                                    Background="{DynamicResource ControlHoverBrush}"
-                                                    CornerRadius="3"
-                                                    Padding="8,5"
-                                                    Margin="8,0,0,0"
-                                                    VerticalAlignment="Center">
-                                                <TextBlock Text="D-12"
-                                                            FontSize="{DynamicResource DDayFontSize}"
-                                                            FontWeight="Bold"
-                                                            Foreground="{DynamicResource FutureBrush}"
-                                                            HorizontalAlignment="Center"/>
-                                            </Border>
-                                        </Grid>
-                                    </Border>
-                                    <Grid Margin="0,0,0,9">
+                                    <Grid MinHeight="36" Margin="0,0,0,5">
                                         <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="52"/>
+                                            <ColumnDefinition Width="112"/>
                                             <ColumnDefinition Width="*"/>
-                                            <ColumnDefinition Width="28"/>
+                                            <ColumnDefinition Width="36"/>
                                         </Grid.ColumnDefinitions>
-                                        <TextBlock Text="제목"
-                                                    Foreground="{DynamicResource AuxMutedBrush}"
+                                        <TextBlock Text="일정 글자 크기"
+                                                    Foreground="{DynamicResource AuxInkBrush}"
                                                    VerticalAlignment="Center"/>
                                         <Slider x:Name="InlineTitleFontSizeSlider"
+                                                AutomationProperties.Name="일정 상세창 제목 글자 크기"
                                                 Grid.Column="1"
                                                 Minimum="10"
                                                 Maximum="24"
@@ -774,16 +783,17 @@
                                                    Foreground="{DynamicResource AuxActionTextBrush}"
                                                    VerticalAlignment="Center"/>
                                     </Grid>
-                                    <Grid>
+                                    <Grid MinHeight="36">
                                         <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="52"/>
+                                            <ColumnDefinition Width="112"/>
                                             <ColumnDefinition Width="*"/>
-                                            <ColumnDefinition Width="28"/>
+                                            <ColumnDefinition Width="36"/>
                                         </Grid.ColumnDefinitions>
-                                        <TextBlock Text="D-Day"
-                                                    Foreground="{DynamicResource AuxMutedBrush}"
+                                        <TextBlock Text="D-Day 크기"
+                                                    Foreground="{DynamicResource AuxInkBrush}"
                                                    VerticalAlignment="Center"/>
                                         <Slider x:Name="InlineDDayFontSizeSlider"
+                                                AutomationProperties.Name="일정 상세창 D-Day 글자 크기"
                                                 Grid.Column="1"
                                                 Minimum="10"
                                                 Maximum="24"
@@ -1000,7 +1010,8 @@
                             <TextBox x:Name="InlineEditTitleInput"
                                      Height="38"
                                      Style="{StaticResource WidgetTextBox}"
-                                     FontSize="12"/>
+                                     FontSize="12" PreviewKeyDown="EditScheduleInput_PreviewKeyDown"
+                                     AutomationProperties.HelpText="Enter 키로 변경 내용을 저장합니다."/>
                             <TextBlock Text="날짜"
                                        Foreground="{DynamicResource SubTextBrush}"
                                        FontSize="10"
@@ -1139,8 +1150,11 @@
                                          IsEnabled="False"
                                          Style="{StaticResource WidgetTextBox}"
                                          HorizontalContentAlignment="Center"
-                                         ToolTip="HH:mm"/>
+                                         ToolTip="HH:mm · Enter로 저장" PreviewKeyDown="EditScheduleInput_PreviewKeyDown"/>
                             </Grid>
+                            <TextBlock x:Name="InlineEditSaveError" Visibility="Collapsed" TextWrapping="Wrap"
+                                       Margin="0,6,0,0" Foreground="#C24135" FontSize="11"
+                                       Text="저장하지 못했습니다. 입력 내용은 유지되니 다시 시도해 주세요."/>
                         </StackPanel>
 
                         <StackPanel Grid.Row="2"

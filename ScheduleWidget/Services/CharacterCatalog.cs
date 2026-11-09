@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using Microsoft.Web.WebView2.Core;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -638,19 +639,24 @@ namespace ScheduleWidget
         public static string Import(string source, string destinationDirectory = null) => Import(source, destinationDirectory, null);
 
         /// <summary>Copies a character into its own folder (a new ID, or <paramref name="folderId"/> for one synced from another PC).</summary>
-        public static string Import(string source, string destinationDirectory, string folderId)
+        public static string Import(string source, string destinationDirectory, string folderId) =>
+            Import(source, destinationDirectory, folderId, CancellationToken.None);
+
+        public static string Import(string source, string destinationDirectory, string folderId, CancellationToken cancellation)
         {
-            string result = ImportCore(source, destinationDirectory, folderId);
+            string result = ImportCore(source, destinationDirectory, folderId, cancellation: cancellation);
             NotifyChanged();
             return result;
         }
 
         // allowCodex: only for checks that unpack into a scratch folder (ZipCopiesBuiltIn, ZipHasCodexSheet) and the old
         // app-folder Pet 이관; 캐릭터 가져오기 and Drive downloads never bring in a Codex character (its files, or its very sheet).
-        private static string ImportCore(string source, string destinationDirectory, string folderId, string fallbackName = null, bool allowCodex = false)
+        private static string ImportCore(string source, string destinationDirectory, string folderId, string fallbackName = null, bool allowCodex = false,
+            CancellationToken cancellation = default(CancellationToken))
         {
+            cancellation.ThrowIfCancellationRequested();
             if (!allowCodex && CodexPets.IsCodexSource(source)) throw new InvalidOperationException(CodexPets.ImportRefused);
-            if (Path.GetExtension(source).Equals(".zip", StringComparison.OrdinalIgnoreCase)) return ImportZip(source, destinationDirectory, folderId, allowCodex);
+            if (Path.GetExtension(source).Equals(".zip", StringComparison.OrdinalIgnoreCase)) return ImportZip(source, destinationDirectory, folderId, allowCodex, cancellation);
             CharacterEntry entry = null;
             if (Path.GetExtension(source).Equals(".json", StringComparison.OrdinalIgnoreCase)) entry = Read(source);
             string image = entry?.ImagePath ?? Path.GetFullPath(source);
@@ -679,10 +685,17 @@ namespace ScheduleWidget
                 File.Copy(image, Path.Combine(building, name));
                 var manifest = BuildManifest(fallbackName ?? entry?.Name ?? Path.GetFileNameWithoutExtension(source), name, entry?.Rows ?? 0, entry?.Animations);
                 File.WriteAllText(Path.Combine(building, "pet.json"), manifest.ToString());
-                Directory.Move(building, folder);
+                PublishImport(building, folder, cancellation);
             }
             finally { if (Directory.Exists(building)) try { Directory.Delete(building, true); } catch (Exception ex) when (IsImportError(ex)) { } }
             return Path.Combine(folder, "pet.json");
+        }
+
+        internal static void PublishImport(string building, string folder, CancellationToken cancellation)
+        {
+            // The only point where a prepared download becomes a visible local character.
+            cancellation.ThrowIfCancellationRequested();
+            Directory.Move(building, folder);
         }
 
         // A clean pet.json for a copied character: name, its image (spritesheet or single picture), format and extra actions.
@@ -730,7 +743,7 @@ namespace ScheduleWidget
         /// Reads an exported character (.zip): pet.json at the top or in one folder, plus the image it names. Only those two
         /// small files are unpacked (into a temp folder, never outside it), then they go through the normal pet.json import.
         /// </summary>
-        private static string ImportZip(string zipPath, string destinationDirectory, string folderId, bool allowCodex)
+        private static string ImportZip(string zipPath, string destinationDirectory, string folderId, bool allowCodex, CancellationToken cancellation)
         {
             string full = Path.GetFullPath(zipPath);
             if (new Uri(full).IsUnc || !File.Exists(full) || new FileInfo(full).Length > 30 * 1024 * 1024)
@@ -768,7 +781,7 @@ namespace ScheduleWidget
                         string inner = prefix.Replace('\\', '/').Trim('/');
                         fallback = inner.Length > 0 ? inner : Path.GetFileNameWithoutExtension(full);
                     }
-                    return ImportCore(manifestPath, destinationDirectory, folderId, fallback, allowCodex);
+                    return ImportCore(manifestPath, destinationDirectory, folderId, fallback, allowCodex, cancellation);
                 }
             }
             catch (InvalidDataException ex) { throw new InvalidOperationException("캐릭터 파일(.zip)을 읽을 수 없습니다. " + ex.Message, ex); }

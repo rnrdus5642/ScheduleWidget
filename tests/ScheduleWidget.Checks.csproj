@@ -18,6 +18,7 @@
   <ItemGroup>
     <Reference Include="System" />
     <Reference Include="System.Core" />
+    <Reference Include="System.Drawing" />
     <Reference Include="System.Net.Http" />
     <Reference Include="System.Security" />
     <Reference Include="System.Xaml" />
@@ -39,9 +40,19 @@
     <Compile Include="MediaWatchChecks.cs" />
     <Compile Include="SettingsScopeChecks.cs" />
     <Compile Include="SettingsRuntimeChecks.cs" />
+    <Compile Include="SettingsDismissChecks.cs" />
+    <Compile Include="PlaylistEditorChecks.cs" />
+    <Compile Include="RenderRecoveryChecks.cs" />
+    <Compile Include="ReviewRegressionChecks.cs" />
+    <Compile Include="HardeningChecks.cs" />
     <Compile Include="CalendarModeChecks.cs" />
+    <Compile Include="CalendarPetModeChecks.cs" />
     <Compile Include="CalendarRangeChecks.cs" />
     <Compile Include="DisplayInputChecks.cs" />
+    <Compile Include="BrowserInputChecks.cs" />
+    <Compile Include="ConnectivityChecks.cs" />
+    <Compile Include="ScheduleEnterChecks.cs" />
+    <Compile Include="CalendarMonitorChecks.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>

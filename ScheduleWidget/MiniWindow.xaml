@@ -84,7 +84,11 @@
                                         <DataTrigger Binding="{Binding IsCompleted}" Value="True"><Setter Property="TextDecorations" Value="Strikethrough"/></DataTrigger>
                                     </Style.Triggers></Style></TextBlock.Style>
                                 </TextBlock>
-                                <TextBlock Grid.Column="2" Text="{Binding DDay}" FontSize="10" Margin="5,0,0,0" VerticalAlignment="Center"/>
+                                <TextBlock x:Name="RangeDDay" Grid.Column="2" Text="{Binding DDay}" FontSize="{DynamicResource CompactDDayFontSize}" Margin="5,0,0,0" VerticalAlignment="Center">
+                                    <TextBlock.Style><Style TargetType="TextBlock"><Style.Triggers>
+                                        <DataTrigger Binding="{Binding DDay}" Value=""><Setter Property="Visibility" Value="Collapsed"/></DataTrigger>
+                                    </Style.Triggers></Style></TextBlock.Style>
+                                </TextBlock>
                                 <TextBlock Grid.Column="3" Text="{Binding After}" Margin="3,0,0,0" FontWeight="Bold"/>
                             </Grid>
                         </Border>
@@ -317,10 +321,36 @@
                             </Button>
                             <TextBlock x:Name="MonthLabel" Grid.Column="2" Visibility="Collapsed" HorizontalAlignment="Center" VerticalAlignment="Center"
                                        FontSize="15" FontWeight="SemiBold" Foreground="{DynamicResource MiniInkBrush}"/>
-                            <!-- Settings and the month toggle. -->
-                            <Button x:Name="HeaderSettingsButton" Grid.Column="3" Margin="0,0,1,0" Style="{StaticResource WeekArrow}" Click="Settings_Click" AutomationProperties.Name="설정">
-                                <TextBlock Text="⚙" FontFamily="Segoe UI Symbol" FontSize="13" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type Button}}}"/>
-                            </Button>
+                            <!-- Offline status is shown only while Windows reports no Internet access. -->
+                            <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center">
+                                <ContentControl x:Name="OfflineIndicator" Width="20" Height="24" Margin="0,0,2,0" Visibility="Collapsed"
+                                                Focusable="False" AutomationProperties.Name="오프라인" AutomationProperties.LiveSetting="Polite"
+                                                AutomationProperties.HelpText="인터넷에 연결되어 있지 않습니다. 일정은 이 PC에 저장됩니다."
+                                                ToolTipService.InitialShowDelay="250">
+                                    <ContentControl.ToolTip>
+                                        <TextBlock MaxWidth="235" TextWrapping="Wrap"
+                                                   Text="오프라인&#10;일정은 이 PC에 저장됩니다.&#10;구글 연동을 켜 두었다면 연결 복구 후 다시 시도합니다."/>
+                                    </ContentControl.ToolTip>
+                                    <Border Background="Transparent">
+                                        <Canvas Width="16" Height="16" HorizontalAlignment="Center" VerticalAlignment="Center" Opacity="0.8">
+                                            <Ellipse Width="12" Height="12" Canvas.Left="2" Canvas.Top="2"
+                                                     Stroke="{DynamicResource MiniInkBrush}" StrokeThickness="1.3"/>
+                                            <Path Data="M8,2 C4.5,5 4.5,11 8,14 M8,2 C11.5,5 11.5,11 8,14 M2,8 L14,8"
+                                                  Stroke="{DynamicResource MiniInkBrush}" StrokeThickness="1"/>
+                                            <Path Data="M1,1 L15,15" Stroke="{DynamicResource MiniHeaderBrush}" StrokeThickness="3.8"/>
+                                            <Path Data="M1,1 L15,15" Stroke="{DynamicResource MiniInkBrush}" StrokeThickness="1.6"
+                                                  StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
+                                        </Canvas>
+                                    </Border>
+                                </ContentControl>
+                                <Button x:Name="HeaderSettingsButton" Margin="0,0,1,0" Style="{StaticResource WeekArrow}" Click="Settings_Click" AutomationProperties.Name="설정">
+                                    <Grid>
+                                        <TextBlock Text="⚙" FontFamily="Segoe UI Symbol" FontSize="13" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type Button}}}"/>
+                                        <Ellipse x:Name="SettingsWarningBadge" Width="6" Height="6" Fill="#E55353" Visibility="Collapsed"
+                                                 HorizontalAlignment="Right" VerticalAlignment="Top" IsHitTestVisible="False"/>
+                                    </Grid>
+                                </Button>
+                            </StackPanel>
                             <!-- Toggle between the compact range and a complete month. -->
                             <Button x:Name="MonthViewButton" Grid.Column="4" Margin="0,0,2,0" Style="{StaticResource WeekArrow}" Click="ToggleMonthView_Click" ToolTip="한 달 전체 보기" AutomationProperties.Name="한 달 전체 보기">
                                 <Path Data="M1,3 L13,3 13,13 1,13 Z M1,6 L13,6 M4,1 L4,4 M10,1 L10,4 M4,9 L5,9 M9,9 L10,9" Width="14" Height="14"
@@ -376,10 +406,16 @@
                                                         </Style.Triggers></Style></Grid.Style>
                                                         <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                                                         <TextBlock Text="{Binding Time}" Foreground="{Binding BlockInk}" FontSize="10" TextTrimming="CharacterEllipsis"/>
-                                                        <TextBlock Grid.Column="1" Text="{Binding DDay}" Foreground="{Binding BlockInk}" FontSize="10" FontWeight="Bold" Margin="4,0,0,0"/>
+                                                        <TextBlock x:Name="WeekEventDDay" Grid.Column="1" Text="{Binding DDay}" Foreground="{Binding BlockInk}"
+                                                                   FontSize="{DynamicResource CompactDDayFontSize}" FontWeight="Bold" Margin="4,0,0,0">
+                                                            <TextBlock.Style><Style TargetType="TextBlock"><Style.Triggers>
+                                                                <DataTrigger Binding="{Binding DDay}" Value=""><Setter Property="Visibility" Value="Collapsed"/></DataTrigger>
+                                                            </Style.Triggers></Style></TextBlock.Style>
+                                                        </TextBlock>
                                                     </Grid>
-                                                    <TextBlock Text="{Binding Title, Converter={StaticResource KeepAll}}" Foreground="{Binding BlockInk}" FontSize="11" LineHeight="14" LineStackingStrategy="BlockLineHeight"
-                                                               TextWrapping="Wrap" TextTrimming="CharacterEllipsis" MaxHeight="28">
+                                                    <TextBlock x:Name="WeekEventTitle" Text="{Binding Title, Converter={StaticResource KeepAll}}" Foreground="{Binding BlockInk}"
+                                                               FontSize="{DynamicResource CompactTitleFontSize}" LineHeight="{DynamicResource CompactTitleLineHeight}" LineStackingStrategy="BlockLineHeight"
+                                                               TextWrapping="Wrap" TextTrimming="CharacterEllipsis" MaxHeight="{DynamicResource CompactTitleMaxHeight}">
                                                         <TextBlock.Style><Style TargetType="TextBlock"><Style.Triggers>
                                                             <DataTrigger Binding="{Binding IsCompleted}" Value="True"><Setter Property="TextDecorations" Value="Strikethrough"/></DataTrigger>
                                                         </Style.Triggers></Style></TextBlock.Style>
@@ -453,7 +489,7 @@
                                                                     <DataTrigger Binding="{Binding HasTime}" Value="False"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger>
                                                                 </Style.Triggers></Style></TextBlock.Style>
                                                             </TextBlock>
-                                                            <TextBlock x:Name="MonthEventTitle" Grid.Column="1" Text="{Binding Title}" FontSize="{DynamicResource TitleFontSize}"
+                                                            <TextBlock x:Name="MonthEventTitle" Grid.Column="1" Text="{Binding Title}" FontSize="{DynamicResource MonthTitleFontSize}"
                                                                        Foreground="{Binding Ink}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center">
                                                                 <TextBlock.Style><Style TargetType="TextBlock"><Style.Triggers>
                                                                     <DataTrigger Binding="{Binding IsCompleted}" Value="True"><Setter Property="TextDecorations" Value="Strikethrough"/></DataTrigger>
@@ -713,7 +749,7 @@
                             <Path Data="M1,1 L11,11 M11,1 L1,11" Stroke="{DynamicResource AuxInkBrush}" StrokeThickness="1.5" Width="12" Height="12"/>
                         </Button>
                     </Grid>
-                    <ScrollViewer MaxHeight="220" VerticalScrollBarVisibility="Auto">
+                    <ScrollViewer x:Name="DaySchedulesScroll" MaxHeight="220" VerticalScrollBarVisibility="Auto">
                         <ItemsControl x:Name="DaySchedules">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
@@ -767,7 +803,8 @@
                     <TextBlock Text="제목" Style="{StaticResource AuxCaption}" FontSize="11"/>
                     <TextBox x:Name="MiniTitleInput" MaxHeight="120" Padding="10,5" Margin="0,3,0,7" Style="{StaticResource AuxTextBox}"
                              TextWrapping="Wrap" AcceptsReturn="False" VerticalScrollBarVisibility="Auto"
-                             AutomationProperties.Name="미니 일정 제목"/>
+                             PreviewKeyDown="MiniScheduleInput_PreviewKeyDown" AutomationProperties.Name="미니 일정 제목"
+                             AutomationProperties.HelpText="Enter 키로 일정을 저장합니다."/>
                     <TextBlock Text="날짜" Style="{StaticResource AuxCaption}" FontSize="11"/>
                     <!-- SafeDatePicker: a DatePicker that screen readers / UI Automation can't crash (this one sits in a popup). -->
                     <local:SafeDatePicker x:Name="MiniDateInput" Height="34" Margin="0,3,0,3" SelectedDateFormat="Short"
@@ -779,7 +816,8 @@
                         <CheckBox x:Name="MiniTimeToggle" Content="시간 지정" IsChecked="False" Style="{StaticResource AuxCheckBox}"
                                   Checked="MiniTimeToggle_Changed" Unchecked="MiniTimeToggle_Changed"/>
                         <TextBox x:Name="MiniTimeInput" Text="09:00" Width="72" Height="36" Padding="8,2" Margin="8,0,0,0"
-                                 IsEnabled="False" Style="{StaticResource AuxTextBox}" AutomationProperties.Name="미니 일정 시간"/>
+                                 IsEnabled="False" Style="{StaticResource AuxTextBox}" PreviewKeyDown="MiniScheduleInput_PreviewKeyDown"
+                                 AutomationProperties.Name="미니 일정 시간"/>
                         <!-- 여러 날: shows 종료 날짜 below (10/8 ~ 10/10). -->
                         <CheckBox x:Name="MiniRangeToggle" Content="여러 날" IsChecked="False" Style="{StaticResource AuxCheckBox}" Margin="14,0,0,0"
                                   ToolTip="여러 날 이어지는 일정 (종료 날짜 선택)" Checked="MiniRangeToggle_Changed" Unchecked="MiniRangeToggle_Changed"/>
@@ -797,7 +835,7 @@
                         <Button Content="취소" Width="58" Height="28" Margin="0,0,6,0" Padding="4,0"
                                 Style="{StaticResource AuxCancelCompactButton}" Click="CancelMiniSchedule_Click"/>
                         <Button Content="저장" Width="58" Height="28" Padding="4,0"
-                                Style="{StaticResource AuxSaveCompactButton}" Click="SaveMiniSchedule_Click"/>
+                                Style="{StaticResource AuxSaveCompactButton}" Click="SaveMiniSchedule_Click" ToolTip="Enter로 저장"/>
                     </StackPanel>
                     </StackPanel>
                     <!-- The editor's message line while the editor is folded away: what 완료, 삭제 or 저장 just did ("…일정을

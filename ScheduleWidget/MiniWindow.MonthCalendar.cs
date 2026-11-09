@@ -29,11 +29,12 @@ namespace ScheduleWidget
             var previous = CaptureCalendarBoard();
             if (IsMonthViewOpen) data.MiniMonthBoard = previous;
             else data.MiniBoard = previous;
-            var desired = open ? data.MiniMonthBoard : data.MiniBoard;
+            var desired = PreferredMonitorModeBoard(open) ?? (open ? data.MiniMonthBoard : data.MiniBoard);
             var area = CalendarWorkArea(previous);
             if (!ValidCalendarBoard(desired)) desired = open ? NewMonthBoard(previous) : previous;
             double anchor = open ? .5 : CollapseCalendarAnchor(previous, desired, area);
             var target = AnchorCalendarBoard(previous, desired, area, open, anchor);
+            PrepareCalendarPetMode(previous, target, open);
             if (open)
             {
                 double extraHeight = target.Height - previous.Height;
@@ -56,6 +57,7 @@ namespace ScheduleWidget
             }
             try
             {
+                ActivateCalendarPetMode(open);
                 data.MiniMonthView = open;
                 ApplyCalendarModeVisibility(open);
                 ResizeCalendarBoard(target, updateLayout: false);
@@ -141,7 +143,7 @@ namespace ScheduleWidget
         private void UpdateMonthCalendarLayout()
         {
             if (CalendarSheet == null) return;
-            double font = FiniteRange(scheduleAppearance.TitleFontSize, 10, 24, 14);
+            double font = FiniteRange(scheduleAppearance.EffectiveMonthTitleFontSize, 10, 24, 14);
             double rowHeight = Math.Ceiling(font * 1.3) + 5;
             Resources["MonthEventRowHeight"] = rowHeight;
             if (MonthDays == null || MonthDays.Items.Count == 0) return;

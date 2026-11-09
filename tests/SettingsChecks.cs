@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
@@ -72,6 +72,13 @@ namespace ScheduleWidget.Checks
                 for (DependencyObject node = Control<FrameworkElement>(mini, "MonthCalendarPanel"); node != null; node = VisualTreeHelper.GetParent(node))
                     if (node is UIElement element) opacity *= element.Opacity;
                 Require(Math.Abs(opacity - .45) < .01, "Visible agenda opacity remains " + opacity + "; only legacy MainBorder changes.");
+                Call(mini, "NewMiniSchedule_Click", mini, ClickArgs());
+                opacity = 1;
+                for (DependencyObject node = Control<TextBox>(mini, "MiniTitleInput"); node != null; node = VisualTreeHelper.GetParent(node))
+                    if (node is UIElement element) opacity *= element.Opacity;
+                Require(Math.Abs(opacity - .45) < .001 && Control<FrameworkElement>(mini, "BlockBubble").Opacity == .45,
+                    "Schedule input or details ignored opacity, or multiplied it twice.");
+                Call(mini, "CancelMiniSchedule_Click", mini, ClickArgs());
             });
             Run("AUDIT 화면/제목 글자 크기 실제 표시", () => {
                 Control<Slider>(main, "InlineTitleFontSizeSlider").Value = 20; LayoutAudit(mini);
@@ -108,7 +115,15 @@ namespace ScheduleWidget.Checks
                 Require(data.MiniFlipEffect == effect, "Flip selection not persisted.");
             });
             Run("AUDIT 화면/일정 블록 D-day 켜기 끄기", () => {
-                foreach (bool enabled in new[] { false, true }) { Open(); Control<System.Windows.Controls.Primitives.ToggleButton>(main, "InlineBlockDDaySwitch").IsChecked = enabled; Save();
+                foreach (bool enabled in new[] { false, true }) { Open();
+                    var size = Control<Slider>(main, "InlineCompactDDayFontSizeSlider");
+                    double previousSize = size.Value;
+                    Control<System.Windows.Controls.Primitives.ToggleButton>(main, "InlineBlockDDaySwitch").IsChecked = enabled;
+                    Require(size.IsEnabled == enabled && Control<Grid>(main, "SettingsCompactDdaySizeRow").Opacity == (enabled ? 1 : .4) &&
+                        size.Value == previousSize, "D-Day visibility did not disable and dim its size row while retaining the value.");
+                    Require(Control<Slider>(main, "InlineCompactTitleFontSizeSlider").IsEnabled && Control<Slider>(main, "InlineDDayFontSizeSlider").IsEnabled,
+                        "Disabling compact D-Day affected unrelated size controls.");
+                    Save();
                     var cells = Control<ItemsControl>(mini, "WeekDays").Items.Cast<MiniWindow.DayCell>();
                     var block = cells.SelectMany(c => ((System.Collections.IEnumerable)c.TaskBlocks).Cast<object>())
                         .Single(b => ((ScheduleItem)b.GetType().GetProperty("Item").GetValue(b)).Title == "Audit title");
@@ -143,11 +158,6 @@ namespace ScheduleWidget.Checks
                     Require(service.TryDisableStartup(out error), error); Require(service.IsStartupEnabled(out enabled, out error) && !enabled, "Startup removal failed."); }
                 finally { Microsoft.Win32.Registry.CurrentUser.DeleteSubKeyTree(key, false); }
             });
-            Run("AUDIT 음악/달력 음악 막대 표시 켜기 끄기", () => {
-                Open(); var box = (CheckBox)Field(main, "settingsPlayerVisible");
-                foreach (bool shown in new[] { false, true }) { box.IsChecked = shown; box.RaiseEvent(ClickArgs()); Require(data.MiniPlayerVisible == shown && Control<FrameworkElement>(mini, "PlayerBar").Visibility == (shown ? Visibility.Visible : Visibility.Collapsed), "Player bar toggle failed."); }
-                Cancel(); Require(data.MiniPlayerVisible, "Closing settings reverted an immediate music option.");
-            });
             Run("AUDIT 공통/저장 실패 시 설정창 유지", () => {
                 Open(); var previousStore = Field(main, "dataStore");
                 SetField(main, "dataStore", new AuditFailingStore());
@@ -158,10 +168,30 @@ namespace ScheduleWidget.Checks
                 finally { SetField(main, "dataStore", previousStore); SetField(main, "_saveErrorShown", false); if (Field(main, "settingsHost") != null) Cancel(); }
             });
             SettingsRetryChecks(main, mini, data);
+            Run("Fatal render recovery saves managed data without showing UI or overwriting unavailable data", () =>
+            {
+                var previous = (IAppDataStore)Field(main, "dataStore");
+                bool unavailable = (bool)Field(main, "_dataUnavailable");
+                var controlled = new ControlledSettingsStore(previous) { Fail = false };
+                SetField(main, "dataStore", controlled);
+                try
+                {
+                    main.SaveForRenderRecovery();
+                    Require(controlled.Writes == 1 && previous.LoadData().Data.Schedules.Count == data.Schedules.Count,
+                        "The recovery path did not preserve schedules.");
+                    SetField(main, "_dataUnavailable", true);
+                    main.SaveForRenderRecovery();
+                    Require(controlled.Writes == 1, "Recovery overwrote data that had failed to load.");
+                    SetField(main, "_dataUnavailable", false); controlled.Fail = true;
+                    main.SaveForRenderRecovery();
+                    Require(controlled.Writes == 2 && !main.IsVisible, "Recovery saving touched the broken view or failed to return.");
+                }
+                finally { SetField(main, "dataStore", previous); SetField(main, "_dataUnavailable", unavailable); }
+            });
             ScheduleMenuChecks(main, mini, data);
             AppearancePersistenceCheck(main, mini, data);
             HostedSettingsAudit(main, mini, data);
-            ContactAudit(); PetAudit(); MusicAudit();
+            ContactAudit(); PetAudit(); MusicAudit(); PlaylistPopupAudit();
             Run("Personal character changes preserve other pets and shared placement", CharacterSettingScopes);
             Run("Provider tabs preserve independent drafts, recipients and saved credentials", ProviderSettingScopes);
             Console.WriteLine("AUDIT MANUAL: 실제 Windows 로그인 자동 실행, 전역 단축키 호출, 화면 위 고정/모니터 전환, 효과 1~6 애니메이션, 캐릭터 파일 선택/가져오기/내보내기 및 실제 WebView2/타이핑 반응/드래그, 파일 선택창과 삭제 확인창, YouTube 네트워크 재생/목록 가져오기, 구글 OAuth/실제 캘린더·Drive 동기화, PC 알림 실제 표시, Telegram/Kakao 실제 전송, 휴대폰·전화·도움말 앱 열기, 업데이트 다운로드·설치는 실행하지 않음.");
@@ -330,16 +360,21 @@ namespace ScheduleWidget.Checks
                 string[] colors = { "BackgroundColor", "CardColor", "TextColor", "TodayColor", "FutureColor", "PastColor" };
                 try
                 {
+                    // Legacy custom palettes remain readable; new settings expose themes instead of per-color editing.
+                    foreach (string color in colors) typeof(AppearanceSettings).GetProperty(color).SetValue(data.Appearance, "#314159");
                     var settings = OpenSettingsForCheck(main);
                     Control<Slider>(main, "InlineOpacitySlider").Value = 60;
+                    Control<Slider>(main, "InlineCompactTitleFontSizeSlider").Value = 16;
+                    Control<Slider>(main, "InlineCompactDDayFontSizeSlider").Value = 12;
+                    Control<Slider>(main, "InlineMonthTitleFontSizeSlider").Value = 22;
                     Control<Slider>(main, "InlineTitleFontSizeSlider").Value = 19;
                     Control<Slider>(main, "InlineDDayFontSizeSlider").Value = 17;
-                    SetField(main, "colorPickerOverride", (Func<string, string>)(_ => "#314159"));
-                    foreach (Button button in Control<System.Windows.Controls.Primitives.UniformGrid>(main, "SettingsColorButtons").Children)
-                        button.RaiseEvent(ClickArgs());
+                    Require(main.FindName("SettingsColorButtons") == null && main.FindName("SettingsColorHint") == null,
+                        "The removed detailed palette editor is still present.");
                     Call(main, "InlineSettingsApplyButton_Click", settings, ClickArgs());
                     var loaded = ((IAppDataStore)Field(main, "dataStore")).LoadData().Data;
-                    Require(loaded.Appearance.Opacity == .6 && loaded.Appearance.TitleFontSize == 19 && loaded.Appearance.DDayFontSize == 17,
+                    Require(loaded.Appearance.Opacity == .6 && loaded.Appearance.TitleFontSize == 19 && loaded.Appearance.DDayFontSize == 17 &&
+                        loaded.Appearance.CompactTitleFontSize == 16 && loaded.Appearance.CompactDDayFontSize == 12 && loaded.Appearance.MonthTitleFontSize == 22,
                         "Appearance sizes/opacity were not persisted.");
                     foreach (string color in colors)
                         Require((string)typeof(AppearanceSettings).GetProperty(color).GetValue(loaded.Appearance) == "#314159", "Color not persisted: " + color);
@@ -349,16 +384,40 @@ namespace ScheduleWidget.Checks
                         reloaded.SetMonthViewOpen(true);
                         LayoutAudit(reloaded);
                         var cell = VisualDescendants<Button>(Control<ItemsControl>(reloaded, "MonthDays")).First();
-                        Require(Control<FrameworkElement>(reloaded, "MiniRoot").Opacity == .6 && (double)reloaded.Resources["TitleFontSize"] == 19 &&
-                            (double)reloaded.Resources["DDayFontSize"] == 17 && ((SolidColorBrush)cell.Background).Color.ToString().EndsWith("314159"), "A reopened calendar ignored saved appearance.");
+                        Require(Control<FrameworkElement>(reloaded, "MiniRoot").Opacity == .6 && Control<FrameworkElement>(reloaded, "DayBubble").Opacity == .6 &&
+                            (double)reloaded.Resources["TitleFontSize"] == 19 &&
+                            (double)reloaded.Resources["DDayFontSize"] == 17 && (double)reloaded.Resources["CompactTitleFontSize"] == 16 &&
+                            (double)reloaded.Resources["CompactDDayFontSize"] == 12 && (double)reloaded.Resources["MonthTitleFontSize"] == 22 &&
+                            ((SolidColorBrush)cell.Background).Color.ToString().EndsWith("314159"),
+                            "A reopened calendar ignored saved appearance.");
                     }
                     finally { reloaded.Close(); }
                     OpenSettingsForCheck(main);
+                    Require(Control<Slider>(main, "InlineCompactTitleFontSizeSlider").Value == 16 &&
+                        Control<Slider>(main, "InlineCompactDDayFontSizeSlider").Value == 12 &&
+                        Control<Slider>(main, "InlineMonthTitleFontSizeSlider").Value == 22, "Reopening settings lost the independent sizes.");
                     Control<ComboBox>(main, "InlinePresetCombo").SelectedIndex = 1;
                     Control<Slider>(main, "InlineOpacitySlider").Value = 30;
+                    Control<Slider>(main, "InlineCompactTitleFontSizeSlider").Value = 24;
+                    Control<Slider>(main, "InlineCompactDDayFontSizeSlider").Value = 24;
+                    Control<Slider>(main, "InlineMonthTitleFontSizeSlider").Value = 10;
                     Call(main, "CloseInlineSettings", false);
                     Require(data.Appearance.ThemePreset == "Light" && mini.ThemeName == "Light" && Control<FrameworkElement>(mini, "MiniRoot").Opacity == .6 &&
+                        Control<FrameworkElement>(mini, "DayBubble").Opacity == .6 &&
+                        data.Appearance.CompactTitleFontSize == 16 && data.Appearance.CompactDDayFontSize == 12 &&
+                        data.Appearance.MonthTitleFontSize == 22 && (double)mini.Resources["MonthTitleFontSize"] == 22 &&
+                        (double)mini.Resources["CompactTitleFontSize"] == 16 && (double)mini.Resources["CompactDDayFontSize"] == 12 &&
                         ((SolidColorBrush)Control<Border>(mini, "MonthCalendarPanel").Background).Color.ToString().EndsWith("314159"), "Cancelling a later preview lost saved custom appearance.");
+                    OpenSettingsForCheck(main);
+                    Call(main, "ResetUnifiedSettingsPage", SettingsPage.Appearance);
+                    Require(Control<Slider>(main, "InlineCompactTitleFontSizeSlider").Value == 11 &&
+                        Control<Slider>(main, "InlineCompactDDayFontSizeSlider").Value == 10 &&
+                        Control<Slider>(main, "InlineTitleFontSizeSlider").Value == 14 && Control<Slider>(main, "InlineMonthTitleFontSizeSlider").Value == 14,
+                        "Appearance reset did not restore every screen's defaults.");
+                    Call(main, "CloseInlineSettings", false);
+                    Require((double)mini.Resources["CompactTitleFontSize"] == 16 && (double)mini.Resources["TitleFontSize"] == 19 &&
+                        (double)mini.Resources["MonthTitleFontSize"] == 22,
+                        "Cancelling an appearance reset lost independent saved sizes.");
                 }
                 finally
                 {
@@ -425,9 +484,35 @@ namespace ScheduleWidget.Checks
 
         private static void MusicAudit()
         {
-            var data = new MusicSettings(); int saves = 0; var music = new MusicWindow(data, () => { saves++; return true; }, () => { }, embedded: true);
+            var data = new MusicSettings(); int saves = 0;
+            var stored = new AppData { Music = data }; var store = Store("audit-music-editor");
+            var music = new MusicWindow(data, () => { saves++; store.SaveData(stored); return true; }, () => { }, embedded: true);
             try {
-                Run("AUDIT 음악/새 목록 및 이름 변경", () => { Control<TextBox>(music, "PlaylistName").Text = "Audit playlist"; Call(music, "CreatePlaylist_Click", music, ClickArgs()); Require(music.CurrentPlaylist.Name == "Audit playlist", "Playlist create failed."); Control<TextBox>(music, "PlaylistName").Text = "Renamed"; Call(music, "RenamePlaylist_Click", music, ClickArgs()); Require(music.CurrentPlaylist.Name == "Renamed", "Playlist rename failed."); });
+                Run("AUDIT 음악/팝업에서 여러 목록 추가와 수정 및 취소", () => {
+                    int count = data.Playlists.Count;
+                    var firstEditor = music.CreatePlaylistEditor(true);
+                    Require(!firstEditor.TryCommit() && data.Playlists.Count == count, "An empty name was accepted.");
+                    Control<TextBox>(firstEditor, "PlaylistName").Text = " 집중할 때 ";
+                    firstEditor.AddFiles(new[] { SilentWave(), SilentWave() });
+                    Require(data.Playlists.Count == count, "Adding files in a popup changed the saved playlists.");
+                    Require(firstEditor.TryCommit(), "The new playlist did not save."); firstEditor.Close();
+                    var first = music.CurrentPlaylist;
+                    var secondEditor = music.CreatePlaylistEditor(true);
+                    Control<TextBox>(secondEditor, "PlaylistName").Text = "휴식";
+                    Require(secondEditor.TryCommit(), "The second playlist did not save."); secondEditor.Close();
+                    var second = music.CurrentPlaylist;
+                    var edit = music.CreatePlaylistEditor(false);
+                    Require(Control<TextBox>(edit, "PlaylistName").Text == "휴식", "Edit opened another name.");
+                    Control<TextBox>(edit, "PlaylistName").Text = "휴식 음악";
+                    Require(edit.TryCommit(), "Rename did not save."); edit.Close();
+                    var cancel = music.CreatePlaylistEditor(false);
+                    Control<TextBox>(cancel, "PlaylistName").Text = "취소할 이름";
+                    cancel.AddFiles(new[] { SilentWave() }); cancel.Close();
+                    var reloaded = store.LoadData().Data.Music;
+                    Require(reloaded.Playlists.Count == count + 2 && first.Id != second.Id && first.Name == "집중할 때" && first.Tracks.Count == 2 &&
+                        second.Name == "휴식 음악" && second.Tracks.Count == 0 && reloaded.Playlists.Single(p => p.Id == second.Id).Name == "휴식 음악" &&
+                        reloaded.SelectedPlaylistId == second.Id, "A popup cancelled or overwrote another playlist or lost saved tracks.");
+                });
                 Run("AUDIT 음악/파일 추가 순서 변경 삭제", () => { Call(music, "InsertFiles", new[] { SilentWave(), SilentWave() }, 0); var list = music.CurrentPlaylist.Tracks; var first = list[0]; Call(music, "MoveTrackTo", first, 1); Require(list[1] == first, "Track reorder failed."); Call(music, "RemoveTrack", first); Require(list.Count == 1 && !list.Contains(first), "Track deletion failed."); });
                 Run("AUDIT 음악/음량 및 반복 랜덤 한 곡 반복", () => { music.SetVolume(.37); Require(Math.Abs(data.Volume - .37) < .001, "Volume not saved."); foreach (string name in new[] { "Repeat", "Shuffle", "RepeatOne" }) { Control<CheckBox>(music, name + "Toggle").IsChecked = true; Call(music, name + "_Click", music, ClickArgs()); Require((bool)typeof(MusicSettings).GetProperty(name).GetValue(data), name + " failed."); } });
                 Run("AUDIT 음악/재생 옵션 초기화 확인 및 목록 보존", () => { int count = data.Playlists.Count; Call(music, "PlayOptionsReset_Click", music, ClickArgs()); Require(Math.Abs(data.Volume - .37) < .001, "Music reset skipped confirmation."); Call(music, "PlayOptionsReset_Click", music, ClickArgs()); var defaults = new MusicSettings(); Require(data.Volume == defaults.Volume && data.Repeat == defaults.Repeat && data.Shuffle == defaults.Shuffle && data.RepeatOne == defaults.RepeatOne && data.Playlists.Count == count && saves > 0, "Music reset removed playlists or failed defaults."); });
@@ -440,6 +525,26 @@ namespace ScheduleWidget.Checks
                     ((System.Threading.Tasks.Task)music.GetType().GetMethod("AdvanceAsync", BindingFlags.Instance | BindingFlags.NonPublic).Invoke(music, new object[] { 1, false })).GetAwaiter().GetResult(); Require(music.PlayingTrack == second, "Next failed.");
                     ((System.Threading.Tasks.Task)music.GetType().GetMethod("AdvanceAsync", BindingFlags.Instance | BindingFlags.NonPublic).Invoke(music, new object[] { -1, false })).GetAwaiter().GetResult(); Require(music.PlayingTrack == first, "Previous failed.");
                     Call(music, "StopPlayback"); Require(!music.IsPlaying, "Stop failed.");
+                });
+                Run("Popup imports multiple YouTube links in order and only applies them on save", () => {
+                    int lookups = 0, count = music.CurrentPlaylist.Tracks.Count;
+                    var editor = music.CreatePlaylistEditor(false);
+                    SetField(editor, "youTubeTitleLookupOverride", (Func<string, System.Threading.Tasks.Task<string>>)(id => {
+                        lookups++; return System.Threading.Tasks.Task.FromResult("제목 " + id);
+                    }));
+                    try {
+                        var links = Control<TextBox>(editor, "YouTubeLinks");
+                        links.Text = "https://www.youtube.com/watch?v=dQw4w9WgXcQ\r\nnot-a-youtube-link";
+                        editor.ImportYouTubeAsync().GetAwaiter().GetResult();
+                        Require(lookups == 0 && editor.DraftTracks.Count == count, "An invalid batch partially imported.");
+                        links.Text = " https://www.youtube.com/watch?v=dQw4w9WgXcQ \r\n\r\nhttps://youtu.be/aqz-KE-bpKQ\n";
+                        editor.ImportYouTubeAsync().GetAwaiter().GetResult();
+                        Require(lookups == 2 && editor.DraftTracks.Count == count + 2 && music.CurrentPlaylist.Tracks.Count == count &&
+                            links.Text == "" && links.IsEnabled, "Import changed the live playlist or lost a link.");
+                        Require(editor.TryCommit(), "The imported batch could not be saved.");
+                        var tracks = store.LoadData().Data.Music.Playlists.Single(p => p.Id == music.CurrentPlaylist.Id).Tracks;
+                        Require(tracks.Count == count + 2 && tracks[count].Title == "제목 dQw4w9WgXcQ" && tracks[count + 1].Title == "제목 aqz-KE-bpKQ", "The saved import lost its order or titles.");
+                    } finally { editor.Close(); }
                 });
             } finally { music.Close(); }
         }

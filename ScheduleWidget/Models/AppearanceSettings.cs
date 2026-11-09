@@ -21,6 +21,13 @@ namespace ScheduleWidget
         public string FutureColor { get; set; } = "#FF64748B";
         public string PastColor { get; set; } = "#FFEF4444";
 
+        // Keep the compact calendar's former fixed sizes when loading settings from older versions.
+        public double CompactTitleFontSize { get; set; } = 11;
+        public double CompactDDayFontSize { get; set; } = 10;
+        // Older settings used TitleFontSize for both month cells and the detail popup.
+        public double? MonthTitleFontSize { get; set; }
+        [Newtonsoft.Json.JsonIgnore]
+        public double EffectiveMonthTitleFontSize => MonthTitleFontSize ?? TitleFontSize;
         public double TitleFontSize { get; set; } = 14;
         public double DDayFontSize { get; set; } = 13;
 

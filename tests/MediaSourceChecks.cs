@@ -47,7 +47,7 @@ namespace ScheduleWidget.Checks
         {
             var main = new MainWindow();
             ((TrayService)Field(main, "trayService")).Dispose();
-            var data = new AppData { MiniCharacterVisible = false, MiniPlayerVisible = true, StartupEnabled = false, BringToFrontHotKeyEnabled = false };
+            var data = new AppData { MiniCharacterVisible = false, MiniPlayerVisible = false, StartupEnabled = false, BringToFrontHotKeyEnabled = false };
             var playlist = new MusicPlaylist { Name = "Own playlist" };
             playlist.Tracks.Add(new MusicTrack { Title = "Embedded track", Source = "https://www.youtube.com/watch?v=dQw4w9WgXcQ" });
             data.Music.Playlists.Add(playlist);

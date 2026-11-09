@@ -6,7 +6,7 @@ using System.Windows.Threading;
 namespace ScheduleWidget
 {
     // A composition browser's native surface can appear after page-ready, or be replaced after a display/session change.
-    // Keep only the known noninteractive pet surface click-through; other WebView2 windows retain their normal input.
+    // Keep noninteractive pet surfaces and invisible about:blank placeholders click-through; other views retain input.
     internal sealed class BrowserWindowInputGuard : IDisposable
     {
         internal static TimeSpan RecheckInterval = TimeSpan.FromSeconds(5);

@@ -10,13 +10,14 @@ namespace ScheduleWidget.Checks
         private static void FixedMusicBar()
         {
             var player = new MusicBarPlayer();
-            var data = new AppData { MiniCharacterVisible = false, MiniPlayerVisible = true };
+            var data = new AppData { MiniCharacterVisible = false, MiniPlayerVisible = false };
             var mini = new MiniWindow(data, () => true, () => { }, player: player);
             try
             {
                 var content = (FrameworkElement)mini.Content;
                 var bar = Control<FrameworkElement>(mini, "PlayerBar");
                 var calendar = Control<FrameworkElement>(mini, "WeekCalendar");
+                Require(bar.Visibility == Visibility.Visible, "A legacy hidden-bar setting hid the playback controls on startup.");
                 void Layout(double width)
                 {
                     mini.Width = width;
@@ -43,6 +44,7 @@ namespace ScheduleWidget.Checks
                         player.Position = TimeSpan.FromSeconds(45);
                         mini.UpdatePlayerBar();
                         Layout(width);
+                        Require(bar.Visibility == Visibility.Visible, "A playback update hid the always-visible music bar.");
                         Require(Math.Abs(bar.ActualHeight - idleBar) < .1 && Math.Abs(calendar.ActualHeight - idleCalendar) < .1,
                             state + " resized the music bar or calendar at width " + width);
                         foreach (string name in new[] { "PlayerPlaylist", "PlayerPrevious", "PlayerPlay", "PlayerNext", "PlayerVolume", "PlayerMode", "SeekSlider" })
@@ -64,14 +66,6 @@ namespace ScheduleWidget.Checks
                 Require(slider.IsEnabled && slider.Template.FindName("PART_Track", slider) != null, "The thin seek track was not constructed.");
                 slider.Value = 60;
                 Require(player.LastSeek == TimeSpan.FromSeconds(60), "The thin progress bar no longer seeks.");
-                double beforeHide = calendar.ActualHeight;
-                mini.SetPlayerVisible(false);
-                Layout(800);
-                Require(calendar.ActualHeight > beforeHide, "Hiding the player did not release its space.");
-                mini.SetPlayerVisible(true);
-                Layout(800);
-                Require(Math.Abs(calendar.ActualHeight - beforeHide) < .1 && Math.Abs(bar.ActualHeight - MiniWindow.PlayerBarHeight) < 1,
-                    "Showing the player did not restore the fixed strip.");
                 Require(!mini.IsVisible, "The player layout check showed a desktop window.");
             }
             finally { mini.Close(); }

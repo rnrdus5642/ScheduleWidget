@@ -35,6 +35,11 @@ namespace ScheduleWidget
         private Task playerInitialization;
         private TaskCompletionSource<bool> shellReady;
 
+
+
+
+
+
         public MusicWindow(MusicSettings settings, Func<bool> save, Action exitApplication, bool embedded = false)
         {
             this.settings = settings;
@@ -53,7 +58,7 @@ namespace ScheduleWidget
             RepeatToggle.IsChecked = settings.Repeat;
             ShuffleToggle.IsChecked = settings.Shuffle;
             RepeatOneToggle.IsChecked = settings.RepeatOne;
-            ExpandPlaylists.IsChecked = settings.ExpandYouTubePlaylists;
+
             RefreshPlaylists(settings.Playlists.FirstOrDefault(p => p.Id == settings.SelectedPlaylistId) ?? settings.Playlists[0]);
             media.MediaOpened += (s, e) =>
             {
@@ -85,6 +90,7 @@ namespace ScheduleWidget
             Closed += (s, e) =>
             {
                 closed = true;
+                playlistEditor?.Close();
                 StopPlayback();
                 media.Close();
                 volumeSaveTimer?.Stop();
@@ -106,6 +112,7 @@ namespace ScheduleWidget
             if (settingsOwner != null) return MusicSettingsContent;
             if (!ReferenceEquals(Content, MusicSettingsContent)) throw new InvalidOperationException("Only the embedded player can be hosted in settings.");
             settingsOwner = owner ?? throw new ArgumentNullException(nameof(owner));
+            PlaybackControls.Visibility = Visibility.Collapsed;
             MusicSettingsContent.Resources.MergedDictionaries.Clear();
             MusicSettingsContent.Resources.MergedDictionaries.Add(Resources);
             Content = null;
@@ -117,6 +124,8 @@ namespace ScheduleWidget
         {
             if (settingsOwner == null) return;
             settingsOwner = null;
+
+            PlaybackControls.Visibility = Visibility.Visible;
             Content = MusicSettingsContent;
             // Keep the existing browser and playback state alive after leaving the music page.
             if (keepPlaying && !closed && playing?.IsYouTube == true) MoveToBackground();
@@ -144,7 +153,8 @@ namespace ScheduleWidget
             playlist = selected;
             settings.SelectedPlaylistId = selected.Id;
             NotifyPlayback();
-            PlaylistName.Text = selected.Name;
+
+
             RefreshTracks();
             if (!loading) save();
         }
@@ -152,6 +162,9 @@ namespace ScheduleWidget
         {
             TrackList.ItemsSource = null;
             TrackList.ItemsSource = playlist?.Tracks;
+            int count = playlist?.Tracks.Count ?? 0;
+            TrackCount.Text = count.ToString(CultureInfo.CurrentCulture) + "곡";
+            EmptyTracksHint.Visibility = count == 0 ? Visibility.Visible : Visibility.Collapsed;
             TrackList.SelectedItem = selected;
             if (selected == null && playlist?.Tracks.Count > 0) TrackList.SelectedIndex = 0;
             ShowSelectedTrack();
@@ -209,37 +222,107 @@ namespace ScheduleWidget
             if (settings.Shuffle) ResetShuffle(track);
             await PlayTrackAsync(track);
         }
-        private void CreatePlaylist_Click(object sender, RoutedEventArgs e)
+        private PlaylistEditorWindow playlistEditor;
+        private void AddPlaylist_Click(object sender, RoutedEventArgs e) => OpenPlaylistEditor(true);
+        private void EditPlaylist_Click(object sender, RoutedEventArgs e) => OpenPlaylistEditor(false);
+
+        internal PlaylistEditorWindow CreatePlaylistEditor(bool create)
         {
-            string name = PlaylistName.Text.Trim();
-            if (name.Length == 0) { MusicStatus.Text = "새 플레이리스트 이름을 입력하세요."; return; }
-            var list = new MusicPlaylist { Name = name };
-            settings.Playlists.Add(list); RefreshPlaylists(list); save();
+            var original = create ? null : playlist;
+            return new PlaylistEditorWindow(original, settings.ExpandYouTubePlaylists, draft => CommitPlaylistEdit(original, draft));
         }
-        private void RenamePlaylist_Click(object sender, RoutedEventArgs e)
+
+        private void OpenPlaylistEditor(bool create, System.Collections.Generic.IEnumerable<string> files = null, int index = int.MaxValue)
         {
-            if (playlist == null || string.IsNullOrWhiteSpace(PlaylistName.Text)) return;
-            playlist.Name = PlaylistName.Text.Trim(); RefreshPlaylists(playlist); save();
+            if (closed) return;
+            if (playlistEditor != null) { playlistEditor.Activate(); return; }
+            var dialog = CreatePlaylistEditor(create);
+            playlistEditor = dialog;
+            try
+            {
+                dialog.Owner = DialogOwner;
+                if (files != null) dialog.AddFiles(files, index);
+                dialog.ShowDialog();
+            }
+            finally { playlistEditor = null; dialog.Close(); }
         }
+
+        private string CommitPlaylistEdit(MusicPlaylist original, PlaylistEdit draft)
+        {
+            if (closed || (original != null && !settings.Playlists.Contains(original))) return "이 플레이리스트는 더 이상 존재하지 않습니다.";
+            var target = original ?? new MusicPlaylist();
+            string oldName = target.Name;
+            var oldTracks = target.Tracks;
+            bool oldExpand = settings.ExpandYouTubePlaylists;
+            Guid oldSelection = settings.SelectedPlaylistId;
+            var selected = original == null ? target : playlist ?? target;
+            target.Name = draft.Name;
+            target.Tracks = draft.Tracks;
+            settings.ExpandYouTubePlaylists = draft.ExpandPlaylists;
+            settings.SelectedPlaylistId = selected.Id;
+            if (original == null) settings.Playlists.Add(target);
+            bool saved = false;
+            try { saved = save(); }
+            finally
+            {
+                if (!saved)
+                {
+                    if (original == null) settings.Playlists.Remove(target);
+                    target.Name = oldName; target.Tracks = oldTracks;
+                    settings.ExpandYouTubePlaylists = oldExpand; settings.SelectedPlaylistId = oldSelection;
+                }
+            }
+            if (!saved) return "플레이리스트를 저장하지 못했습니다. 다시 시도해 주세요.";
+            if (playlist == target && playing != null && !target.Tracks.Contains(playing)) StopPlayback();
+            RefreshSavedPlaylists(selected);
+            MusicStatus.Text = "플레이리스트를 저장했습니다.";
+            return null;
+        }
+
+        private void RefreshSavedPlaylists(MusicPlaylist selected)
+        {
+            bool wasLoading = loading;
+            loading = true;
+            try { RefreshPlaylists(selected); }
+            finally { loading = wasLoading; }
+        }
+
         private void DeletePlaylist_Click(object sender, RoutedEventArgs e)
         {
-            if (playlist == null || MessageBox.Show(DialogOwner, "‘" + playlist.Name + "’ 목록을 삭제할까요? 원본 음악 파일은 유지됩니다.",
+            var selected = playlist;
+            if (selected == null || MessageBox.Show(DialogOwner, "‘" + selected.Name + "’ 플레이리스트를 삭제할까요?\n목록에 담긴 원본 음악 파일은 삭제하지 않습니다.",
                 "플레이리스트 삭제", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
-            StopPlayback(); settings.Playlists.Remove(playlist);
-            if (settings.Playlists.Count == 0) settings.Playlists.Add(new MusicPlaylist());
-            RefreshPlaylists(settings.Playlists[0]); save();
+            DeletePlaylist(selected);
         }
-        private static readonly string[] MusicExtensions = { ".mp3", ".wav", ".wma", ".m4a", ".aac", ".flac", ".ogg", ".aiff", ".aif" };
+
+        internal bool DeletePlaylist(MusicPlaylist selected)
+        {
+            if (closed || selected == null || !settings.Playlists.Contains(selected)) return false;
+            var oldLists = settings.Playlists.ToList();
+            Guid oldSelection = settings.SelectedPlaylistId;
+            settings.Playlists.Remove(selected);
+            if (settings.Playlists.Count == 0) settings.Playlists.Add(new MusicPlaylist());
+            var next = playlist != selected && settings.Playlists.Contains(playlist) ? playlist : settings.Playlists[0];
+            settings.SelectedPlaylistId = next.Id;
+            bool saved = false;
+            try { saved = save(); }
+            finally
+            {
+                if (!saved)
+                {
+                    settings.Playlists.Clear(); settings.Playlists.AddRange(oldLists);
+                    settings.SelectedPlaylistId = oldSelection;
+                }
+            }
+            if (!saved) { MusicStatus.Text = "플레이리스트를 삭제하지 못했습니다. 다시 시도해 주세요."; return false; }
+            if (playlist == selected) StopPlayback();
+            RefreshSavedPlaylists(next);
+            MusicStatus.Text = "플레이리스트를 삭제했습니다.";
+            return true;
+        }
+        internal static readonly string[] MusicExtensions = { ".mp3", ".wav", ".wma", ".m4a", ".aac", ".flac", ".ogg", ".aiff", ".aif" };
         private const string TrackDragFormat = "ScheduleWidget.MusicTrack";
         private Point? trackDragStart;
-
-        private void AddFiles_Click(object sender, RoutedEventArgs e)
-        {
-            var dialog = new OpenFileDialog { Multiselect = true, Title = "음악 파일 선택",
-                Filter = "음악 파일|*" + string.Join(";*", MusicExtensions) + "|모든 파일|*.*" };
-            if (dialog.ShowDialog(DialogOwner) != true) return;
-            InsertFiles(dialog.FileNames, playlist?.Tracks.Count ?? 0);
-        }
 
         private void InsertFiles(System.Collections.Generic.IEnumerable<string> paths, int index)
         {
@@ -252,7 +335,7 @@ namespace ScheduleWidget
         }
 
         // Dropped files plus music files inside dropped folders; files dropped explicitly are kept even with unknown extensions.
-        private static System.Collections.Generic.List<string> DroppedMusicFiles(IDataObject data)
+        internal static System.Collections.Generic.List<string> DroppedMusicFiles(IDataObject data)
         {
             var result = new System.Collections.Generic.List<string>();
             if (!(data.GetData(DataFormats.FileDrop) is string[] items)) return result;
@@ -393,7 +476,7 @@ namespace ScheduleWidget
                 int current = playlist.Tracks.IndexOf(track);
                 MoveTrackTo(track, index > current ? index - 1 : index);
             }
-            else if (e.Data.GetDataPresent(DataFormats.FileDrop)) InsertFiles(DroppedMusicFiles(e.Data), index);
+            else if (e.Data.GetDataPresent(DataFormats.FileDrop)) QueueFileEditor(e.Data, index);
             e.Handled = true;
         }
 
@@ -405,8 +488,21 @@ namespace ScheduleWidget
 
         private void Window_Drop(object sender, DragEventArgs e)
         {
-            if (e.Data.GetDataPresent(DataFormats.FileDrop)) InsertFiles(DroppedMusicFiles(e.Data), playlist?.Tracks.Count ?? 0);
+            if (e.Data.GetDataPresent(DataFormats.FileDrop)) QueueFileEditor(e.Data, int.MaxValue);
             e.Handled = true;
+        }
+
+        private void QueueFileEditor(IDataObject data, int index)
+        {
+            var files = DroppedMusicFiles(data);
+            var owner = DialogOwner;
+            var selected = playlist;
+            // Finish the native drag operation before opening a modal window; discard a drop if its view was closed meanwhile.
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                if (!closed && owner.IsVisible && ReferenceEquals(owner, DialogOwner) && ReferenceEquals(selected, playlist))
+                    OpenPlaylistEditor(false, files, index);
+            }), DispatcherPriority.Background);
         }
 
         private static T FindAncestor<T>(DependencyObject node) where T : DependencyObject
@@ -426,57 +522,6 @@ namespace ScheduleWidget
                 if (nested != null) return nested;
             }
             return null;
-        }
-        private async void AddLinks_Click(object sender, RoutedEventArgs e)
-        {
-            string[] links = YouTubeLinks.Text.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)
-                .Select(s => s.Trim()).Where(s => s.Length > 0).ToArray();
-            if (links.Length == 0) return;
-            foreach (string link in links)
-                if (!FeatureRules.TryYouTube(link, out _, out _))
-                { MusicStatus.Text = "올바른 YouTube 링크인지 확인해 주세요: " + link; return; }
-
-            MusicPlaylist target = playlist;
-            bool expand = ExpandPlaylists.IsChecked == true;
-            var tracks = new System.Collections.Generic.List<MusicTrack>();
-            var failures = new System.Collections.Generic.List<string>();
-            AddLinksButton.IsEnabled = false;
-            try
-            {
-                foreach (string link in links)
-                {
-                    FeatureRules.TryYouTube(link, out string video, out string list);
-                    if (expand && FeatureRules.TryYouTubePlaylistId(link, out string listId))
-                    {
-                        MusicStatus.Text = "재생목록 곡을 불러오는 중… (" + listId + ")";
-                        try
-                        {
-                            var videos = await YouTubePlaylistService.FetchAsync(listId);
-                            if (closed) return;
-                            tracks.AddRange(videos.Select(v => new MusicTrack
-                                { Source = "https://www.youtube.com/watch?v=" + v.Id, Title = v.Title }));
-                            continue;
-                        }
-                        catch (InvalidOperationException ex)
-                        {
-                            // Keep the link usable: fall back to the original single entry below.
-                            failures.Add(ex.Message);
-                        }
-                    }
-                    string videoTitle = video != null ? await YouTubePlaylistService.FetchVideoTitleAsync(video) : null;
-                    if (closed) return;
-                    tracks.Add(new MusicTrack { Source = link, Title = videoTitle ?? (video != null ? "YouTube · " + video : "YouTube 재생목록 · " + list) });
-                }
-            }
-            finally { AddLinksButton.IsEnabled = true; }
-
-            if (target == null || !settings.Playlists.Contains(target)) { MusicStatus.Text = "추가할 플레이리스트를 다시 선택해 주세요."; return; }
-            target.Tracks.AddRange(tracks);
-            YouTubeLinks.Clear();
-            if (target == playlist) RefreshTracks(TrackList.SelectedItem as MusicTrack);
-            save();
-            MusicStatus.Text = tracks.Count + "곡을 추가했습니다." +
-                (failures.Count > 0 ? " 일부 재생목록은 곡별로 가져오지 못해 한 항목으로 추가했습니다: " + failures[0] : "");
         }
         private void RemoveTrack_Click(object sender, RoutedEventArgs e)
         {
@@ -683,7 +728,7 @@ namespace ScheduleWidget
         private void PlayerNewWindow(object sender, CoreWebView2NewWindowRequestedEventArgs e)
         {
             e.Handled = true;
-            MusicStatus.Text = "외부 링크는 ‘YouTube에서 열기’를 사용하세요.";
+            MusicStatus.Text = "이 링크는 위젯에서 열 수 없습니다.";
         }
 
         // ---- Player crash recovery ----
@@ -857,7 +902,7 @@ namespace ScheduleWidget
             paused = true; PlayButton.Content = "재생";
             NotifyPlayback();
             MusicStatus.Text = "YouTube 재생 오류 " + (codeText != null && codeText.Length <= 12 ? codeText : "") +
-                ". 연결을 확인하거나 ‘YouTube에서 열기’를 사용하세요.";
+                ". 연결을 확인한 뒤 다시 재생해 주세요.";
         }
 
         /// <summary>A text (or number) field of a player message; null when missing or of another type.</summary>
@@ -931,16 +976,16 @@ namespace ScheduleWidget
         {
             bool previous = settings.ExpandYouTubePlaylists;
             settings.ExpandYouTubePlaylists = expand;
-            ExpandPlaylists.IsChecked = expand;
+
             if (!loading && !save())
             {
                 settings.ExpandYouTubePlaylists = previous;
-                ExpandPlaylists.IsChecked = previous;
+
                 MusicStatus.Text = "재생목록 링크 옵션을 저장하지 못했습니다. 다시 시도해 주세요.";
             }
         }
 
-        private void ExpandPlaylists_Click(object sender, RoutedEventArgs e) => SetExpandPlaylists(ExpandPlaylists.IsChecked == true);
+
 
         // 초기화 → 정말 초기화 → play options back to the defaults (playlists and tracks stay).
         private bool playOptionsResetArmed;
@@ -954,7 +999,7 @@ namespace ScheduleWidget
                 return;
             }
             playOptionsResetArmed = false;
-            PlayOptionsResetButton.Content = "초기화";
+            PlayOptionsResetButton.Content = "재생 옵션 초기화";
             var defaults = new MusicSettings();
             SetVolume(defaults.Volume); // first: the saves below keep it
             SetRepeat(defaults.Repeat);
@@ -1224,14 +1269,6 @@ namespace ScheduleWidget
             var item = sender as MenuItem;
             var selected = item?.Tag as MusicPlaylist;
             if (selected != null) PlaylistCombo.SelectedItem = selected;
-        }
-
-        private void OpenYouTube_Click(object sender, RoutedEventArgs e)
-        {
-            var track = TrackList.SelectedItem as MusicTrack;
-            if (track?.IsYouTube != true) { MusicStatus.Text = "YouTube 곡을 선택하세요."; return; }
-            StopPlayback();
-            OpenYouTubePage(track);
         }
 
         private void OpenYouTubePage(MusicTrack track)

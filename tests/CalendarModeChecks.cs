@@ -189,6 +189,52 @@ namespace ScheduleWidget.Checks
             finally { mini.Close(); }
         }
 
+        private static void CalendarModeFonts()
+        {
+            var data = new AppData { MiniCharacterVisible = false, MiniPlayerVisible = false,
+                MiniBoard = new MonitorStateData { Left = 100, Top = 100, Width = 792, Height = 420 } };
+            data.Schedules.Add(new ScheduleItem { Title = "A long schedule title that wraps", Period = "2026-10-06", Time = "09:00" });
+            data.Schedules.Add(new ScheduleItem { Title = "Connected days", Period = "2026-10-05", EndPeriod = "2026-10-07" });
+            var mini = new MiniWindow(data, () => true, () => { });
+            SetField(mini, "calendarWorkAreaOverride", (Func<Rect>)(() => new Rect(0, 0, 1920, 1040)));
+            try
+            {
+                mini.ShowRangeFrom(new DateTime(2026, 10, 5)); LayoutCalendarMode(mini);
+                TextBlock WeekText(string name) => VisualDescendants<TextBlock>(Control<ItemsControl>(mini, "WeekDays")).Single(t => t.Name == name);
+                Require(WeekText("WeekEventTitle").FontSize == 11 && WeekText("WeekEventDDay").FontSize == 10,
+                    "The compact calendar's default sizes changed.");
+                var appearance = new AppearanceSettings { CompactTitleFontSize = 24, CompactDDayFontSize = 22, MonthTitleFontSize = 19, TitleFontSize = 17 };
+                mini.ApplyAppearance(appearance); LayoutCalendarMode(mini);
+                var title = WeekText("WeekEventTitle");
+                Require(title.FontSize == 24 && WeekText("WeekEventDDay").FontSize == 22 &&
+                    title.LineHeight >= 30 && title.MaxHeight >= 60 && title.ActualHeight >= 60,
+                    "Compact font settings did not reach visible text or left the old two-line height limit.");
+                Require(RangeBars(mini, "WeekRanges").Length > 0 && RangeBars(mini, "WeekRanges").All(b => b.FontSize == 24 && b.Height >= 36),
+                    "Compact range bars ignored the font or kept a clipped fixed height.");
+
+                mini.SetMonthViewOpen(true); LayoutCalendarMode(mini);
+                var month = Control<ItemsControl>(mini, "MonthDays");
+                Require(VisualDescendants<TextBlock>(month).Any(t => t.Name == "MonthEventTitle" && t.FontSize == 19) &&
+                    RangeBars(mini, "MonthRanges").All(b => b.FontSize == 19), "The monthly calendar used the compact font.");
+                double monthHeight = RangeBars(mini, "MonthRanges").First().Height;
+                appearance.CompactTitleFontSize = 10; appearance.CompactDDayFontSize = 24;
+                mini.ApplyAppearance(appearance); LayoutCalendarMode(mini);
+                Require(RangeBars(mini, "MonthRanges").All(b => b.FontSize == 19 && b.Height == monthHeight) &&
+                    VisualDescendants<TextBlock>(Control<ItemsControl>(mini, "MonthRanges")).Where(t => t.Name == "RangeDDay").All(t => t.Visibility == Visibility.Collapsed),
+                    "Compact status text changed monthly range geometry.");
+                appearance.MonthTitleFontSize = 23;
+                mini.ApplyAppearance(appearance); LayoutCalendarMode(mini);
+                Require(VisualDescendants<TextBlock>(month).Any(t => t.Name == "MonthEventTitle" && t.FontSize == 23) &&
+                    (double)mini.Resources["TitleFontSize"] == 17,
+                    "The monthly font preview did not update.");
+                mini.SetMonthViewOpen(false); LayoutCalendarMode(mini);
+                Require(WeekText("WeekEventTitle").FontSize == 10 && WeekText("WeekEventDDay").FontSize == 24 &&
+                    RangeBars(mini, "WeekRanges").All(b => b.FontSize == 10 && b.Height >= 36),
+                    "Returning from month mode changed compact sizes or clipped its larger D-day.");
+            }
+            finally { mini.Close(); }
+        }
+
         private static void CalendarModePetScale()
         {
             var data = new AppData { MiniCharacterVisible = true, MiniCharacterScale = 140, MiniPlayerVisible = false,

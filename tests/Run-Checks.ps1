@@ -47,6 +47,7 @@ try {
     if (-not $checkProcess.WaitForExit($TimeoutSeconds * 1000)) {
         $checkProcess.Kill()
         $checkProcess.WaitForExit()
+        [IO.File]::WriteAllText((Join-Path $runRoot 'checks.log'), $outputTask.GetAwaiter().GetResult() + $errorTask.GetAwaiter().GetResult())
         throw "Checks timed out after $TimeoutSeconds seconds. Artifacts: $runRoot"
     }
     $standardOutput = $outputTask.GetAwaiter().GetResult()
