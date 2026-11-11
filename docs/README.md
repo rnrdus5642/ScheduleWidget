@@ -11,6 +11,12 @@
 - `.nojekyll`: 정적 파일을 그대로 제공
 - `CNAME`: 앱 소개 홈페이지에 사용할 도메인
 
+## 다운로드 버튼
+
+첫 화면과 시작 안내의 **Windows용 다운로드**는 `https://github.com/rnrdus5642/ScheduleWidget/releases/latest/download/ScheduleWidget-Setup.exe`로 직접 연결합니다. 방문자는 GitHub의 파일 목록을 거치지 않고 설치 EXE를 받습니다. ZIP은 보조 링크의 릴리스 페이지에서 제공합니다.
+
+매 릴리스에는 `ScheduleWidget-Setup.exe`, 앱 업데이트 ZIP, `latest.json`이 모두 있어야 합니다. `tools/Publish-Update.ps1`가 세 파일을 생성합니다. 게시 후 직접 다운로드 주소가 새 설치 파일로 연결되는지, 공개 파일의 해시가 검증한 파일과 같은지 확인합니다. 설치 방식이나 외부 런타임 다운로드가 바뀌면 루트 README와 개인정보 문서도 함께 갱신합니다.
+
 ## GitHub Pages 설정
 
 저장소 **Settings → Pages → Build and deployment**에서 다음을 지정합니다.

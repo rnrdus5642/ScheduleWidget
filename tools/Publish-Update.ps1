@@ -2,7 +2,7 @@
 #   powershell -ExecutionPolicy Bypass -File tools\Publish-Update.ps1 [-Notes "..."] [-Repo owner/repo] [-DryRun]
 # Steps: stamp AssemblyInformationalVersion (numeric System.Version) in ScheduleWidget\Properties\AssemblyInfo.cs -> build Release into
 # .work\publish\<version>\app\ -> zip (no *.pdb, doc *.xml, Pet folders; DefaultPets kept) -> latest.json signed with the DPAPI-protected key
-# (both left in .work\publish\<version>\) -> gh release create v<version> <zip> latest.json --repo <owner/repo>.
+# -> build ScheduleWidget-Setup.exe with Inno Setup 7 -> publish the ZIP, manifest and installer together.
 # Repo: -Repo, else UpdateClient.GitHubRepository in the app source (a public repository: the app reads releases without a token).
 # -DryRun prints the GitHub command instead of running it. -ObjName sets obj\<name>\ (default Publish). -FromFolder <dir> packages an existing build folder (no stamp, no build).
 param(
@@ -11,7 +11,8 @@ param(
     [string]$Version,
     [string]$FromFolder,
     [switch]$DryRun,
-    [string]$ObjName = 'Publish'
+    [string]$ObjName = 'Publish',
+    [string]$InstallerCompilerPath = $env:SCHEDULEWIDGET_ISCC
 )
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'UpdateSigning.ps1')
@@ -89,6 +90,10 @@ if ($FromFolder) {
     $attr = "[assembly: AssemblyInformationalVersion(`"$Version`")]"
     $pattern = '\[assembly:\s*AssemblyInformationalVersion\("[^"]*"\)\]'
     $stamped = if ([regex]::IsMatch($info, $pattern)) { [regex]::Replace($info, $pattern, $attr) } else { $info.TrimEnd("`r", "`n") + $nl + $attr + $nl }
+    # Windows Setup reads FileVersion to refuse a downgrade, including after an in-app ZIP update.
+    $fileVersionAttribute = '[assembly: AssemblyFileVersion("' + $Version + '")]'
+    $fileVersionPattern = '\[assembly:\s*AssemblyFileVersion\("[^"]*"\)\]'
+    $stamped = if ([regex]::IsMatch($stamped, $fileVersionPattern)) { [regex]::Replace($stamped, $fileVersionPattern, $fileVersionAttribute) } else { $stamped.TrimEnd("`r", "`n") + $nl + $fileVersionAttribute + $nl }
     $stampedEncoding = New-Object Text.UTF8Encoding($hasBom)
     $stampedBytes = [byte[]]($stampedEncoding.GetPreamble() + $stampedEncoding.GetBytes($stamped))
     $stampTemp = $infoPath + '.' + [Guid]::NewGuid().ToString('N') + '.tmp'
@@ -174,10 +179,15 @@ $manifestPath = Join-Path $work 'latest.json'
 [IO.File]::WriteAllText($manifestPath, $json, (New-Object Text.UTF8Encoding($false)))
 Write-Host "Package: $zipPath ($count files, $size bytes, sha256 $sha)"
 
-# 6. GitHub release (the app reads latest.json and the zip from the latest release)
+# 6. A stable installer filename lets the website download the latest setup directly.
+& (Join-Path $PSScriptRoot 'Build-Installer.ps1') -PublishDirectory $work -CompilerPath $InstallerCompilerPath
+$installerPath = Join-Path $work 'ScheduleWidget-Setup.exe'
+if (-not (Test-Path -LiteralPath $installerPath -PathType Leaf)) { throw 'The website installer was not produced.' }
+
+# 7. GitHub release (the app reads latest.json and the zip; the website links to the installer)
 $notesFile = Join-Path $work 'release-notes.txt'
 [IO.File]::WriteAllText($notesFile, $(if ($Notes) { $Notes } else { "ScheduleWidget $Version" }), (New-Object Text.UTF8Encoding($false)))
-$ghArgs = @('release', 'create', "v$Version", $zipPath, $manifestPath, '--repo', $Repo, '--title', "ScheduleWidget $Version", '--notes-file', $notesFile, '--latest')
+$ghArgs = @('release', 'create', "v$Version", $zipPath, $manifestPath, $installerPath, '--repo', $Repo, '--title', "ScheduleWidget $Version", '--notes-file', $notesFile, '--latest')
 if ($DryRun) {
     $publishSucceeded = $true
     Write-Host ('[DryRun] gh ' + (($ghArgs | ForEach-Object { if ($_ -match '\s') { "`"$_`"" } else { $_ } }) -join ' '))

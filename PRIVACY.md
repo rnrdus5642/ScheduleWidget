@@ -60,6 +60,7 @@ ScheduleWidget은 Windows PC에서 동작하는 개인용 일정 위젯입니다
 
 ## 업데이트와 소개 홈페이지
 
+- 홈페이지의 설치 파일은 GitHub에서 내려받습니다. 설치 과정에서 .NET Framework·WebView2가 없으면 Microsoft 공식 부트스트래퍼가 Microsoft 서버에서 실행 환경을 받으며, 해당 구성 요소의 설치·업데이트에는 Microsoft의 개인정보 처리방침이 적용됩니다. ScheduleWidget은 이 과정에 일정이나 연동 토큰을 전달하지 않습니다. 앱 제거는 프로그램·바로가기·해당 설치의 자동 시작 항목만 지우며 일정·설정은 남깁니다.
 - 업데이트 확인·다운로드 시 GitHub의 배포 주소에 접속합니다. 일정이나 연동 토큰을 요청에 포함하지 않으며 받은 업데이트의 서명을 확인합니다.
 - 소개 홈페이지는 GitHub Pages에서 제공하는 정적 페이지입니다. 자체 분석·광고·로그인·개인정보 입력 폼을 사용하지 않고 자체 쿠키나 브라우저 저장소를 생성하지 않습니다. GitHub는 보안을 위해 방문자의 IP 주소 등 접속 정보를 처리할 수 있습니다. [GitHub 개인정보처리방침](https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement)을 참고해 주세요.
 
@@ -78,5 +79,7 @@ ScheduleWidget은 Windows PC에서 동작하는 개인용 일정 위젯입니다
 The character creation guide is bundled locally. Its copy buttons put example text on the clipboard only when clicked. Gallery and help links open in the user's browser without attaching schedules, credentials or local files; those sites apply their own privacy practices.
 
 Windows media information, volume controls and character typing reactions are processed locally. Typing reactions count key presses without recording keys or text. Updates are retrieved from GitHub. This static website has no custom tracking scripts or forms; GitHub Pages may process visitor IP addresses for security.
+
+The Windows installer is downloaded from GitHub. If required runtimes are missing, bundled official Microsoft bootstrappers download .NET Framework or WebView2 from Microsoft; their installation and updating follow Microsoft's privacy practices. ScheduleWidget does not pass schedules or account tokens to these installers. Uninstalling removes the program, shortcuts and its startup entry while retaining local user data for reinstallation.
 
 Tokens (Google refresh token, Telegram and Kakao tokens) are encrypted with Windows DPAPI on the user's PC. Data remains until deleted. Disconnect Google anytime via 로그아웃 or https://myaccount.google.com/connections, clear the Telegram/Kakao keys in 설정 → 연동, or close the app and delete `%LocalAppData%\ScheduleWidget` to remove local data and backups. Data previously sent to external services must be managed in those services. Contact: [project issues](https://github.com/rnrdus5642/ScheduleWidget/issues).

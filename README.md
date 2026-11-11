@@ -18,7 +18,20 @@ Windows 바탕화면에 붙여 쓰는 D-day 일정 위젯입니다. 주간 달�
 
 - Windows 10 / 11, .NET Framework 4.7.2
 - [Microsoft Edge WebView2 Runtime](https://developer.microsoft.com/microsoft-edge/webview2/): 캐릭터 표시(미니 창, `캐릭터 선택`)와 YouTube 재생에 필요합니다. 없으면 캐릭터 자리에 설치를 확인하라는 안내가 나옵니다.
-- 인터넷 연결은 구글 연동, YouTube 링크 추가·재생, 텔레그램·카카오톡 전송에만 필요합니다.
+- 필요한 실행 환경이 없는 PC는 첫 설치 중 인터넷 연결이 필요합니다. 설치 후에는 구글 연동, YouTube, 메시지 전송, 웹 자료 받기와 업데이트 등 온라인 기능을 쓸 때 인터넷을 사용합니다.
+
+## 설치와 제거
+
+1. [홈페이지](https://schedule.jwstudio.page/)의 **Windows용 다운로드**를 누릅니다.
+2. 받은 `ScheduleWidget-Setup.exe`를 열고 **설치**를 누릅니다.
+3. 설치 완료 후 실행하거나 시작 메뉴의 **ScheduleWidget**을 엽니다. 바탕화면 바로가기도 자동으로 만듭니다.
+
+- 현재 Windows 사용자의 `%LocalAppData%\Programs\ScheduleWidget`에 설치하고 Windows의 설치된 앱 목록에 등록합니다. 일반 설치에는 관리자 권한이 필요하지 않습니다. .NET Framework가 없는 오래된 Windows에서는 Microsoft 구성 요소 설치에 관리자 확인·재시작이 필요할 수 있습니다.
+- .NET Framework 4.7.2 이상과 WebView2가 이미 있으면 그대로 사용합니다. 없으면 함께 담긴 Microsoft 공식 설치 프로그램으로 필요한 구성 요소를 준비합니다. 이때 인터넷 연결이 필요하며, 실패하면 앱 파일을 설치하기 전에 중단하고 다시 시도할 수 있습니다.
+- 재설치해도 `%LocalAppData%\ScheduleWidget`의 일정·설정·캐릭터는 유지합니다. 더 최신 버전이 설치되어 있으면 이전 설치 파일로 덮어쓰지 않습니다. 이후 업데이트는 앱의 `설정 → 앱 정보`에서 받을 수 있습니다.
+- 제거하려면 트레이에서 앱을 종료하고 Windows의 **설치된 앱 → ScheduleWidget → 제거**를 사용합니다. 프로그램·바로가기·이 설치 경로의 자동 시작 항목만 제거하며, 일정과 설정은 재설치를 위해 남깁니다. 데이터까지 지우려면 앱을 종료한 상태에서 `%LocalAppData%\ScheduleWidget`을 별도로 지웁니다.
+- [GitHub 릴리스](https://github.com/rnrdus5642/ScheduleWidget/releases/latest)의 ZIP도 계속 제공합니다. ZIP을 쓸 때는 전체를 압축 해제하고 `ScheduleWidget.exe`를 실행합니다.
+- 설치 EXE에는 아직 Windows 게시자 인증서(Authenticode)가 적용되지 않았으므로 보안 확인창이 표시될 수 있습니다. 앱 내부 업데이트의 RSA 서명·해시 검증은 별도로 유지됩니다.
 
 ## 기본 사용법
 
@@ -508,7 +521,10 @@ msbuild ScheduleWidget.sln -restore /p:RestorePackagesConfig=true /p:Configurati
 - 서명키를 준비할 때는 `powershell -NoProfile -ExecutionPolicy Bypass -File tools\New-UpdateKey.ps1`을 실행합니다. 이미 키가 있으면 재사용합니다. 배포 후 `-Force`로 키를 바꾸면 기존 앱이 새 업데이트를 거부하므로, 같은 키를 계속 사용합니다.
 - 개인키 파일은 현재 Windows 사용자에게 묶인 DPAPI로 암호화됩니다. 파일 복사만으로 다른 PC나 재설치한 Windows에서 복구할 수 있는 것은 아니므로, PC를 바꾸기 전에는 별도의 복구 가능한 암호화 백업이 필요합니다. 개인키는 배포 ZIP에 넣지 않습니다.
 - 배포 파일 준비는 `powershell -NoProfile -ExecutionPolicy Bypass -File tools\Publish-Update.ps1 -DryRun`으로 합니다. 날짜·시간 형식의 버전을 소스에 기록하고 빌드한 뒤 `.work\publish\<버전>\`에 ZIP, 서명된 `latest.json`, 배포 설명을 만듭니다. `-DryRun`은 여기까지 수행하고 GitHub 게시 명령을 출력합니다.
-- 릴리스에는 생성된 ZIP과 `latest.json`을 함께 올립니다. ZIP을 다시 압축하거나 내용을 바꾸면 서명된 해시와 달라지므로, 변경이 필요할 때는 배포 스크립트로 새 버전을 생성합니다.
+- 배포 PC에는 [Inno Setup 7](https://jrsoftware.org/isdl.php)이 필요합니다. `ISCC.exe`를 PATH에 두거나 `SCHEDULEWIDGET_ISCC` 환경 변수 또는 `-InstallerCompilerPath`로 지정합니다. `tools/Publish-Update.ps1`는 앱의 제품·파일 버전을 함께 기록하고, 서명된 ZIP을 검증·추출해 `installer/ScheduleWidget.iss`로 설치 EXE까지 만듭니다. `tools/Build-Installer.ps1 -PublishDirectory <배포 폴더>`로 기존의 검증 가능한 패키지에서 설치 파일만 다시 만들 수도 있습니다.
+- 설치 파일에 넣는 Microsoft WebView2·.NET 부트스트래퍼는 공식 주소에서 받아 Authenticode 상태와 Microsoft 게시자를 확인합니다. 캐시는 `.work/tools/setup-prerequisites`이며 빌드 때 다시 서명을 검사합니다. 설치 프로그램에는 ZIP의 앱 파일만 포함하고, 테스트 파일·PDB·개인 데이터는 넣지 않습니다.
+- 릴리스에는 생성된 ZIP, `latest.json`, **`ScheduleWidget-Setup.exe` 세 파일을 함께 올립니다.** 홈페이지는 `releases/latest/download/ScheduleWidget-Setup.exe`로 직접 연결하므로 매 릴리스에서 같은 설치 파일 이름을 유지합니다. ZIP을 다시 압축하거나 내용을 바꾸면 서명된 해시와 달라지므로, 변경이 필요할 때는 배포 스크립트로 새 버전을 생성합니다.
+- 설치 검사는 `powershell -NoProfile -ExecutionPolicy Bypass -File tests/Run-InstallerChecks.ps1 -PublishDirectory <배포 폴더>`로 실행합니다. 이미 .NET·WebView2가 있는 PC에서 별도 앱 ID·뮤텍스·레지스트리 경로·바로가기로 실제 설치·재설치·제거·구버전 덮어쓰기 차단을 확인합니다. 실제 앱을 실행하거나 공유 런타임을 바꾸지 않습니다. 런타임이 없는 PC의 최초 구성 요소 설치는 별도 Windows 환경에서 확인해야 합니다.
 
 ## 검증
 
