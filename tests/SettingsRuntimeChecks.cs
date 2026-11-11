@@ -21,6 +21,7 @@ namespace ScheduleWidget.Checks
             Run("Google status remains usable before the connections page has been opened", () =>
             {
                 string previousToken = data.GoogleCalendar.ProtectedRefreshToken;
+                object previousSignIn = Field(main, "googleSignIn");
                 var settings = OpenSettingsForCheck(main);
                 try
                 {
@@ -32,15 +33,33 @@ namespace ScheduleWidget.Checks
                         SetField(main, "googleSyncing", true);
                         Call(main, "UpdateGoogleUi");
                         Require(ReferenceEquals(Control<Button>(main, "GoogleSignInButton").Style,
-                            Control<FrameworkElement>(main, "InlineSettingsPanel").FindResource(signedIn ? "AuxUtilityButton" : "AuxPrimaryButton")),
+                            Control<FrameworkElement>(main, "InlineSettingsPanel").FindResource(signedIn ? "AuxUtilityButton" : "GoogleSignInButtonStyle")),
                             "Google sign-in button lost the appropriate style.");
+                        var button = Control<Button>(main, "GoogleSignInButton");
+                        button.ApplyTemplate();
+                        var artwork = button.Template.FindName("GoogleSignInArtwork", button) as Image;
+                        Require(signedIn ? artwork == null : artwork?.Source != null,
+                            "Only the signed-out action must display the embedded Google artwork.");
+                        if (!signedIn) Require(System.Windows.Automation.AutomationProperties.GetName(button) == "Google 계정으로 로그인",
+                            "The image button needs an accessible sign-in label.");
                         SetField(main, "googleSyncing", false);
                         Call(main, "UpdateGoogleUi");
+                    }
+                    using (var pending = new System.Threading.CancellationTokenSource())
+                    {
+                        data.GoogleCalendar.ProtectedRefreshToken = null;
+                        SetField(main, "googleSignIn", pending);
+                        Call(main, "UpdateGoogleUi");
+                        var button = Control<Button>(main, "GoogleSignInButton");
+                        Require((string)button.Content == "로그인 취소" &&
+                            ReferenceEquals(button.Style, Control<FrameworkElement>(main, "InlineSettingsPanel").FindResource("AuxUtilityButton")),
+                            "A pending sign-in must expose a plain cancel action instead of the sign-in image.");
                     }
                 }
                 finally
                 {
                     data.GoogleCalendar.ProtectedRefreshToken = previousToken;
+                    SetField(main, "googleSignIn", previousSignIn);
                     SetField(main, "googleSyncing", false);
                     Call(main, "CloseInlineSettings", false);
                 }

@@ -223,6 +223,7 @@
     <None Include="App.config" />
     <None Include="app.manifest" />
     <None Include="app.ico" />
+    <Resource Include="Assets\Google\sign-in-with-google.png" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <ItemGroup>

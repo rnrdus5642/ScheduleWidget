@@ -579,7 +579,7 @@ namespace ScheduleWidget
                     int q = target.IndexOf('?');
                     var query = q < 0 ? new Dictionary<string, string>() : ParseQuery(target.Substring(q + 1));
                     bool ours = q >= 0 && query.TryGetValue("state", out string gotState) && gotState == state;
-                    string message = !ours ? "" : query.ContainsKey("code") ? "구글 캘린더 연동이 끝났습니다. 이 창을 닫아도 됩니다." : "구글 로그인이 취소되었습니다.";
+                    string message = !ours ? "" : query.ContainsKey("code") ? "이 창을 닫고 ScheduleWidget에서 로그인 결과를 확인해 주세요." : "구글 로그인이 취소되었습니다.";
                     byte[] body = Encoding.UTF8.GetBytes("<!doctype html><meta charset=utf-8><title>ScheduleWidget</title>" +
                         "<body style=\"font-family:sans-serif;padding:40px\"><h2>" + message + "</h2></body>");
                     byte[] head = Encoding.ASCII.GetBytes("HTTP/1.1 " + (ours ? "200 OK" : "404 Not Found") +

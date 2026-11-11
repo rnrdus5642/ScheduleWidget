@@ -12,7 +12,7 @@ ScheduleWidget은 Windows PC에서 동작하는 개인용 일정 위젯입니다
 
 ## 구글 계정 연동 (사용자가 직접 켰을 때만)
 
-구글 로그인은 브라우저에서 진행하며 앱은 구글 계정 비밀번호를 입력받거나 보관하지 않습니다. 로그인하면 연결 계정을 확인하고, `설정 → 연동 → 구글`에서 캘린더와 캐릭터 보관 스위치를 각각 켰을 때 해당 기능을 사용합니다.
+구글 로그인은 브라우저에서 진행하며 앱은 구글 계정 비밀번호를 입력받거나 보관하지 않습니다. 로그인할 때 아래의 캘린더·Drive·이메일 권한을 함께 요청합니다. 이메일은 연결 계정 확인에 사용하고, 캘린더와 캐릭터 보관은 `설정 → 연동 → 구글`의 각 스위치가 켜져 있을 때 동기화합니다. 처음 사용하는 경우 두 스위치는 OFF이며, 이전에 켜 둔 선택이 있으면 재연결 후 그 선택을 따릅니다. 스위치를 끄는 것은 동기화 중단이며 Google에서 허용한 권한의 철회와는 다릅니다.
 
 - **Google Calendar API** (`https://www.googleapis.com/auth/calendar.events.owned`): 사용자의 기본 캘린더 일정을 읽어 위젯에 표시하고, 위젯에서 추가·수정한 일정을 같은 캘린더에 반영합니다. 일정의 제목·날짜·시간·길이, 참석자가 있는지 또는 다른 사람이 주최한 일정인지(삭제할 때 구글에서도 지울지 정하는 데만 사용)만 사용합니다. 반복 일정은 앞으로 8주 치만 가져옵니다.
   - 위젯이 만든 일정에는 "이 앱이 만든 일정"이라는 표시와 완료 여부를 일정의 비공개 속성(`extendedProperties.private`, 다른 사람에게 보이지 않음)으로 저장합니다.
@@ -77,6 +77,8 @@ ScheduleWidget은 Windows PC에서 동작하는 개인용 일정 위젯입니다
 - **YouTube** (music the user adds): the app fetches YouTube playlist pages and oEmbed (with a consent cookie, no sign-in) to read titles, and plays songs in an embedded YouTube player (WebView2) whose cookies and cache stay in `%LocalAppData%\ScheduleWidget\WebView2Music`.
 
 The character creation guide is bundled locally. Its copy buttons put example text on the clipboard only when clicked. Gallery and help links open in the user's browser without attaching schedules, credentials or local files; those sites apply their own privacy practices.
+
+The desktop sign-in requests the three declared Google scopes together. Email identifies the connected account; the separate Calendar and Drive switches control subsequent synchronization. Both switches are off for a new user, and existing enabled preferences may resume after reconnection. Turning a switch off stops synchronization but does not revoke the Google grant.
 
 Windows media information, volume controls and character typing reactions are processed locally. Typing reactions count key presses without recording keys or text. Updates are retrieved from GitHub. This static website has no custom tracking scripts or forms; GitHub Pages may process visitor IP addresses for security.
 

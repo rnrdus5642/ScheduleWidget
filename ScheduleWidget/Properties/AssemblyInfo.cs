@@ -49,6 +49,6 @@ using System.Windows;
 //      수정 버전
 //
 [assembly: AssemblyVersion("0.0.0.0")]
-[assembly: AssemblyFileVersion("2026.1111.1808")]
-[assembly: AssemblyInformationalVersion("2026.1111.1808")]
+[assembly: AssemblyFileVersion("2026.1111.1911")]
+[assembly: AssemblyInformationalVersion("2026.1111.1911")]
 [assembly: System.Runtime.CompilerServices.InternalsVisibleTo("ScheduleWidget.Checks")]

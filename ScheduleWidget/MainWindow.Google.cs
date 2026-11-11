@@ -263,12 +263,12 @@ namespace ScheduleWidget
             }
             else
             {
-                GoogleAccountText.Text = googleLastError ?? "구글 계정으로 로그인하면 아래 연동을 켤 수 있습니다.";
-                GoogleSignInButton.Content = "구글 로그인";
+                GoogleAccountText.Text = googleLastError ?? "로그인 후 사용할 연동을 선택하세요.";
+                GoogleSignInButton.Content = "Google 계정으로 로그인";
             }
             // Unified settings detach this card until the connections page is opened. Resolve from the permanent
             // resource owner, not the card's temporary visual parent; losing a button style must not stop syncing.
-            string signInStyle = GoogleConnected && googleSignIn == null ? "AuxUtilityButton" : "AuxPrimaryButton";
+            string signInStyle = !GoogleConnected && googleSignIn == null ? "GoogleSignInButtonStyle" : "AuxUtilityButton";
             if (InlineSettingsPanel.TryFindResource(signInStyle) is Style style) GoogleSignInButton.Style = style;
 
             // The switches: OFF and locked until signed in.

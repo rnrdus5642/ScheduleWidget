@@ -845,7 +845,7 @@
                             <Border x:Name="SettingsGoogleCard" Style="{StaticResource AuxRoundSection}" Padding="14,12" Margin="0,10,0,0">
                                 <StackPanel>
                                     <TextBlock Text="구글 연동" Style="{StaticResource AuxSectionTitle}" FontSize="15"/>
-                                    <TextBlock Text="로그인하면 이메일로 연결된 계정을 표시합니다. 캘린더 연동은 일정 동기화에, 드라이브 연동은 가져온 캐릭터 보관에 사용합니다."
+                                    <TextBlock Text="로그인할 때 이메일 확인, 캘린더 일정 조회·수정, 캐릭터 파일 보관 권한을 요청합니다. 로그인 후 아래 스위치를 켠 기능만 동기화합니다."
                                                Style="{StaticResource AuxCaption}" TextWrapping="Wrap" Margin="0,8,0,0"/>
                                     <Button x:Name="GooglePrivacyPolicyButton" Content="개인정보처리방침 ↗" HorizontalAlignment="Left"
                                             Margin="0,8,0,0" MinHeight="30" Style="{StaticResource AuxCompactButton}"
@@ -854,8 +854,8 @@
                                     <!-- Account line and the sign-in button, both centered. -->
                                     <TextBlock x:Name="GoogleAccountText" Style="{StaticResource AuxCaption}" TextWrapping="Wrap"
                                                TextAlignment="Center" HorizontalAlignment="Center" Margin="0,10,0,0"/>
-                                    <Button x:Name="GoogleSignInButton" Content="구글 로그인" Height="36" MinWidth="160" Padding="18,0" Margin="0,8,0,0"
-                                            HorizontalAlignment="Center" Style="{StaticResource AuxPrimaryButton}" Click="GoogleSignIn_Click"/>
+                                    <Button x:Name="GoogleSignInButton" Content="Google 계정으로 로그인" Height="40" MinWidth="180" Margin="0,8,0,0"
+                                            HorizontalAlignment="Center" Style="{StaticResource GoogleSignInButtonStyle}" Click="GoogleSignIn_Click"/>
                                     <Border Height="1" Background="{DynamicResource AuxHairlineBrush}" Margin="0,12,0,12"/>
                                     <Grid>
                                         <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>

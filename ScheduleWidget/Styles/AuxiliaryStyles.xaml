@@ -102,6 +102,29 @@
             </ControlTemplate>
         </Setter.Value></Setter>
     </Style>
+    <!-- Google's unmodified approved artwork includes its current logo, font and spacing. -->
+    <Style x:Key="GoogleSignInButtonStyle" TargetType="Button">
+        <Setter Property="Width" Value="180"/>
+        <Setter Property="Height" Value="40"/>
+        <Setter Property="Padding" Value="0"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="ToolTip" Value="{Binding Content, RelativeSource={RelativeSource Self}}"/>
+        <Setter Property="AutomationProperties.Name" Value="{Binding Content, RelativeSource={RelativeSource Self}}"/>
+        <Setter Property="Template"><Setter.Value>
+            <ControlTemplate TargetType="Button">
+                <Grid x:Name="SignInRoot" Background="Transparent" SnapsToDevicePixels="True">
+                    <Image x:Name="GoogleSignInArtwork" Source="/ScheduleWidget;component/Assets/Google/sign-in-with-google.png"
+                           Width="180" Height="40" Stretch="Uniform" RenderOptions.BitmapScalingMode="HighQuality"/>
+                    <Border x:Name="SignInFocus" BorderBrush="{DynamicResource AuxFocusBrush}" BorderThickness="2"
+                            CornerRadius="6" Margin="-3" Visibility="Hidden" IsHitTestVisible="False"/>
+                </Grid>
+                <ControlTemplate.Triggers>
+                    <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="SignInFocus" Property="Visibility" Value="Visible"/></Trigger>
+                    <Trigger Property="IsEnabled" Value="False"><Setter TargetName="SignInRoot" Property="Opacity" Value="0.4"/></Trigger>
+                </ControlTemplate.Triggers>
+            </ControlTemplate>
+        </Setter.Value></Setter>
+    </Style>
     <Style x:Key="AuxCompactButton" TargetType="Button" BasedOn="{StaticResource AuxSecondaryButton}">
         <Setter Property="MinHeight" Value="30"/><Setter Property="FontSize" Value="12"/><Setter Property="Padding" Value="10,3"/>
     </Style>
