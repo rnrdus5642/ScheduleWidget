@@ -1,8 +1,10 @@
 # ScheduleWidget 소개 홈페이지
 
+문서 기준: 2026-11-11. 앱의 사용·개발 안내는 [루트 README](../README.md), 개인정보 문서의 원본은 [PRIVACY.md](../PRIVACY.md)입니다.
+
 기존 저장소의 `docs` 폴더를 GitHub Pages로 게시합니다. 사이트 파일은 HTML·CSS·SVG로 구성되며 별도 빌드, 외부 폰트, 자바스크립트 또는 분석 도구가 필요하지 않습니다.
 
-- `index.html`: 앱 소개와 구글 연동의 사용 목적
+- `index.html`: 기능, 캐릭터 추가 방법, 오프라인 사용과 구글 연동 소개
 - `privacy.html`: 개인정보처리방침과 영문 요약
 - `assets/site.css`: 데스크톱·모바일 공통 스타일
 - `assets/icon.svg`: 사이트 아이콘
@@ -17,7 +19,7 @@
 - Branch: **main**
 - Folder: **/docs**
 
-사용자 지정 주소는 `https://schedule.jwstudio.page/`이며 개인정보처리방침은 `https://schedule.jwstudio.page/privacy.html`입니다. `jwstudio.page`의 기본 주소는 별도의 개인 포트폴리오에 사용할 수 있습니다. 모든 로컬 링크는 상대 경로입니다.
+사용자 지정 주소는 `https://schedule.jwstudio.page/`이며 개인정보처리방침은 `https://schedule.jwstudio.page/privacy.html`입니다. `jwstudio.page`의 기본 주소는 별도의 개인 포트폴리오에 사용할 수 있습니다. 모든 로컬 링크는 상대 경로입니다. 로컬 파일 편집은 공개 사이트를 갱신하지 않으며, 게시 브랜치로 푸시한 뒤 Pages 배포가 완료돼야 반영됩니다. 공개 게시와 릴리스 배포는 사용자가 요청한 범위에서 진행합니다.
 
 ### 도메인 연결 순서
 
@@ -62,6 +64,21 @@ Google Cloud 프로젝트 소유자 계정으로 Google Search Console의 **도�
 
 ## 수정과 확인
 
+다음 문서를 함께 관리합니다.
+
+| 변경 내용 | 확인할 파일 |
+| --- | --- |
+| 화면 이름·버튼·설정 저장 방식 | [루트 README](../README.md), `index.html` |
+| 캐릭터 제작·다운로드 안내 | `CharacterHelpWindow.xaml`·`.xaml.cs`, 루트 README, `index.html` |
+| 전송 정보·저장 위치·외부 사이트 | [PRIVACY.md](../PRIVACY.md), `privacy.html`의 한국어·영문 요약 |
+| 구글 재시도·모드별 위치 복원 | 루트 README의 구글 연동·월간 달력·검증 항목 |
+| 빌드·서명·릴리스 절차 | 루트 README의 빌드와 배포, 이 문서의 Pages 설정 |
+
 앱의 정보 처리 방식이 바뀌면 저장소 루트의 `PRIVACY.md`와 `privacy.html`을 함께 갱신합니다. 홈페이지의 기능 설명도 실제 동작과 맞춰 관리합니다. 문의처는 프로젝트의 GitHub 이슈입니다.
 
 로컬 미리보기는 프로젝트 루트에서 `python -m http.server 8000 --directory docs`를 실행한 후 `http://localhost:8000/`에서 확인할 수 있습니다. 320px 이상의 좁은 화면과 데스크톱 화면에서 레이아웃·목차·앵커 링크를 확인합니다.
+
+- 링크와 `id` 앵커, 상대 경로의 CSS·아이콘 파일이 존재하는지 확인합니다. HTML의 제목·설명·문서 수정일과 루트 문서의 내용도 맞춥니다.
+- 앱 검사는 `powershell -NoProfile -ExecutionPolicy Bypass -File tests/Run-Checks.ps1`로 실행합니다. 사이트는 별도 빌드가 없는 정적 파일이며, 코드 검사가 HTML 화면 확인을 대신하지는 않습니다.
+- 구글 드라이브 소개는 `pet.json + 이미지`만 공유한다는 점과 PC별 배치 설정을 구분합니다. 로컬 일정 저장, 오프라인 자동 재시도, 캐릭터 안내의 외부 브라우저 링크도 실제 코드와 대조합니다.
+- Pages 게시 위치는 [GitHub의 게시 소스 안내](https://docs.github.com/en/pages/getting-started-with-github-pages/configuring-a-publishing-source-for-your-github-pages-site), Drive 권한 설명은 [Google의 Drive 범위 안내](https://developers.google.com/workspace/drive/api/guides/api-specific-auth)를 참고합니다.

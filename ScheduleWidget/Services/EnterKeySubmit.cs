@@ -13,7 +13,7 @@ namespace ScheduleWidget
         {
             bool ime = args.Key == Key.ImeProcessed;
             Key key = ime ? args.ImeProcessedKey : args.Key;
-            if (key != Key.Enter || Keyboard.Modifiers != ModifierKeys.None) return;
+            if (key != Key.Enter || args.KeyboardDevice.Modifiers != ModifierKeys.None) return;
             if (!ime) args.Handled = true;
             if (args.IsRepeat || pending) return;
             if (!ime) { submit(); return; }

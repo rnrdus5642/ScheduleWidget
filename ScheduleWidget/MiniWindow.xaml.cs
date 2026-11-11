@@ -2098,7 +2098,7 @@ namespace ScheduleWidget
             var sizes = Enumerable.Range(0, count).Select(i => PetHidden(i) ? new Size(0, 0) : PetSize(i)).ToList();
             var rects = new System.Collections.Generic.List<Rect>();
             var spots = placement ?? Spots;
-            bool precisePlacement = !companion && (placement != null || petLayoutScreenFitting);
+            bool precisePlacement = !companion;
             for (int i = 0; i < count; i++)
             {
                 if (PetHidden(i)) { rects.Add(new Rect(0, 0, 0, 0)); continue; }
@@ -2109,8 +2109,8 @@ namespace ScheduleWidget
                     : CharactersOnRight ? boardW + gap + sizes.Take(i).Sum(s => s.Width) : -gap - sizes.Skip(i).Sum(s => s.Width);
                 double y = HasY(spot) ? SpotY(spot, h, boardH)
                     : Math.Max(0, boardH - h - 8) * Math.Max(0, Math.Min(100, PlacementVertical)) / 100 + 4;
-                // A mode switch can move the board by a fractional DIP. Rounding the pet's local offset each time
-                // accumulates screen-position drift; retain it and let WPF align the final visual to device pixels.
+                // Keep calendar positions precise before the first switch too, so restoring saved coordinates cannot
+                // move a pet that was initially rounded. WPF aligns the final visual to device pixels.
                 rects.Add(new Rect(precisePlacement ? x : Math.Round(x), precisePlacement ? y : Math.Round(y), w, h));
             }
             // A pet on the default placement never lands on a dragged one: it goes on outward past it (a pet added, or shown

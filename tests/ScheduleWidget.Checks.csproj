@@ -44,6 +44,7 @@
     <Compile Include="PlaylistEditorChecks.cs" />
     <Compile Include="RenderRecoveryChecks.cs" />
     <Compile Include="ReviewRegressionChecks.cs" />
+    <Compile Include="GooglePetRetryChecks.cs" />
     <Compile Include="HardeningChecks.cs" />
     <Compile Include="CalendarModeChecks.cs" />
     <Compile Include="CalendarPetModeChecks.cs" />

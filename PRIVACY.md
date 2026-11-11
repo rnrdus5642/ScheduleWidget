@@ -1,6 +1,6 @@
 # ScheduleWidget 개인정보처리방침 (Privacy Policy)
 
-최종 수정: 2026-10-06
+최종 수정: 2026-11-11
 
 ScheduleWidget은 Windows PC에서 동작하는 개인용 일정 위젯입니다. 프로젝트 운영자는 [rnrdus5642](https://github.com/rnrdus5642)입니다. 이 문서는 앱이 어떤 정보를 어디에 저장하는지, 사용자가 선택한 기능에 따라 어떤 외부 서비스와 통신하는지, 소개 홈페이지가 처리하는 정보를 설명합니다. 읽기용 웹 문서는 [docs/privacy.html](docs/privacy.html)에 있습니다.
 
@@ -17,7 +17,7 @@ ScheduleWidget은 Windows PC에서 동작하는 개인용 일정 위젯입니다
 - **Google Calendar API** (`https://www.googleapis.com/auth/calendar.events.owned`): 사용자의 기본 캘린더 일정을 읽어 위젯에 표시하고, 위젯에서 추가·수정한 일정을 같은 캘린더에 반영합니다. 일정의 제목·날짜·시간·길이, 참석자가 있는지 또는 다른 사람이 주최한 일정인지(삭제할 때 구글에서도 지울지 정하는 데만 사용)만 사용합니다. 반복 일정은 앞으로 8주 치만 가져옵니다.
   - 위젯이 만든 일정에는 "이 앱이 만든 일정"이라는 표시와 완료 여부를 일정의 비공개 속성(`extendedProperties.private`, 다른 사람에게 보이지 않음)으로 저장합니다.
   - 위젯에서 일정을 지우면, 위젯이 만든 참석자 없는 일정만 구글 캘린더에서도 지웁니다. 참석자가 있는 일정이나 구글 캘린더에서 만든 일정은 위젯에서만 지우고 구글 캘린더에는 그대로 둡니다.
-- **Google Drive API** (`https://www.googleapis.com/auth/drive.file`): 사용자가 가져온 캐릭터 이미지를 드라이브의 `ScheduleWidget 캐릭터` 폴더에 보관하고 다른 PC에서 받아 옵니다. 이 권한으로는 이 앱이 만든 파일만 볼 수 있으며, 드라이브의 다른 파일에는 접근할 수 없습니다. 캐릭터는 이 PC의 캐릭터 선택에서 삭제했을 때만 드라이브에서도 지웁니다.
+- **Google Drive API** (`https://www.googleapis.com/auth/drive.file`): 가져온 캐릭터의 이름·이미지 경로·동작 정의를 담은 `pet.json`과 해당 이미지를 ZIP으로 묶어 `ScheduleWidget 캐릭터` 폴더에 보관합니다. 같은 계정의 다른 PC에서도 보관 옵션을 켜면 받아 올 수 있습니다. 원본 폴더의 다른 파일이나 PC별 캐릭터 크기·반전·표시·배치 설정은 보내지 않습니다. 이 앱은 자체 캐릭터 보관 파일만 사용하고 다른 드라이브 파일을 탐색하지 않습니다. 이 PC의 캐릭터 선택 화면에서 명시적으로 삭제한 캐릭터만 드라이브에서도 삭제합니다.
 - **계정 이메일 주소** (`https://www.googleapis.com/auth/userinfo.email`): 설정 화면에 어떤 계정이 연결되었는지 표시하고, 다른 계정으로 로그인했는지 확인하는 데만 사용합니다.
 - 로그인 정보(갱신 토큰)는 Windows 계정 암호화(DPAPI)로 보호해 사용자 PC에만 저장합니다.
 
@@ -43,7 +43,7 @@ ScheduleWidget은 Windows PC에서 동작하는 개인용 일정 위젯입니다
 
 일정·설정·가져온 캐릭터는 사용자가 삭제할 때까지 PC에 보관합니다. 기능을 끄거나 구글에서 로그아웃해도 이미 PC에 저장된 일정과 캐릭터는 남습니다. 외부 서비스로 보낸 데이터에는 해당 서비스의 보관·삭제 정책도 적용됩니다.
 
-- 설정의 `로그아웃`을 누르면 구글에 연결 권한 해제를 요청하고 PC에 저장된 구글 로그인 정보를 지웁니다. [구글 계정 → 보안 → 타사 앱 연결](https://myaccount.google.com/connections)에서도 언제든 해제할 수 있습니다.
+- 설정의 `로그아웃`은 현재 앱의 구글 작업을 취소하고 연결 권한 해제와 로컬 로그인 정보 삭제를 시도합니다. 네트워크나 파일 저장에 실패하면 상태를 알리며, 저장 실패 경고의 `다시 저장`으로 로컬 변경을 재시도할 수 있습니다. [구글 계정 → 보안 → 타사 앱 연결](https://myaccount.google.com/connections)에서도 언제든 해제할 수 있습니다.
 - 텔레그램·카카오 연동은 `설정 → 연동`에서 토큰을 지우고 저장하면 해제됩니다. 카카오 앱 연결은 카카오 계정의 연결된 서비스 관리에서도 끊을 수 있습니다.
 - 앱을 종료하고 `%LocalAppData%\ScheduleWidget` 폴더를 지우면 일정·설정·백업·캐릭터·YouTube 플레이어 쿠키 등 해당 폴더의 데이터가 삭제됩니다. 구글 캘린더·드라이브, 텔레그램, 카카오톡에 보낸 데이터는 각 서비스에서 직접 지울 수 있습니다.
 
@@ -51,6 +51,12 @@ ScheduleWidget은 Windows PC에서 동작하는 개인용 일정 위젯입니다
 
 - 다른 앱의 음악을 표시하고 조작하기 위해 Windows 미디어 세션의 앱 이름·곡 제목·재생 상태·위치를 읽습니다. 관련 창 제목과 프로세스 이름을 확인하고 Windows 오디오 세션으로 음량을 읽거나 사용자의 조작을 전달합니다. 이 정보는 PC에서 처리하며 개발자 서버로 보내지 않습니다.
 - 타이핑 반응을 선택한 캐릭터가 보일 때 키가 눌렸다는 사실을 세어 애니메이션에 사용합니다. 어떤 키를 눌렀는지나 입력 문장을 기록·저장·전송하지 않습니다.
+
+## 캐릭터 제작 안내와 외부 링크
+
+- `캐릭터 추가 방법`의 설명과 제작 규격은 앱에 포함되어 오프라인에서도 볼 수 있습니다. `JSON 복사`·`제작 요청문 복사`는 사용자가 누를 때 예시 텍스트를 PC 클립보드에 복사하며, 앱이 이미지 생성 서비스로 보내지는 않습니다.
+- 갤러리·다운로드 예시, 서비스 설정 도움말, 홈페이지 링크는 사용자가 누를 때 기본 브라우저에서 엽니다. 캐릭터 자료실은 `codexpets.org`이며 해당 사이트의 접속 정보·쿠키 처리는 그 사이트와 브라우저의 방침을 따릅니다. 앱은 이 링크에 일정·토큰·로컬 파일을 첨부하지 않습니다.
+- 받은 캐릭터 파일은 사용자가 `캐릭터 가져오기`로 선택할 때 PC에 복사됩니다. 구글 드라이브 보관은 별도로 켜야 동작합니다.
 
 ## 업데이트와 소개 홈페이지
 
@@ -65,9 +71,11 @@ ScheduleWidget은 Windows PC에서 동작하는 개인용 일정 위젯입니다
 
 **English summary**: ScheduleWidget runs locally on Windows. It has no developer server, and it sends no analytics, ads or crash data anywhere; schedules and settings stay in `%LocalAppData%\ScheduleWidget` on the user's PC. It talks to outside services only for features the user turns on or uses, directly between the user's PC and that service:
 
-- **Google** (browser sign-in, then optional sync switches): the Google Calendar API (calendar.events.owned) syncs the primary calendar's events (title, date, time, length, and whether the event has guests or another organizer, used to decide whether deleting it in the widget also deletes it on Google; recurring events only for the next 8 weeks; events the widget creates carry a private "created by this app" mark and the completed flag). Deleting in the widget deletes on Google only the guest-less events the widget created. The Google Drive API (drive.file, app-created files only) keeps the user's imported characters, deleted there only when deleted on this PC. The account email is shown in the settings and used to tell accounts apart. Use of Google API data adheres to the Google API Services User Data Policy, including Limited Use requirements. It is not used for advertising, sale, tracking or AI model training. User-enabled messages and reminders may send schedule details to the selected service, as described below.
+- **Google** (browser sign-in, then optional sync switches): the Google Calendar API (calendar.events.owned) syncs the primary calendar's events (title, date, time, length, and whether the event has guests or another organizer, used to decide whether deleting it in the widget also deletes it on Google; recurring events only for the next 8 weeks; events the widget creates carry a private "created by this app" mark and the completed flag). Deleting in the widget deletes on Google only the guest-less events the widget created. The Google Drive API (drive.file, app-created files only) stores one ZIP per imported character containing its manifest and image, excluding unrelated source-folder files and per-PC placement, size, visibility and flip settings. Each PC must enable character storage to share packages through the same account. Cloud deletion follows explicit deletion in the character picker. The account email is shown in the settings and used to tell accounts apart. Use of Google API data adheres to the Google API Services User Data Policy, including Limited Use requirements. It is not used for advertising, sale, tracking or AI model training. User-enabled messages and reminders may send schedule details to the selected service, as described below.
 - **Telegram / Kakao** (optional reminders and messages set up by the user): schedule titles, dates and times, or the message the user writes, are sent to the Telegram Bot API or the Kakao Talk message API; Kakao tokens are refreshed with Kakao's auth server. SMS and calls are only handed to Windows Phone Link / `tel:` with the text on the clipboard.
 - **YouTube** (music the user adds): the app fetches YouTube playlist pages and oEmbed (with a consent cookie, no sign-in) to read titles, and plays songs in an embedded YouTube player (WebView2) whose cookies and cache stay in `%LocalAppData%\ScheduleWidget\WebView2Music`.
+
+The character creation guide is bundled locally. Its copy buttons put example text on the clipboard only when clicked. Gallery and help links open in the user's browser without attaching schedules, credentials or local files; those sites apply their own privacy practices.
 
 Windows media information, volume controls and character typing reactions are processed locally. Typing reactions count key presses without recording keys or text. Updates are retrieved from GitHub. This static website has no custom tracking scripts or forms; GitHub Pages may process visitor IP addresses for security.
 

@@ -67,6 +67,8 @@ namespace ScheduleWidget.Checks
                         Require(ScreenPets(mini).Zip(original, NearPet).All(x => x), "Round trips accumulated a placement error.");
                     }
                     // Bottom edge follows the bottom, including a small overlap into the board.
+                    // No month placement yet: an existing mode now keeps its own saved edge placement.
+                    data.MiniMonthPetLayout = null;
                     SetField(mini, "calendarWorkAreaOverride", (Func<Rect>)(() => new Rect(0, 0, 1920, 1440)));
                     PlaceTestPets(mini, data, new MiniPetSpot { EdgeX = "L", OffsetX = -14, Top = 45 },
                         new MiniPetSpot { EdgeX = "R", OffsetX = 18, Top = 15 }, new MiniPetSpot { Left = 42, Top = 300.0 / 312 * 100 });
@@ -118,6 +120,77 @@ namespace ScheduleWidget.Checks
                     Require(restored.MiniPetSpots[0].Key != restored.MiniPetSpots[1].Key, "Duplicate characters share a mode memory key.");
                 }
                 finally { reopened.Close(); }
+            }
+            finally { mini.Close(); }
+        }
+
+        private static void CalendarPetEdgeModeMemory()
+        {
+            foreach (string edge in new[] { "T", "B", "L", "R" })
+            {
+                var data = PetModeData(500);
+                var mini = new MiniWindow(data, () => true, () => { });
+                SetField(mini, "calendarWorkAreaOverride", (Func<Rect>)(() => new Rect(0, 0, 1920, 1440)));
+                MiniPetSpot Spot(double along, double gap) => edge == "T" || edge == "B"
+                    ? new MiniPetSpot { Left = along, EdgeY = edge, OffsetY = gap }
+                    : new MiniPetSpot { Top = along, EdgeX = edge, OffsetX = gap };
+                try
+                {
+                    PlaceTestPets(mini, data, Spot(20, -6));
+                    var compact = BoardPets(mini)[0];
+                    mini.SetMonthViewOpen(true); LayoutCalendarMode(mini);
+                    PlaceTestPets(mini, data, Spot(60, -14));
+                    var monthly = BoardPets(mini)[0];
+                    for (int round = 0; round < 6; round++)
+                    {
+                        mini.SetMonthViewOpen(false); LayoutCalendarMode(mini);
+                        Require(NearPet(BoardPets(mini)[0], compact), edge + " edge changed its basic-mode placement.");
+                        mini.SetMonthViewOpen(true); LayoutCalendarMode(mini);
+                        Require(NearPet(BoardPets(mini)[0], monthly), edge + " edge changed its saved monthly placement.");
+                    }
+                    var store = Store("pet-edge-mode-" + edge); store.SaveData(data);
+                    var restored = store.LoadData().Data;
+                    var reopened = new MiniWindow(restored, () => true, () => { });
+                    SetField(reopened, "calendarWorkAreaOverride", (Func<Rect>)(() => new Rect(0, 0, 1920, 1440)));
+                    try
+                    {
+                        LayoutCalendarMode(reopened);
+                        Require(NearPet(BoardPets(reopened)[0], monthly), "Restart lost the active " + edge + " placement.");
+                        reopened.SetMonthViewOpen(false); LayoutCalendarMode(reopened);
+                        Require(NearPet(BoardPets(reopened)[0], compact), "Restart lost the inactive " + edge + " placement.");
+                        reopened.SetMonthViewOpen(true); LayoutCalendarMode(reopened);
+                        Require(NearPet(BoardPets(reopened)[0], monthly), "Reopening the month after restart lost " + edge + ".");
+                    }
+                    finally { reopened.Close(); }
+                }
+                finally { mini.Close(); }
+            }
+        }
+
+        private static void CalendarPetChangedCompactPlacement()
+        {
+            var data = PetModeData(720);
+            data.MiniBoard.Left = 575;
+            data.MiniBoard.Width = 792;
+            data.MiniCharacterScale = 116;
+            var mini = new MiniWindow(data, () => true, () => { }, player: new MusicBarPlayer());
+            SetField(mini, "calendarWorkAreaOverride", (Func<Rect>)(() => new Rect(0, 0, 1920, 1040)));
+            try
+            {
+                // Establish an older monthly placement attached to the calendar's top edge.
+                PlaceTestPets(mini, data, new MiniPetSpot { Left = .38995737021308174, EdgeY = "T", OffsetY = 19.180991842138923 });
+                mini.SetMonthViewOpen(true); LayoutCalendarMode(mini);
+                mini.SetMonthViewOpen(false); LayoutCalendarMode(mini);
+                // The user then moves the pet in basic mode, overlapping the top by more than the edge threshold.
+                PlaceTestPets(mini, data, new MiniPetSpot { Left = 2.1464646464646466, Top = -33.786217948717955 });
+                var expected = ScreenPets(mini)[0];
+                for (int round = 0; round < 3; round++)
+                {
+                    mini.SetMonthViewOpen(true); LayoutCalendarMode(mini);
+                    mini.SetMonthViewOpen(false); LayoutCalendarMode(mini);
+                    Require(NearPet(ScreenPets(mini)[0], expected),
+                        "Returning to basic mode replaced the freshly dragged placement with the monthly edge position: " + expected + " -> " + ScreenPets(mini)[0]);
+                }
             }
             finally { mini.Close(); }
         }

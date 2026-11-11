@@ -111,7 +111,7 @@
                         </StackPanel>
                         <StackPanel VerticalAlignment="Center">
                             <TextBlock x:Name="SaveHint" FontSize="12" Foreground="{DynamicResource AuxMutedBrush}" TextWrapping="Wrap"/>
-                            <TextBlock Text="다른 곳을 누르면 닫힙니다. 저장 전 변경은 취소됩니다." FontSize="11"
+                            <TextBlock x:Name="SettingsDismissHint" Text="다른 곳을 누르면 닫힙니다. 저장 전 변경은 취소됩니다." FontSize="11"
                                        Foreground="{DynamicResource AuxMutedBrush}" TextWrapping="Wrap" Margin="0,4,0,0"/>
                             <Button x:Name="SettingsResetButton" Content="이 페이지 초기화" HorizontalAlignment="Left" Margin="0,6,0,0"
                                     Style="{StaticResource AuxCompactButton}" Click="Reset_Click"/>

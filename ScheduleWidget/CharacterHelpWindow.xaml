@@ -1,0 +1,151 @@
+<Window x:Class="ScheduleWidget.CharacterHelpWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="캐릭터 추가 방법" Width="680" Height="760" MinWidth="420" MinHeight="440"
+        ShowInTaskbar="False" WindowStyle="None" ResizeMode="CanResizeWithGrip"
+        Background="{DynamicResource AuxCanvasBrush}" Foreground="{DynamicResource AuxInkBrush}"
+        FontFamily="Segoe UI" FontSize="14" UseLayoutRounding="True" TextOptions.TextFormattingMode="Display"
+        PreviewKeyDown="Help_KeyDown">
+    <Window.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries><ResourceDictionary Source="Styles/AuxiliaryStyles.xaml"/></ResourceDictionary.MergedDictionaries>
+            <Style x:Key="HelpCard" TargetType="Border" BasedOn="{StaticResource AuxRoundSection}">
+                <Setter Property="Margin" Value="0,0,0,14"/>
+            </Style>
+            <Style x:Key="HelpText" TargetType="TextBlock" BasedOn="{StaticResource AuxCaption}">
+                <Setter Property="Foreground" Value="{DynamicResource AuxInkBrush}"/>
+                <Setter Property="LineHeight" Value="22"/>
+            </Style>
+            <Style x:Key="HelpHint" TargetType="TextBlock" BasedOn="{StaticResource AuxCaption}">
+                <Setter Property="FontSize" Value="12"/><Setter Property="LineHeight" Value="18"/>
+            </Style>
+        </ResourceDictionary>
+    </Window.Resources>
+    <Grid Margin="22,20,16,16">
+        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+        <Grid Margin="0,0,6,18">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+            <TextBlock Text="캐릭터 추가 방법" Style="{StaticResource AuxTitle}" FontSize="24" VerticalAlignment="Center"/>
+            <Button Grid.Column="1" Content="✕" Width="34" Height="34" MinHeight="34" Padding="0"
+                    Style="{StaticResource AuxUtilityButton}" Click="Close_Click" ToolTip="닫기" AutomationProperties.Name="안내 닫기"/>
+        </Grid>
+        <TabControl x:Name="GuideTabs" Grid.Row="1" SelectedIndex="0" Style="{StaticResource AuxTabs}">
+            <TabItem Header="웹에서 받기">
+                <ScrollViewer x:Name="DownloadScroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel Margin="0,0,6,0">
+                        <Border Style="{StaticResource HelpCard}">
+                            <StackPanel>
+                                <TextBlock Text="마음에 드는 캐릭터 받기" Style="{StaticResource AuxSectionTitle}"/>
+                                <TextBlock Text="갤러리에서 미리보기를 확인하고, 원하는 캐릭터의 Download package 버튼으로 ZIP 파일을 받으세요."
+                                           Style="{StaticResource HelpText}" Margin="0,10,0,14"/>
+                                <WrapPanel>
+                                    <Button x:Name="OpenGalleryButton" Content="캐릭터 갤러리 열기" Style="{StaticResource AuxPrimaryButton}" Click="OpenGallery_Click" Margin="0,0,8,8"/>
+                                    <Button x:Name="OpenExampleButton" Content="다운로드 예시" Style="{StaticResource AuxSecondaryButton}" Click="OpenExample_Click" Margin="0,0,0,8"/>
+                                </WrapPanel>
+                                <TextBlock Text="Codex Pets 커뮤니티 자료실 · 기본 브라우저에서 열립니다." Style="{StaticResource HelpHint}"/>
+                            </StackPanel>
+                        </Border>
+                        <Border Style="{StaticResource HelpCard}">
+                            <StackPanel>
+                                <TextBlock Text="앱에 추가하기" Style="{StaticResource AuxSectionTitle}" Margin="0,0,0,12"/>
+                                <TextBlock Text="1. 설정 → 캐릭터에서 ‘캐릭터 추가’ 또는 ‘바꾸기’를 누르세요." Style="{StaticResource HelpText}" Margin="0,0,0,10"/>
+                                <TextBlock Text="2. ‘캐릭터 가져오기’를 누르고 받은 ZIP 파일을 선택하세요. 압축을 풀지 않아도 됩니다." Style="{StaticResource HelpText}" Margin="0,0,0,10"/>
+                                <TextBlock Text="3. 미리보기에서 캐릭터를 선택한 뒤 ‘이 캐릭터 적용’을 누르세요." Style="{StaticResource HelpText}"/>
+                            </StackPanel>
+                        </Border>
+                        <Border Style="{StaticResource HelpCard}">
+                            <StackPanel>
+                                <TextBlock Text="이미 파일이 있다면" Style="{StaticResource AuxSectionTitle}" Margin="0,0,0,12"/>
+                                <TextBlock Text="움직이는 캐릭터는 ZIP 또는 pet.json을 선택하세요. JSON이 가리키는 이미지 파일의 이름과 위치를 함께 유지해야 합니다." Style="{StaticResource HelpText}"/>
+                                <TextBlock Text="일반 PNG·WebP·JPG 이미지도 바로 가져올 수 있습니다. 이미지 한 장으로 추가하면 정지 캐릭터로 표시됩니다." Style="{StaticResource HelpText}" Margin="0,10,0,0"/>
+                                <TextBlock Text="웹에서 받은 패키지는 파일 형식과 이미지 크기가 이 앱의 규격에 맞아야 합니다. 제작 규격은 ‘직접 만들기’에서 확인할 수 있습니다."
+                                           Style="{StaticResource HelpHint}" Margin="0,12,0,0"/>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+            <TabItem Header="직접 만들기">
+                <ScrollViewer x:Name="CreateScroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel Margin="0,0,6,0">
+                        <Border Style="{StaticResource HelpCard}">
+                            <StackPanel>
+                                <TextBlock Text="이미지 한 장으로 시작하기" Style="{StaticResource AuxSectionTitle}"/>
+                                <TextBlock Text="캐릭터를 그린 뒤 PNG로 저장하고 ‘캐릭터 가져오기’에서 선택하세요. 투명 배경으로 만들면 그림만 화면에 표시됩니다."
+                                           Style="{StaticResource HelpText}" Margin="0,10,0,0"/>
+                            </StackPanel>
+                        </Border>
+                        <Border Style="{StaticResource HelpCard}">
+                            <StackPanel>
+                                <TextBlock Text="움직이는 캐릭터 만들기" Style="{StaticResource AuxSectionTitle}"/>
+                                <TextBlock Text="동작별 연속 그림을 하나의 스프라이트시트에 배치합니다. 모든 칸에서 캐릭터의 크기와 기준 위치를 맞춰 주세요."
+                                           Style="{StaticResource HelpText}" Margin="0,10,0,12"/>
+                                <Border Background="{DynamicResource AuxCanvasBrush}" CornerRadius="6" Padding="12">
+                                    <StackPanel>
+                                        <TextBlock Text="기본 규격 · 1536 × 1872 px" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                                        <TextBlock Text="가로 8칸 × 세로 9줄 · 한 칸 192 × 208 px" Style="{StaticResource HelpHint}" Margin="0,4,0,0"/>
+                                        <TextBlock Text="투명 배경 PNG 또는 WebP" Style="{StaticResource HelpHint}"/>
+                                    </StackPanel>
+                                </Border>
+                                <Expander x:Name="AnimationOrder" Header="동작별 배치 순서" Foreground="{DynamicResource AuxInkBrush}" Margin="0,14,0,0">
+                                    <StackPanel Margin="0,12,0,0">
+                                        <Grid Margin="0,0,0,6">
+                                            <Grid.ColumnDefinitions><ColumnDefinition Width="48"/><ColumnDefinition Width="*"/><ColumnDefinition Width="64"/></Grid.ColumnDefinitions>
+                                            <TextBlock Text="줄" Style="{StaticResource HelpHint}"/>
+                                            <TextBlock Grid.Column="1" Text="동작" Style="{StaticResource HelpHint}"/>
+                                            <TextBlock Grid.Column="2" Text="그림 수" Style="{StaticResource HelpHint}"/>
+                                        </Grid>
+                                        <ItemsControl x:Name="AnimationRows">
+                                            <ItemsControl.ItemTemplate><DataTemplate>
+                                                <Grid Margin="0,4">
+                                                    <Grid.ColumnDefinitions><ColumnDefinition Width="48"/><ColumnDefinition Width="*"/><ColumnDefinition Width="64"/></Grid.ColumnDefinitions>
+                                                    <TextBlock Text="{Binding Number}"/>
+                                                    <TextBlock Grid.Column="1" Text="{Binding Label}"/>
+                                                    <TextBlock Grid.Column="2" Text="{Binding Frames}"/>
+                                                </Grid>
+                                            </DataTemplate></ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                        <TextBlock Text="각 줄은 왼쪽부터 순서대로 채우고, 남는 칸은 투명하게 비워 두세요." Style="{StaticResource HelpHint}" Margin="0,10,0,0"/>
+                                    </StackPanel>
+                                </Expander>
+                                <Button Content="제작 요청문 복사" HorizontalAlignment="Left" Style="{StaticResource AuxCompactButton}" Click="CopyPrompt_Click" Margin="0,14,0,0"/>
+                            </StackPanel>
+                        </Border>
+                        <Border Style="{StaticResource HelpCard}">
+                            <StackPanel>
+                                <TextBlock Text="pet.json 만들기" Style="{StaticResource AuxSectionTitle}"/>
+                                <TextBlock Text="아래 내용을 pet.json으로 저장하고 spritesheet.png와 같은 폴더에 두세요. 이름과 이미지 파일명은 바꿀 수 있습니다."
+                                           Style="{StaticResource HelpText}" Margin="0,10,0,10"/>
+                                <TextBox x:Name="ManifestExample" IsReadOnly="True" AcceptsReturn="True" FontFamily="Consolas" FontSize="13" Height="132"
+                                         TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                                         Style="{StaticResource AuxTextBox}" Background="{DynamicResource AuxCanvasBrush}" AutomationProperties.Name="기본 캐릭터 JSON 예시"/>
+                                <Button Content="JSON 복사" HorizontalAlignment="Left" Style="{StaticResource AuxCompactButton}" Click="CopyManifest_Click"/>
+                                <TextBlock Text="완성한 pet.json을 ‘캐릭터 가져오기’로 선택하면 이미지도 함께 복사됩니다." Style="{StaticResource HelpHint}" Margin="0,12,0,0"/>
+                            </StackPanel>
+                        </Border>
+                        <Expander x:Name="ExtraFormats" Header="음악·타이핑 동작을 더 넣으려면" Foreground="{DynamicResource AuxInkBrush}" Margin="0,0,0,14">
+                            <StackPanel Margin="0,12,0,0">
+                                <TextBlock Text="기본 9줄 아래에 동작을 추가하고, pet.json의 animations에 각 동작의 row(0부터 시작), frames(1~8), duration(밀리초)을 지정합니다."
+                                           Style="{StaticResource HelpText}"/>
+                                <TextBlock Text="지원 형식: v1 9줄 · v2 11줄 · v3 13줄 · v4 15줄 · v5 17줄. 가로는 1536 px, 세로는 줄 수 × 208 px입니다."
+                                           Style="{StaticResource HelpHint}" Margin="0,10,0,0"/>
+                                <TextBlock Text="음악 동작: listening, grooving, disliking, immersed&#10;타이핑 동작: keyboard1, keyboard2"
+                                           Style="{StaticResource HelpHint}" Margin="0,10,0,0"/>
+                                <TextBlock Text="예: 13줄 이미지에 spriteVersionNumber를 3으로 지정하고, animations 안에 아래 항목을 추가하면 10번째 줄이 ‘음악 듣기’가 됩니다."
+                                           Style="{StaticResource HelpText}" Margin="0,10,0,0"/>
+                                <TextBox Text="&quot;listening&quot;: { &quot;row&quot;: 9, &quot;frames&quot;: 6, &quot;duration&quot;: 150 }" IsReadOnly="True" FontFamily="Consolas" FontSize="12"
+                                         TextWrapping="Wrap" Style="{StaticResource AuxTextBox}" Background="{DynamicResource AuxCanvasBrush}" Margin="0,8,0,0"/>
+                            </StackPanel>
+                        </Expander>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+        </TabControl>
+        <Border Grid.Row="2" BorderBrush="{DynamicResource AuxHairlineBrush}" BorderThickness="0,1,0,0" Margin="0,12,6,0" Padding="0,12,0,0">
+            <DockPanel LastChildFill="True">
+                <Button Content="닫기" DockPanel.Dock="Right" MinWidth="76" Style="{StaticResource AuxSecondaryButton}" Click="Close_Click" Margin="12,0,0,0"/>
+                <TextBlock x:Name="GuideStatus" Style="{StaticResource HelpHint}" VerticalAlignment="Center" AutomationProperties.LiveSetting="Polite"/>
+            </DockPanel>
+        </Border>
+    </Grid>
+</Window>

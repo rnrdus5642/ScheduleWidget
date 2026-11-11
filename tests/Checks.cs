@@ -75,6 +75,7 @@ namespace ScheduleWidget.Checks
             Run("Long timed multi-day reminders fit Kakao and preserve Unicode titles", ReminderLengthRegression);
             Run("Google account display works without Calendar metadata permission", GoogleAccountEmail);
             Run("Drive sync only deletes explicitly removed pets", DriveDeletion);
+            GooglePetRetryAudit();
             Run("Default pet manifests and packaged assets load", PackagedAssets);
             Run("Updates reject a modified signed manifest", SignedUpdates);
             Run("Updater restores failed partial copies, removes new fragments, and preserves intact locked files", UpdaterPartialCopyRollback);
@@ -85,7 +86,7 @@ namespace ScheduleWidget.Checks
             RenderRecoveryChecks();
             Run("Invisible blank browser surfaces cannot intercept desktop icons", BrowserInputSurfaces);
             Run("Browser input protection survives replacement surfaces and style resets", BrowserInputGuardRecovery);
-            Run("WPF resources and six window layouts construct", WindowResources);
+            Run("WPF resources and auxiliary window layouts construct", WindowResources);
 
             Console.WriteLine("{0} passed, {1} failed.", passed, failed);
             return failed == 0 ? 0 : 1;
@@ -448,6 +449,7 @@ namespace ScheduleWidget.Checks
                 windows.Add(new ContactWindow(data, new CommunicationService(), () => true));
                 windows.Add(new CharacterWindow(CharacterCatalog.DefaultManifest));
                 windows.Add(new PetSettingsWindow(mini, 0));
+                windows.Add(new CharacterHelpWindow());
                 foreach (Window window in windows)
                 {
                     Require(window.Content is FrameworkElement, "Window content missing: " + window.GetType().Name);
@@ -505,6 +507,8 @@ namespace ScheduleWidget.Checks
                 Run("Monthly mode preserves the basic calendar's pet scale", CalendarModePetScale);
                 Run("Calendar modes keep side pets still and top/bottom pets attached to their edges", CalendarPetEdgeAnchors);
                 Run("Inside pets remember independent mode positions across restarts and duplicate characters", CalendarPetModeMemory);
+                Run("Edge pets restore both calendar modes independently after edits and restart", CalendarPetEdgeModeMemory);
+                Run("Returning to basic mode preserves a newly dragged pet despite an older monthly edge position", CalendarPetChangedCompactPlacement);
                 Run("Screen-edge corrections preserve preferred pet positions and size", CalendarPetScreenCorrection);
                 Run("Interrupted mode animations preserve the prepared pet placement", CalendarPetInterruptedMode);
                 Run("Repeated fractional-size mode switches do not accumulate pet drift", CalendarPetFractionalPositions);
@@ -522,6 +526,7 @@ namespace ScheduleWidget.Checks
                 Run("Audio volume events preserve mute and stop after disposal", VolumeEventCallbacks);
                 Run("Unified settings navigation, save, cancel and content lifecycle", () => UnifiedSettingsFlow(main, mini, data));
                 SettingsDismissalAudit();
+                GooglePetBackoffAudit();
                 SettingsAudit();
             }
             finally { app.Shutdown(); }
@@ -778,9 +783,10 @@ namespace ScheduleWidget.Checks
                 if (round == 0)
                 {
                     settings.CloseRequested += () => Call(main, "CloseInlineSettings", false);
-                    SetField(settings, "canDismissOverride", (Func<bool>)(() => true));
-                    Call(settings, "Settings_Deactivated", settings, EventArgs.Empty);
-                    Call(settings, "RecheckDismissal", null, EventArgs.Empty);
+                    var dismissal = (AuxiliaryWindowDismissal)Field(settings, "dismissal");
+                    dismissal.CanDismissOverride = () => true;
+                    Call(dismissal, "Window_Deactivated", settings, EventArgs.Empty);
+                    Call(dismissal, "RecheckDismissal", null, EventArgs.Empty);
                     Require(data.Communication.TelegramChatId == null && data.Appearance.ThemePreset == "Light", "Closing settings saved pending connection or theme edits.");
                     Require(AuxTheme.Current == "Light", "Closing settings did not undo the theme preview.");
                 }

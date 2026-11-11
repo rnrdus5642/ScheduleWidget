@@ -44,7 +44,8 @@ namespace ScheduleWidget
         // signed in to the account. A character is deleted on Drive only when it was deleted here (CharacterCatalog.Delete).
         public bool PetsEnabled { get; set; }
         public List<string> SyncedPetIds { get; set; } = new List<string>();
-        // Drive character files that could not be brought in ("file id|modified time"): skipped until the file changes there.
+        // Permanently invalid/unsupported Drive files ("v2|file id|modified time"): skipped until the file changes.
+        // Legacy unversioned entries are retried once because they could also contain temporary transfer failures.
         public List<string> FailedPetFiles { get; set; } = new List<string>();
         // true once the characters an older version deleted here (it kept no record of them) were sorted out: done by the
         // first character sync of this version (see CharacterCatalog.RememberOldDeletions).
@@ -958,8 +959,8 @@ namespace ScheduleWidget
 
         /// <summary>
         /// Keeps the imported characters in step with Drive (see <see cref="PetSyncPlan.Build"/>). A character that fails on its
-        /// own (a broken file, a slow upload, …) is skipped and counted; a Drive file that could not be brought in is tried
-        /// again only once it changes there. Reading the characters and packing / unpacking zips runs in the background.
+        /// own is counted without blocking the others. Only permanently invalid packages are cached until a new remote
+        /// revision; temporary transfer and file failures remain retryable. Packing and unpacking run in the background.
         /// </summary>
         public async Task<GooglePetSyncResult> SyncPetsAsync(GoogleCalendarSettings settings)
         {
@@ -1090,7 +1091,7 @@ namespace ScheduleWidget
                         catch (Exception ex) when (IsPetFailure(ex))
                         {
                             Fail(result, ex);
-                            failed.Add(file.Mark);
+                            if (IsPermanentPetFailure(ex)) failed.Add(file.Mark);
                         }
                         finally { TryDeleteFile(zip); }
                     }
@@ -1117,6 +1118,12 @@ namespace ScheduleWidget
         // rate limit or no connection stop the whole character sync instead.
         private static bool IsPetFailure(Exception ex) => CharacterCatalog.IsImportError(ex) && !(ex is GoogleSignInRequiredException) &&
             !(ex is GoogleScopeException) && !(ex is GoogleRateLimitException) && !(ex is GoogleConnectionException);
+
+        // A malformed package will not improve by fetching the same revision again. Local file locks, disk/permission
+        // errors and HTTP failures can recover without a Drive modification, so they must never enter this cache.
+        private static bool IsPermanentPetFailure(Exception ex) => !(ex is GoogleRequestException) &&
+            (ex is InvalidDataException || ex is Newtonsoft.Json.JsonException || ex is ArgumentException ||
+             ex is NotSupportedException || ex is InvalidOperationException);
 
         private static void Fail(GooglePetSyncResult result, Exception ex)
         {
@@ -1157,7 +1164,7 @@ namespace ScheduleWidget
         private sealed class DrivePet
         {
             public string FileId, Name, Modified;
-            public string Mark => FileId + "|" + Modified; // changes whenever the file does
+            public string Mark => "v2|" + FileId + "|" + Modified; // old caches also recorded timeouts; retry those once
         }
 
         private async Task<string> PetFolderAsync()
@@ -1276,7 +1283,7 @@ namespace ScheduleWidget
                         {
                             _ = reading.ContinueWith(t => t.Exception, TaskContinuationOptions.OnlyOnFaulted);
                             operations.Check();
-                            throw new InvalidOperationException("구글 드라이브에서 캐릭터 파일을 받다가 멈췄습니다. 다음 동기화 때 다시 받습니다.");
+                            throw new GoogleConnectionException("구글 드라이브에서 캐릭터 파일을 받다가 멈췄습니다. 다음 동기화 때 다시 받습니다.", new TimeoutException());
                         }
                         int read = await reading;
                         operations.Check();
@@ -1298,7 +1305,7 @@ namespace ScheduleWidget
             HttpResponseMessage response;
             try { response = await (transfer ? transferClient : client).SendAsync(request, HttpCompletionOption.ResponseHeadersRead, operations.Token); }
             catch (HttpRequestException ex) { throw new GoogleConnectionException("구글에 연결할 수 없습니다. 인터넷 연결을 확인해 주세요.", ex); }
-            catch (TaskCanceledException ex) when (!operations.Token.IsCancellationRequested) { throw new InvalidOperationException("구글 드라이브 전송이 너무 오래 걸려 중단했습니다. 다음 동기화 때 다시 시도합니다.", ex); }
+            catch (TaskCanceledException ex) when (!operations.Token.IsCancellationRequested) { throw new GoogleConnectionException("구글 드라이브 전송이 너무 오래 걸려 중단했습니다. 다음 동기화 때 다시 시도합니다.", ex); }
             if (operations.Token.IsCancellationRequested) { response.Dispose(); operations.Check(); }
             if (response.IsSuccessStatusCode) return response;
             using (response) await ThrowForStatusAsync(response, request.RequestUri);

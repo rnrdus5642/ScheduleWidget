@@ -154,6 +154,12 @@ namespace ScheduleWidget
             }
             catch (OperationCanceledException) { } // Disabled, signed out, or closing: no error or retry penalty.
             catch (Exception ex) when (!SystemMediaService.IsFatal(ex) && (closingApp || generation != googleWorkGeneration)) { }
+            catch (GoogleRateLimitException ex)
+            {
+                failed = true;
+                if (ex.RetryAfter.HasValue && (!googleWait.HasValue || ex.RetryAfter.Value > googleWait.Value)) googleWait = ex.RetryAfter;
+            }
+            catch (GoogleConnectionException) { failed = true; }
             catch (GoogleSignInRequiredException ex)
             {
                 // The saved sign-in stopped working: back to signed out (switches keep their choice for the next sign-in).
@@ -220,6 +226,11 @@ namespace ScheduleWidget
             { throw new OperationCanceledException(); }
             catch (GoogleSignInRequiredException) { throw; }
             catch (OperationCanceledException) { throw; }
+            catch (Exception ex) when (ex is GoogleRateLimitException || ex is GoogleConnectionException)
+            {
+                googlePetStatus = ex.Message;
+                throw; // RunGoogleSync applies the shared retry delay, including Drive's Retry-After.
+            }
             catch (Exception ex) when (!(ex is OutOfMemoryException)) { googlePetStatus = ex.Message; } // shown on its own line; retried next sync
             finally { if (!closingApp && generation == googleWorkGeneration) googlePetsVersion = seen; }
         }

@@ -4,137 +4,168 @@
         xmlns:local="clr-namespace:ScheduleWidget"
         Title="캐릭터 설정" Width="380" Height="640" MinWidth="330" MinHeight="420" WindowStartupLocation="Manual"
         ShowInTaskbar="False" ResizeMode="CanResizeWithGrip" WindowStyle="None"
-        Background="{DynamicResource AuxCanvasBrush}" Foreground="{DynamicResource AuxInkBrush}" FontFamily="Segoe UI"
-        PreviewKeyDown="PetSettings_KeyDown">
-    <Window.Resources><ResourceDictionary><ResourceDictionary.MergedDictionaries>
-        <ResourceDictionary Source="Styles/AuxiliaryStyles.xaml"/>
-    </ResourceDictionary.MergedDictionaries></ResourceDictionary></Window.Resources>
-    <!-- Everything about the mini window's pets in one place (opened by right-clicking a pet). Changes apply at once.
-         No title bar or icon: drag the header to move, X to close. -->
-    <Border BorderBrush="{DynamicResource AuxHairlineBrush}" BorderThickness="1">
-    <Grid>
-        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
-        <Grid x:Name="PetEditorHeader" Background="Transparent" Margin="18,14,10,10" MouseLeftButtonDown="Header_MouseLeftButtonDown" Cursor="SizeAll">
-            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-            <StackPanel>
-                <TextBlock x:Name="HeaderTitle" Text="캐릭터 설정" Style="{StaticResource AuxTitle}" FontSize="22" TextTrimming="CharacterEllipsis"/>
-                <TextBlock x:Name="HeaderHint" Text="바꾸는 즉시 달력에 반영되고 저장됩니다." Style="{StaticResource AuxCaption}" Margin="0,4,0,0"/>
-            </StackPanel>
-            <Button Grid.Column="1" Width="34" Height="34" Padding="0" VerticalAlignment="Top" Cursor="Hand" Style="{StaticResource AuxUtilityButton}"
-                    Click="Close_Click" AutomationProperties.Name="닫기">
-                <Path Data="M4,4 L12,12 M12,4 L4,12" Width="12" Height="12" Stretch="Fill" Stroke="{DynamicResource AuxMutedBrush}"
-                      StrokeThickness="1.5" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
-            </Button>
+        Background="{DynamicResource AuxCanvasBrush}" Foreground="{DynamicResource AuxInkBrush}" FontFamily="Segoe UI" FontSize="14"
+        UseLayoutRounding="True" TextOptions.TextFormattingMode="Display" PreviewKeyDown="PetSettings_KeyDown">
+    <Window.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="Styles/AuxiliaryStyles.xaml"/>
+            </ResourceDictionary.MergedDictionaries>
+            <Style x:Key="PetCard" TargetType="Border" BasedOn="{StaticResource AuxRoundSection}">
+                <Setter Property="Padding" Value="16"/>
+                <Setter Property="Margin" Value="0,0,0,14"/>
+            </Style>
+            <Style x:Key="PetButton" TargetType="Button" BasedOn="{StaticResource AuxCompactButton}">
+                <Setter Property="FontSize" Value="13"/>
+                <Setter Property="MinHeight" Value="34"/>
+                <Setter Property="Padding" Value="8,5"/>
+            </Style>
+            <Style x:Key="PetHint" TargetType="TextBlock" BasedOn="{StaticResource AuxCaption}">
+                <Setter Property="FontSize" Value="12"/>
+                <Setter Property="LineHeight" Value="18"/>
+            </Style>
+            <Style x:Key="PetValue" TargetType="TextBlock">
+                <Setter Property="FontWeight" Value="SemiBold"/>
+                <Setter Property="Foreground" Value="{DynamicResource AuxInkBrush}"/>
+                <Setter Property="VerticalAlignment" Value="Center"/>
+            </Style>
+            <ItemsPanelTemplate x:Key="PetActionsWidePanel"><UniformGrid Columns="3"/></ItemsPanelTemplate>
+            <ItemsPanelTemplate x:Key="PetActionsNarrowPanel"><UniformGrid Columns="2"/></ItemsPanelTemplate>
+        </ResourceDictionary>
+    </Window.Resources>
+    <Border x:Name="PetSettingsRoot" BorderBrush="{DynamicResource AuxHairlineBrush}" BorderThickness="1">
+        <Grid>
+            <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+            <Grid x:Name="PetEditorHeader" Background="Transparent" Margin="18,16,12,14" MouseLeftButtonDown="Header_MouseLeftButtonDown" Cursor="SizeAll">
+                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <StackPanel Margin="0,0,10,0">
+                    <TextBlock Text="캐릭터 설정" Style="{StaticResource PetHint}" Margin="0,0,0,3"/>
+                    <TextBlock x:Name="HeaderTitle" Style="{StaticResource AuxTitle}" FontSize="21" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"/>
+                    <TextBlock x:Name="HeaderHint" Text="변경 내용은 자동 저장됩니다." Style="{StaticResource PetHint}" Margin="0,5,0,0"/>
+                </StackPanel>
+                <Button x:Name="PersonalHelpButton" Grid.Column="1" Content="?" Width="30" Height="34" MinHeight="34" Padding="0" Margin="0,0,6,0" VerticalAlignment="Top"
+                        Style="{StaticResource AuxUtilityButton}" Click="Help_Click" ToolTip="캐릭터 추가 방법" AutomationProperties.Name="캐릭터 만들기와 다운로드 안내"/>
+                <Button Grid.Column="2" Width="34" Height="34" MinHeight="34" Padding="0" VerticalAlignment="Top" Style="{StaticResource AuxUtilityButton}"
+                        Click="Close_Click" ToolTip="닫기" AutomationProperties.Name="닫기">
+                    <Path Data="M4,4 L12,12 M12,4 L4,12" Width="12" Height="12" Stretch="Fill" Stroke="{DynamicResource AuxMutedBrush}"
+                          StrokeThickness="1.5" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
+                </Button>
+            </Grid>
+            <ScrollViewer x:Name="PetSettingsScroll" Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                <StackPanel x:Name="SettingsBody" Margin="18,0,18,18">
+                    <Border x:Name="GlobalVisibilitySection" Style="{StaticResource PetCard}">
+                        <Grid>
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                            <StackPanel VerticalAlignment="Center" Margin="0,0,14,0">
+                                <TextBlock x:Name="GlobalVisibilityLabel" Text="달력에 캐릭터 표시" Style="{StaticResource AuxSectionTitle}"/>
+                                <TextBlock x:Name="GlobalHiddenHint" Text="전체 표시를 켜면 개별 표시 설정대로 나타납니다." Style="{StaticResource PetHint}" Margin="0,5,0,0" Visibility="Collapsed"/>
+                            </StackPanel>
+                            <CheckBox x:Name="VisibleToggle" Grid.Column="1" Style="{StaticResource AuxOnOffSwitch}" VerticalAlignment="Center"
+                                      Click="Visible_Click" AutomationProperties.LabeledBy="{Binding ElementName=GlobalVisibilityLabel}"/>
+                        </Grid>
+                    </Border>
+
+                    <Grid x:Name="SettingsSections" SizeChanged="SettingsSections_SizeChanged">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition x:Name="PlacementColumnWidth" Width="0"/></Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+
+                        <Border x:Name="PetRosterSection" Style="{StaticResource PetCard}" VerticalAlignment="Top">
+                            <StackPanel>
+                                <Grid Margin="0,0,0,14">
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                    <TextBlock Text="내 캐릭터" Style="{StaticResource AuxSectionTitle}"/>
+                                    <TextBlock x:Name="PetCountText" Grid.Column="1" Style="{StaticResource PetHint}" VerticalAlignment="Center"/>
+                                </Grid>
+                                <ItemsControl x:Name="PetList">
+                                    <ItemsControl.ItemTemplate><DataTemplate>
+                                        <Border Background="{DynamicResource AuxCanvasBrush}" CornerRadius="8" Padding="12" Margin="0,0,0,10">
+                                            <StackPanel>
+                                                <Grid Margin="0,0,0,12">
+                                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                                    <TextBlock x:Name="PetNameLabel" Text="{Binding Label}" ToolTip="{Binding Name}" FontSize="15" FontWeight="SemiBold"
+                                                               Foreground="{DynamicResource AuxInkBrush}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                                                    <TextBlock Grid.Column="1" Text="표시" Style="{StaticResource PetHint}" Margin="10,0,8,0" VerticalAlignment="Center"/>
+                                                    <CheckBox Grid.Column="2" Tag="{Binding Index}" IsChecked="{Binding Shown, Mode=OneWay}" IsEnabled="{Binding CanHide}"
+                                                              Style="{StaticResource AuxOnOffSwitch}" Click="PetShown_Click" ToolTip="{Binding VisibilityHint}" ToolTipService.ShowOnDisabled="True"
+                                                              AutomationProperties.Name="{Binding VisibilityName}"/>
+                                                </Grid>
+                                                <UniformGrid Columns="3">
+                                                    <Button Content="개별 설정" Tag="{Binding Index}" Margin="0,0,4,0" Style="{StaticResource PetButton}" Click="ConfigurePet_Click"
+                                                            ToolTip="크기, 동작, 좌우 반전과 개별 위치를 설정합니다."/>
+                                                    <Button Content="바꾸기" Tag="{Binding Index}" Margin="2,0" Style="{StaticResource PetButton}" Click="ChangePet_Click"
+                                                            ToolTip="다른 캐릭터로 바꿉니다."/>
+                                                    <Button Content="빼기" Tag="{Binding Index}" Margin="4,0,0,0" IsEnabled="{Binding CanRemove}" Style="{StaticResource PetButton}" Click="RemovePet_Click"
+                                                            ToolTip="{Binding RemoveHint}" ToolTipService.ShowOnDisabled="True"/>
+                                                </UniformGrid>
+                                            </StackPanel>
+                                        </Border>
+                                    </DataTemplate></ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                                <Button x:Name="AddPetButton" Content="캐릭터 추가" Style="{StaticResource PetButton}" Click="AddPet_Click" ToolTipService.ShowOnDisabled="True"/>
+                                <Button x:Name="CharacterHelpButton" Content="캐릭터 추가 방법" Style="{StaticResource PetButton}" Click="Help_Click" Margin="0,8,0,0"
+                                        ToolTip="직접 만들거나 웹에서 받은 캐릭터를 추가하는 방법"/>
+                            </StackPanel>
+                        </Border>
+
+                        <Border x:Name="PersonalAppearancePanel" Style="{StaticResource PetCard}">
+                            <StackPanel>
+                                <TextBlock Text="표시와 크기" Style="{StaticResource AuxSectionTitle}" Margin="0,0,0,16"/>
+                                <Grid>
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                    <TextBlock Text="이 캐릭터 표시" Foreground="{DynamicResource AuxInkBrush}" VerticalAlignment="Center"/>
+                                    <CheckBox x:Name="IndividualVisibleToggle" Grid.Column="1" Style="{StaticResource AuxOnOffSwitch}" Click="IndividualVisible_Click"
+                                              AutomationProperties.Name="이 캐릭터 표시" ToolTipService.ShowOnDisabled="True"/>
+                                </Grid>
+                                <Grid Margin="0,18,0,6">
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                    <TextBlock x:Name="ScaleTitle" Text="크기" Foreground="{DynamicResource AuxInkBrush}"/>
+                                    <TextBlock x:Name="ScaleText" Grid.Column="1" Text="100%" Style="{StaticResource PetValue}"/>
+                                </Grid>
+                                <Slider x:Name="ScaleSlider" Minimum="50" Maximum="300" TickFrequency="10" IsSnapToTickEnabled="True" IsMoveToPointEnabled="True"
+                                        local:SliderInteraction.EnableMouseDrag="True" ValueChanged="Scale_ValueChanged" AutomationProperties.Name="캐릭터 크기"/>
+                                <Grid Margin="0,16,0,0">
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                    <TextBlock x:Name="FlipTitle" Text="좌우 반전" Foreground="{DynamicResource AuxInkBrush}" VerticalAlignment="Center"/>
+                                    <CheckBox x:Name="FlipSwitch" Grid.Column="1" Style="{StaticResource AuxOnOffSwitch}" Click="Flip_Click" AutomationProperties.Name="이 캐릭터 좌우 반전"/>
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+
+                        <StackPanel x:Name="PlacementColumn" Grid.Row="1" VerticalAlignment="Top">
+                            <Border Style="{StaticResource PetCard}">
+                                <StackPanel>
+                                    <TextBlock x:Name="PlacementSectionTitle" Text="전체 배치" Style="{StaticResource AuxSectionTitle}" Margin="0,0,0,14"/>
+                                    <Button x:Name="PlaceButton" Content="드래그로 배치" Style="{StaticResource AuxPrimaryButton}" Click="Place_Click" ToolTipService.ShowOnDisabled="True"/>
+                                    <TextBlock x:Name="PlaceHint" Style="{StaticResource PetHint}" Margin="0,8,0,0"/>
+                                    <Button x:Name="PositionResetButton" Content="위치만 초기화" Style="{StaticResource PetButton}" Margin="0,12,0,0" Click="PositionReset_Click"/>
+                                </StackPanel>
+                            </Border>
+                            <Border x:Name="ActionSection" Style="{StaticResource PetCard}">
+                                <StackPanel>
+                                    <TextBlock x:Name="ActionTitle" Text="동작" Style="{StaticResource AuxSectionTitle}" Margin="0,0,0,12"/>
+                                    <ItemsControl x:Name="ActionButtons" ItemsPanel="{StaticResource PetActionsWidePanel}" SizeChanged="ActionButtons_SizeChanged">
+                                        <ItemsControl.ItemTemplate><DataTemplate>
+                                            <Button Content="{Binding Label}" Tag="{Binding Key}" ToolTip="{Binding Tip}" Click="Action_Click" Margin="2" Padding="4,7"
+                                                    AutomationProperties.Name="{Binding Label}">
+                                                <Button.ContentTemplate><DataTemplate><TextBlock Text="{Binding}" TextWrapping="Wrap" TextAlignment="Center"/></DataTemplate></Button.ContentTemplate>
+                                                <Button.Style><Style TargetType="Button" BasedOn="{StaticResource PetButton}">
+                                                    <Style.Triggers><DataTrigger Binding="{Binding Selected}" Value="True">
+                                                        <Setter Property="Background" Value="{DynamicResource AuxActionBrush}"/><Setter Property="Foreground" Value="White"/>
+                                                    </DataTrigger></Style.Triggers>
+                                                </Style></Button.Style>
+                                            </Button>
+                                        </DataTemplate></ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                    <TextBlock x:Name="StillImageHint" Text="정지 이미지는 동작을 바꿀 수 없습니다." Visibility="Collapsed" Style="{StaticResource PetHint}" Margin="0,10,0,0"/>
+                                    <TextBlock x:Name="TypingHint" Visibility="Collapsed" Style="{StaticResource PetHint}" Margin="0,10,0,0"/>
+                                </StackPanel>
+                            </Border>
+                            <Button x:Name="ResetButton" Content="초기화" HorizontalAlignment="Left" Style="{StaticResource PetButton}" Click="Reset_Click"/>
+                            <TextBlock x:Name="ResetHint" Style="{StaticResource PetHint}" Margin="0,6,0,0"/>
+                        </StackPanel>
+                    </Grid>
+                </StackPanel>
+            </ScrollViewer>
         </Grid>
-    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-        <StackPanel Margin="18,4,18,18">
-
-            <!-- Pets (1~3): pick one to edit its action; change / remove it; add another. -->
-            <Border x:Name="PetRosterSection" Style="{StaticResource AuxRoundSection}" Padding="12" Margin="0,0,0,10">
-                <StackPanel>
-                    <TextBlock Text="캐릭터 관리" Style="{StaticResource AuxSectionTitle}" Margin="0,0,0,8"/>
-                    <TextBlock Text="크기·동작·개별 이동은 캐릭터를 더블클릭하거나 아래 설정 버튼에서 바꿉니다." Style="{StaticResource AuxCaption}" TextWrapping="Wrap" Margin="0,0,0,12"/>
-                    <ItemsControl x:Name="PetList">
-                        <ItemsControl.ItemTemplate><DataTemplate>
-                            <Grid Margin="0,0,0,6">
-                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                                <TextBlock Text="{Binding Label}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" FontSize="13"/>
-                                <!-- 보이기: hide this one pet without removing it (beside the TODO window: not the last one showing). -->
-                                <CheckBox Grid.Column="1" Content="보이기" Tag="{Binding Index}" IsChecked="{Binding Shown, Mode=OneWay}" IsEnabled="{Binding CanHide}" Click="PetShown_Click"
-                                          VerticalAlignment="Center" Margin="6,0,2,0" Style="{StaticResource AuxCheckBox}" AutomationProperties.Name="이 캐릭터 보이기"/>
-                                <Button Grid.Column="2" Content="설정" Tag="{Binding Index}" Height="28" Padding="10,0" Margin="6,0,0,0"
-                                        Style="{StaticResource AuxCompactButton}" Click="ConfigurePet_Click"/>
-                                <Button Grid.Column="3" Content="바꾸기" Tag="{Binding Index}" Height="28" Padding="10,0" Margin="6,0,0,0"
-                                        Style="{StaticResource AuxCompactButton}" Click="ChangePet_Click"/>
-                                <Button Grid.Column="4" Content="빼기" Tag="{Binding Index}" Height="28" Padding="10,0" Margin="4,0,0,0"
-                                        IsEnabled="{Binding CanRemove}" Style="{StaticResource AuxCompactButton}" Click="RemovePet_Click"/>
-                            </Grid>
-                        </DataTemplate></ItemsControl.ItemTemplate>
-                    </ItemsControl>
-                    <Button x:Name="AddPetButton" Content="캐릭터 추가 (최대 3)" Height="32" Margin="0,4,0,0" Style="{StaticResource AuxCompactButton}" Click="AddPet_Click"/>
-                </StackPanel>
-            </Border>
-
-            <!-- The selected pet's action. -->
-            <Border x:Name="ActionSection" Style="{StaticResource AuxRoundSection}" Padding="12" Margin="0,0,0,10">
-                <StackPanel>
-                    <TextBlock x:Name="ActionTitle" Text="동작" Style="{StaticResource AuxSectionTitle}" Margin="0,0,0,8" TextTrimming="CharacterEllipsis"/>
-                    <ItemsControl x:Name="ActionButtons">
-                        <ItemsControl.ItemsPanel><ItemsPanelTemplate><UniformGrid Columns="3"/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
-                        <ItemsControl.ItemTemplate><DataTemplate>
-                            <Button Content="{Binding Label}" Tag="{Binding Key}" ToolTip="{Binding Tip}" Click="Action_Click" Height="30" Margin="2" Padding="3,0">
-                                <Button.Style><Style TargetType="Button" BasedOn="{StaticResource AuxCompactButton}">
-                                    <Style.Triggers><DataTrigger Binding="{Binding Selected}" Value="True">
-                                        <Setter Property="Background" Value="{DynamicResource AuxActionBrush}"/><Setter Property="Foreground" Value="White"/>
-                                    </DataTrigger></Style.Triggers>
-                                </Style></Button.Style>
-                            </Button>
-                        </DataTemplate></ItemsControl.ItemTemplate>
-                    </ItemsControl>
-                    <!-- 타이핑 반응 (offered for sprite pets): what it reads of the keyboard. -->
-                    <TextBlock x:Name="TypingHint" Visibility="Collapsed" TextWrapping="Wrap" Style="{StaticResource AuxCaption}" Margin="2,6,0,0"
-                               Text="타이핑 반응: 다른 앱에서 타자를 쳐도 캐릭터가 따라 움직입니다. 어떤 키를 눌렀는지는 읽지 않고, 눌렀다는 사실만 셉니다."/>
-                </StackPanel>
-            </Border>
-
-            <!-- Size, visibility and where the pets stand around the calendar (the TODO window's pets: around that window,
-                 kept apart from the mini window's; the labels say which). -->
-            <Border Style="{StaticResource AuxRoundSection}" Padding="12" Margin="0,0,0,10">
-                <StackPanel>
-                    <CheckBox x:Name="VisibleToggle" Content="달력에 캐릭터 표시" Style="{StaticResource AuxCheckBox}" Click="Visible_Click" Margin="0,0,0,10"/>
-                    <StackPanel x:Name="PersonalAppearancePanel">
-                    <CheckBox x:Name="IndividualVisibleToggle" Content="이 캐릭터 보이기" Style="{StaticResource AuxCheckBox}" Click="IndividualVisible_Click" Margin="0,0,0,14"/>
-                    <Grid>
-                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                        <TextBlock x:Name="ScaleTitle" Text="크기" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource AuxInkBrush}"/>
-                        <TextBlock x:Name="ScaleText" Grid.Column="1" Text="100%" Foreground="{DynamicResource AuxInkBrush}"/>
-                    </Grid>
-                    <Slider x:Name="ScaleSlider" Minimum="50" Maximum="300" TickFrequency="10" IsSnapToTickEnabled="True" IsMoveToPointEnabled="True"
-                            local:SliderInteraction.EnableMouseDrag="True" ValueChanged="Scale_ValueChanged" AutomationProperties.Name="캐릭터 크기"/>
-                    <!-- 좌우 반전: mirrors the selected pet's drawing (every action); its spot and size stay. -->
-                    <Grid Margin="0,10,0,0">
-                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                        <TextBlock x:Name="FlipTitle" Text="좌우 반전" FontWeight="SemiBold" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource AuxInkBrush}"/>
-                        <CheckBox x:Name="FlipSwitch" Grid.Column="1" Margin="10,0,0,0" Style="{StaticResource AuxOnOffSwitch}" VerticalAlignment="Center"
-                                  Click="Flip_Click" AutomationProperties.Name="이 캐릭터 좌우 반전"/>
-                    </Grid>
-                    </StackPanel>
-                    <StackPanel x:Name="GlobalPlacementPanel">
-                    <TextBlock x:Name="PlacementTitle" Text="위치 (달력 기준)" FontWeight="SemiBold" Foreground="{DynamicResource AuxInkBrush}" Margin="0,12,0,6"/>
-                    <ComboBox x:Name="SideCombo" Height="32" Style="{StaticResource AuxComboBox}" SelectionChanged="Placement_Changed" AutomationProperties.Name="캐릭터를 둘 쪽">
-                        <ComboBoxItem x:Name="SideLeftItem" Content="달력 왼쪽"/>
-                        <ComboBoxItem x:Name="SideRightItem" Content="달력 오른쪽"/>
-                    </ComboBox>
-                    <Grid Margin="0,10,0,2">
-                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                        <TextBlock Text="세로 위치" Foreground="{DynamicResource AuxInkBrush}"/>
-                        <TextBlock x:Name="VerticalText" Grid.Column="1" Text="아래" Foreground="{DynamicResource AuxInkBrush}"/>
-                    </Grid>
-                    <Slider x:Name="VerticalSlider" Minimum="0" Maximum="100" TickFrequency="5" IsSnapToTickEnabled="True" IsMoveToPointEnabled="True"
-                            local:SliderInteraction.EnableMouseDrag="True" ValueChanged="Placement_Changed" AutomationProperties.Name="캐릭터 세로 위치"/>
-                    <Grid Margin="0,10,0,2">
-                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                        <TextBlock x:Name="GapTitle" Text="달력과 간격" Foreground="{DynamicResource AuxInkBrush}"/>
-                        <TextBlock x:Name="GapText" Grid.Column="1" Text="8px" Foreground="{DynamicResource AuxInkBrush}"/>
-                    </Grid>
-                    <Slider x:Name="GapSlider" Minimum="-80" Maximum="60" TickFrequency="2" IsSnapToTickEnabled="True" IsMoveToPointEnabled="True"
-                            local:SliderInteraction.EnableMouseDrag="True" ValueChanged="Placement_Changed" AutomationProperties.Name="캐릭터와 달력 사이 간격"/>
-                    <TextBlock Text="왼쪽/오른쪽이나 간격을 바꾸면 드래그로 옮긴 캐릭터가 기본 배치로 돌아갑니다. 세로 위치는 높이만 맞춥니다."
-                               TextWrapping="Wrap" Style="{StaticResource AuxCaption}" Margin="0,6,0,10"/>
-                    </StackPanel>
-                    <Button x:Name="PlaceButton" Content="이 캐릭터 이동" Height="34" Margin="0,12,0,0" Style="{StaticResource AuxPrimaryButton}" Click="Place_Click"/>
-                    <TextBlock x:Name="PlaceHint" Text="누르면 이 창이 닫히고, 캐릭터를 끌어서 달력 주위 어디에나 놓을 수 있습니다."
-                               TextWrapping="Wrap" Style="{StaticResource AuxCaption}" Margin="0,6,0,0"/>
-                    <Button x:Name="PositionResetButton" Content="이 캐릭터 위치만 초기화" Height="30" Margin="0,12,0,0" Style="{StaticResource AuxCompactButton}" Click="PositionReset_Click"/>
-                </StackPanel>
-            </Border>
-            <!-- 초기화: two presses (the first turns it into 정말 초기화), like the app's 삭제. -->
-            <Button x:Name="ResetButton" Content="초기화" Height="32" HorizontalAlignment="Left" Padding="14,0" Margin="0,4,0,0"
-                    Style="{StaticResource AuxCompactButton}" Click="Reset_Click" AutomationProperties.Name="캐릭터 설정 초기화"/>
-            <TextBlock x:Name="ResetHint" Text="모든 캐릭터를 보이게, 크기 100%, 좌우 반전 끔, 기본 위치(달력 왼쪽·아래·간격 8px), 동작 대기로 되돌립니다. 캐릭터 목록은 그대로 둡니다."
-                       TextWrapping="Wrap" Style="{StaticResource AuxCaption}" Margin="0,6,0,0"/>
-        </StackPanel>
-    </ScrollViewer>
-    </Grid>
     </Border>
 </Window>

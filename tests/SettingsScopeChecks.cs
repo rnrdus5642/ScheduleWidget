@@ -21,9 +21,9 @@ namespace ScheduleWidget.Checks
             var global = new PetSettingsWindow(host, 0, embedded: true);
             try
             {
-                Require(Control<FrameworkElement>(global, "PersonalAppearancePanel").Visibility == Visibility.Collapsed && Control<FrameworkElement>(global, "GlobalPlacementPanel").Visibility == Visibility.Visible,
+                Require(Control<FrameworkElement>(global, "PersonalAppearancePanel").Visibility == Visibility.Collapsed && Control<FrameworkElement>(global, "GlobalVisibilitySection").Visibility == Visibility.Visible,
                     "Global settings still expose selected-pet appearance.");
-                Require(Control<FrameworkElement>(personal, "PetRosterSection").Visibility == Visibility.Collapsed && Control<FrameworkElement>(personal, "GlobalPlacementPanel").Visibility == Visibility.Collapsed,
+                Require(Control<FrameworkElement>(personal, "PetRosterSection").Visibility == Visibility.Collapsed && Control<FrameworkElement>(personal, "GlobalVisibilitySection").Visibility == Visibility.Collapsed,
                     "Personal settings still expose shared management.");
                 string firstSpot = JsonConvert.SerializeObject(data.MiniPetSpots[0]);
                 Call(personal, "Reset_Click", personal, ClickArgs());

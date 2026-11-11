@@ -97,6 +97,7 @@
     <Compile Include="Services\SliderInteraction.cs" />
     <Compile Include="Services\ChromelessWindow.cs" />
     <Compile Include="Services\AuxiliaryWindowPlacement.cs" />
+    <Compile Include="Services\AuxiliaryWindowDismissal.cs" />
     <Compile Include="Services\AuxTheme.cs" />
     <Compile Include="Services\CubicBezierEase.cs" />
     <Compile Include="Services\HotKeyGesture.cs" />
@@ -178,6 +179,8 @@
     <Compile Include="CharacterWindow.xaml.cs"><DependentUpon>CharacterWindow.xaml</DependentUpon></Compile>
     <Page Include="PetSettingsWindow.xaml"><Generator>MSBuild:Compile</Generator></Page>
     <Compile Include="PetSettingsWindow.xaml.cs"><DependentUpon>PetSettingsWindow.xaml</DependentUpon></Compile>
+    <Page Include="CharacterHelpWindow.xaml"><Generator>MSBuild:Compile</Generator></Page>
+    <Compile Include="CharacterHelpWindow.xaml.cs"><DependentUpon>CharacterHelpWindow.xaml</DependentUpon></Compile>
     <Page Include="MainWindow.xaml">
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>

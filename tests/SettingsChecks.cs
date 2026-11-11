@@ -466,7 +466,8 @@ namespace ScheduleWidget.Checks
 
         private static void PetAudit()
         {
-            var data = new AppData(); data.MiniExtraCharacters.Add(new MiniCharacterSlot { Manifest = "DefaultPets/mochi-blue/pet.json" });
+            var data = new AppData { MiniCharacterSide = "Right", MiniCharacterVertical = 25, MiniCharacterGap = -20 };
+            data.MiniExtraCharacters.Add(new MiniCharacterSlot { Manifest = "DefaultPets/mochi-blue/pet.json" });
             int saves = 0; var mini = new MiniWindow(data, () => { saves++; return true; }, () => { }); var host = (IPetSettingsHost)mini;
             var pet = new PetSettingsWindow(host, 1);
             var global = new PetSettingsWindow(host, 0, embedded: true);
@@ -474,7 +475,7 @@ namespace ScheduleWidget.Checks
                 Run("AUDIT 캐릭터/선택한 캐릭터만 크기 변경", () => { Control<Slider>(pet, "ScaleSlider").Value = 170; Require(host.PetScale(1) == 170 && host.PetScale(0) == 100, "Scale changed the wrong pet."); });
                 Run("AUDIT 캐릭터/좌우 반전", () => { Control<CheckBox>(pet, "FlipSwitch").IsChecked = true; Call(pet, "Flip_Click", pet, ClickArgs()); Require(host.PetFlipped(1) && !host.PetFlipped(0), "Flip changed the wrong pet."); });
                 Run("AUDIT 캐릭터/동작 선택", () => { foreach (var option in host.PetAnimationOptions(1)) { Call(pet, "Action_Click", new Button { Tag = option.Key }, ClickArgs()); Require(host.PetAnimation(1) == option.Key, "Animation selection failed: " + option.Key); } });
-                Run("AUDIT 캐릭터/좌우 위치 세로 위치 간격", () => { Control<ComboBox>(global, "SideCombo").SelectedIndex = 1; Control<Slider>(global, "VerticalSlider").Value = 25; Control<Slider>(global, "GapSlider").Value = -20; Require(host.CharacterSide == "Right" && host.CharacterVertical == 25 && host.CharacterGap == -20, "Placement fields did not apply."); });
+                Run("AUDIT 캐릭터/기존 배치 설정 유지", () => { Call(global, "Reload"); Call(pet, "Reload"); Require(host.CharacterSide == "Right" && host.CharacterVertical == 25 && host.CharacterGap == -20, "Opening character settings changed the saved placement."); });
                 Run("AUDIT 캐릭터/개별 보이기", () => { Call(pet, "PetShown_Click", new CheckBox { Tag = 1, IsChecked = false }, ClickArgs()); Require(!host.PetVisible(1) && host.PetVisible(0), "Per-pet visibility failed."); host.SetPetVisible(1, true); });
                 Run("AUDIT 캐릭터/전체 표시 켜기 끄기", () => { foreach (bool shown in new[] { false, true }) { Control<CheckBox>(global, "VisibleToggle").IsChecked = shown; Call(global, "Visible_Click", global, ClickArgs()); Require(host.CharactersVisible == shown, "Global visibility failed."); } });
                 Run("AUDIT 캐릭터/초기화 확인 및 기본값", () => { Call(pet, "Reset_Click", pet, ClickArgs()); Require(host.PetScale(1) == 170, "Pet reset skipped confirmation."); Call(pet, "Reset_Click", pet, ClickArgs()); Require(host.PetScale(1) == 100 && host.PetAnimation(1) == "idle" && !host.PetFlipped(1) && host.CharacterGap == -20 && host.CharacterSide == "Right", "Individual reset changed shared placement or missed personal defaults."); });

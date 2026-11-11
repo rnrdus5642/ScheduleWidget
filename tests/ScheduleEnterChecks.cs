@@ -20,13 +20,34 @@ namespace ScheduleWidget.Checks
             protected override CompositionTarget GetCompositionTargetCore() => null;
         }
 
-        private static KeyEventArgs ScheduleKey(TextBox input, Key key = Key.Enter, bool ime = false, bool repeat = false)
+        private sealed class ScheduleKeyboardDevice : KeyboardDevice
         {
-            var args = new KeyEventArgs(Keyboard.PrimaryDevice, new ScheduleKeySource(), Environment.TickCount, key)
+            internal ModifierKeys Keys;
+            internal ScheduleKeyboardDevice() : base(InputManager.Current) { }
+            protected override KeyStates GetKeyStatesFromSystem(Key key)
+            {
+                ModifierKeys modifier = key == Key.LeftCtrl || key == Key.RightCtrl ? ModifierKeys.Control
+                    : key == Key.LeftShift || key == Key.RightShift ? ModifierKeys.Shift
+                    : key == Key.LeftAlt || key == Key.RightAlt ? ModifierKeys.Alt
+                    : key == Key.LWin || key == Key.RWin ? ModifierKeys.Windows : ModifierKeys.None;
+                return modifier != ModifierKeys.None && (Keys & modifier) != 0 ? KeyStates.Down : KeyStates.None;
+            }
+        }
+
+        private static ScheduleKeyboardDevice scheduleKeyboard;
+        private static KeyEventArgs ScheduleKey(TextBox input, Key key = Key.Enter, bool ime = false, bool repeat = false,
+            ModifierKeys modifiers = ModifierKeys.None)
+        {
+            // Never read modifier keys the user happens to hold in another app while these checks run.
+            var device = scheduleKeyboard ?? (scheduleKeyboard = new ScheduleKeyboardDevice());
+            var previous = device.Keys;
+            device.Keys = modifiers;
+            var args = new KeyEventArgs(device, new ScheduleKeySource(), Environment.TickCount, key)
                 { RoutedEvent = Keyboard.PreviewKeyDownEvent };
             if (ime) typeof(KeyEventArgs).GetMethod("MarkImeProcessed", BindingFlags.Instance | BindingFlags.NonPublic).Invoke(args, null);
             if (repeat) typeof(KeyEventArgs).GetMethod("SetRepeat", BindingFlags.Instance | BindingFlags.NonPublic).Invoke(args, new object[] { true });
-            input.RaiseEvent(args);
+            try { input.RaiseEvent(args); }
+            finally { device.Keys = previous; }
             return args;
         }
 
@@ -56,6 +77,9 @@ namespace ScheduleWidget.Checks
                     PrepareNewSchedule(mini, date);
                     int before = data.Schedules.Count;
                     title.Text = month ? "월간 일정" : "기본 일정";
+                    ScheduleKey(title, modifiers: ModifierKeys.Control);
+                    ScheduleKey(title, modifiers: ModifierKeys.Shift);
+                    Require(data.Schedules.Count == before, "A modified Enter submitted a schedule.");
                     Require(ScheduleKey(title).Handled && data.Schedules.Count == before + 1,
                         "Enter on the title did not add a schedule.");
                     Require(store.LoadData().Data.Schedules.Last().Period == date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),

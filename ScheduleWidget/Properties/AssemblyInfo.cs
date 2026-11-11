@@ -50,5 +50,5 @@ using System.Windows;
 //
 [assembly: AssemblyVersion("0.0.0.0")]
 [assembly: AssemblyFileVersion("0.0.0.0")]
-[assembly: AssemblyInformationalVersion("2026.1109.1550")]
+[assembly: AssemblyInformationalVersion("2026.1111.1711")]
 [assembly: System.Runtime.CompilerServices.InternalsVisibleTo("ScheduleWidget.Checks")]
