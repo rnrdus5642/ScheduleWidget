@@ -61,7 +61,7 @@
             <DockPanel LastChildFill="True">
                 <StackPanel DockPanel.Dock="Top" Margin="12,0,0,24">
                     <TextBlock Text="설정" FontSize="26" FontWeight="SemiBold"/>
-                    <TextBlock Text="ScheduleWidget" FontSize="11" Foreground="{DynamicResource AuxMutedBrush}" Margin="0,5,0,0"/>
+                    <TextBlock x:Name="ProfileLabel" Text="ScheduleWidget" FontSize="11" Foreground="{DynamicResource AuxMutedBrush}" Margin="0,5,0,0"/>
                 </StackPanel>
                 <ListBox x:Name="SettingsNavigation" BorderThickness="0" Background="Transparent"
                          ItemContainerStyle="{StaticResource SettingsNavItem}" SelectedIndex="0"

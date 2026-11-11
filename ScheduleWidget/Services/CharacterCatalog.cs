@@ -60,7 +60,7 @@ namespace ScheduleWidget
         // Imported characters live with this PC's data (like the schedules): %LocalAppData%/ScheduleWidget/Pet.
         // Moving or updating the app folder keeps them. Tests point PetRoot at their own folder.
         public static string PetRoot { get; set; }
-        public static string PetDirectory => PetRoot ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ScheduleWidget", "Pet");
+        public static string PetDirectory => PetRoot ?? Path.Combine(AppProfile.DataDirectory, "Pet");
         // Where older versions kept them: next to the app.
         public static string LegacyPetDirectory => Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Pet");
         private static readonly string[] Extensions = { ".png", ".webp", ".gif", ".jpg", ".jpeg", ".bmp" };

@@ -43,6 +43,7 @@
     <Compile Include="SettingsDismissChecks.cs" />
     <Compile Include="PlaylistEditorChecks.cs" />
     <Compile Include="RenderRecoveryChecks.cs" />
+    <Compile Include="AppProfileChecks.cs" />
     <Compile Include="ReviewRegressionChecks.cs" />
     <Compile Include="GooglePetRetryChecks.cs" />
     <Compile Include="HardeningChecks.cs" />

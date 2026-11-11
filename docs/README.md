@@ -1,6 +1,6 @@
 # ScheduleWidget 소개 홈페이지
 
-문서 기준: 2026-11-11. 앱의 사용·개발 안내는 [루트 README](../README.md), 개인정보 문서의 원본은 [PRIVACY.md](../PRIVACY.md)입니다.
+문서 기준: 2026-11-12. 앱의 사용·개발 안내는 [루트 README](../README.md), 개인정보 문서의 원본은 [PRIVACY.md](../PRIVACY.md)입니다.
 
 기존 저장소의 `docs` 폴더를 GitHub Pages로 게시합니다. 사이트 파일은 HTML·CSS·SVG로 구성되며 별도 빌드, 외부 폰트, 자바스크립트 또는 분석 도구가 필요하지 않습니다.
 

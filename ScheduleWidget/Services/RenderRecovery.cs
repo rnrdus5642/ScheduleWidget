@@ -13,8 +13,7 @@ namespace ScheduleWidget
         private static readonly TimeSpan RestartWindow = TimeSpan.FromMinutes(5);
         private const int MaxRestarts = 2;
         private static string Executable => typeof(RenderRecovery).Assembly.Location;
-        private static string HistoryPath => Path.Combine(ErrorLog.Root ?? Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ScheduleWidget"), "render-restarts.txt");
+        private static string HistoryPath => Path.Combine(ErrorLog.Root ?? AppProfile.DataDirectory, "render-restarts.txt");
 
         internal static bool TryReserveRestart(string historyPath, DateTime nowUtc)
         {
@@ -53,7 +52,8 @@ namespace ScheduleWidget
         internal static ProcessStartInfo RecoveryStartInfo(string executable, int parentId, long parentStartUtc, bool restart)
         {
             return new ProcessStartInfo(executable, RecoveryArgument + " " + parentId.ToString(CultureInfo.InvariantCulture) + " " +
-                parentStartUtc.ToString(CultureInfo.InvariantCulture) + (restart ? " restart" : " stop"))
+                parentStartUtc.ToString(CultureInfo.InvariantCulture) + (restart ? " restart" : " stop") +
+                (AppProfile.IsDemo ? " " + AppProfile.DemoArgument : ""))
             {
                 // No console is created. After the wait this process becomes the visible widget (or a native error notice).
                 UseShellExecute = false, CreateNoWindow = true, WindowStyle = ProcessWindowStyle.Normal,

@@ -87,6 +87,7 @@
       <SubType>Designer</SubType>
     </ApplicationDefinition>
     <Compile Include="Program.cs" />
+    <Compile Include="Services\AppProfile.cs" />
     <Compile Include="Services\RenderRecovery.cs" />
     <Compile Include="Services\DataManager.cs" />
     <Compile Include="Services\ScheduleChanges.cs" />

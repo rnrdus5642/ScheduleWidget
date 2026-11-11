@@ -1,6 +1,6 @@
 # ScheduleWidget 개인정보처리방침 (Privacy Policy)
 
-최종 수정: 2026-11-11
+최종 수정: 2026-11-12
 
 ScheduleWidget은 Windows PC에서 동작하는 개인용 일정 위젯입니다. 프로젝트 운영자는 [rnrdus5642](https://github.com/rnrdus5642)입니다. 이 문서는 앱이 어떤 정보를 어디에 저장하는지, 사용자가 선택한 기능에 따라 어떤 외부 서비스와 통신하는지, 소개 홈페이지가 처리하는 정보를 설명합니다. 읽기용 웹 문서는 [docs/privacy.html](docs/privacy.html)에 있습니다.
 
@@ -8,6 +8,7 @@ ScheduleWidget은 Windows PC에서 동작하는 개인용 일정 위젯입니다
 
 - ScheduleWidget에는 개발자의 서버가 없습니다. 개발자는 사용자의 데이터를 받거나 볼 수 없으며, 앱은 분석·광고·오류 보고용 정보를 어디에도 보내지 않습니다.
 - 일정과 설정은 사용자 PC의 `%LocalAppData%\ScheduleWidget` 폴더(`schedules.json`과 그 백업 `schedules.json.bak`)에만 저장됩니다. 가져온 캐릭터는 같은 폴더의 `Pet`에 저장되고, 문제 해결용 기록(`pet-log.txt` 등)도 같은 폴더에만 남으며 어디에도 보내지 않습니다.
+- `--demo` 시연용 실행에서는 같은 종류의 데이터를 `%LocalAppData%\ScheduleWidget.Demo`에 별도로 저장합니다. 기존 일정·로그인·캐릭터는 자동으로 복사하지 않습니다. 로그인과 선택한 외부 연동은 실제 서비스와 통신하며, 기본 브라우저의 로그인 상태는 Windows 사용자와 공유되므로 시연 계정을 직접 선택해야 합니다. 시연 실행은 일반 앱의 자동 시작 등록을 변경하지 않습니다.
 - 아래의 외부 서비스는 사용자가 설정에서 직접 켜거나 그 기능을 직접 사용할 때만 쓰입니다. 통신은 사용자 PC와 해당 서비스 사이에서 직접 이루어지며, 각 서비스로 보낸 정보는 그 서비스의 개인정보처리방침을 따릅니다.
 
 ## 구글 계정 연동 (사용자가 직접 켰을 때만)
@@ -79,6 +80,8 @@ ScheduleWidget은 Windows PC에서 동작하는 개인용 일정 위젯입니다
 The character creation guide is bundled locally. Its copy buttons put example text on the clipboard only when clicked. Gallery and help links open in the user's browser without attaching schedules, credentials or local files; those sites apply their own privacy practices.
 
 The desktop sign-in requests the three declared Google scopes together. Email identifies the connected account; the separate Calendar and Drive switches control subsequent synchronization. Both switches are off for a new user, and existing enabled preferences may resume after reconnection. Turning a switch off stops synchronization but does not revoke the Google grant.
+
+The optional --demo launch stores a separate set of schedules, credentials, characters and embedded-browser caches in %LocalAppData%\ScheduleWidget.Demo without importing the normal profile. It uses the same real Google services and declared scopes. Sign-in still opens the system browser, whose account session is shared with the Windows user. Both data folders are retained when the program is uninstalled.
 
 Windows media information, volume controls and character typing reactions are processed locally. Typing reactions count key presses without recording keys or text. Updates are retrieved from GitHub. This static website has no custom tracking scripts or forms; GitHub Pages may process visitor IP addresses for security.
 

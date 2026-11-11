@@ -31,6 +31,7 @@ namespace ScheduleWidget
         {
             enabled = false;
             errorMessage = null;
+            if (AppProfile.IsDemo) return true;
 
             try
             {
@@ -70,6 +71,11 @@ namespace ScheduleWidget
         private bool TrySetStartup(bool enabled, out string errorMessage)
         {
             errorMessage = null;
+            if (AppProfile.IsDemo)
+            {
+                if (enabled) errorMessage = "시연용 실행은 Windows 자동 시작에 등록하지 않습니다.";
+                return !enabled;
+            }
 
             string exePath = GetExecutablePath();
             if (enabled && (string.IsNullOrWhiteSpace(exePath) || !File.Exists(exePath)))

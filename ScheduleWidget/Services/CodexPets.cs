@@ -52,7 +52,7 @@ namespace ScheduleWidget
             get
             {
                 if (UserPetsSource != null) return UserPetsSource;
-                if (CharacterCatalog.PetRoot != null) return null; // tests: never the real one
+                if (AppProfile.IsDemo || CharacterCatalog.PetRoot != null) return null; // demonstrations/checks: never the personal library
                 string profile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
                 return string.IsNullOrEmpty(profile) ? null : Path.Combine(profile, ".codex", "pets");
             }

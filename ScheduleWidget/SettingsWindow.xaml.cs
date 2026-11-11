@@ -22,6 +22,12 @@ namespace ScheduleWidget
         public SettingsWindow()
         {
             InitializeComponent();
+            if (AppProfile.IsDemo)
+            {
+                Title = "설정 · 시연용 데이터";
+                ProfileLabel.Text = "시연용 데이터";
+                ProfileLabel.ToolTip = "기존 일정과 분리된 시연용 저장 공간입니다.";
+            }
             ChromelessWindow.Apply(this, addCloseButton: false);
             placement = new AuxiliaryWindowPlacement(this);
             dismissal = new AuxiliaryWindowDismissal(this, () => CloseRequested?.Invoke());

@@ -92,10 +92,10 @@ namespace ScheduleWidget
             UseAppIconForAllWindows();
             // Characters an older version kept in the app folder's Pet are copied into %LocalAppData%/ScheduleWidget/Pet
             // (then the old copies are deleted); the Google Drive backup, when on, uploads them right after the app opens.
-            CharacterCatalog.MigrateLegacyPets();
+            if (!AppProfile.IsDemo) CharacterCatalog.MigrateLegacyPets();
             // The Codex characters are no longer shipped: an older version's app-folder Characters goes, and they are copied
             // from the installed Codex instead (removed when Codex is gone) — both in the background.
-            System.Threading.Tasks.Task.Run(() => DeleteBundledCharacters());
+            if (!AppProfile.IsDemo) System.Threading.Tasks.Task.Run(() => DeleteBundledCharacters());
             CodexPets.RefreshInBackground();
             SpriteSharpener.PruneInBackground(); // sharper sheets of pets deleted or changed since (on its low-priority thread)
             EnableSliderMouseWheel();

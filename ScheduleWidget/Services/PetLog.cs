@@ -17,8 +17,7 @@ namespace ScheduleWidget
         /// <summary>Folder for the log; null = %LocalAppData%\ScheduleWidget. Tests point it at their own folder.</summary>
         public static string Root { get; set; }
 
-        public static string FilePath => Path.Combine(Root ?? Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ScheduleWidget"), "pet-log.txt");
+        public static string FilePath => Path.Combine(Root ?? AppProfile.DataDirectory, "pet-log.txt");
 
         public static void Write(string kind, string detail = null)
         {

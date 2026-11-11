@@ -21,7 +21,8 @@ namespace ScheduleWidget
         /// its own autoplay options — two option sets can't share one folder). The app's data folder; the checks point it at
         /// their run folder, so they never write the real one.
         /// </summary>
-        internal static string UserDataRoot = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ScheduleWidget");
+        internal static string UserDataRoot;
+        internal static string ActiveUserDataRoot => UserDataRoot ?? AppProfile.DataDirectory;
 
         internal static async Task InitializeAsync(IWebView2 browser)
         {
@@ -47,7 +48,7 @@ namespace ScheduleWidget
             Task<CoreWebView2Environment> selectedEnvironment = allowMusicAutoplay ? musicEnvironment : environment;
             if (selectedEnvironment == null || selectedEnvironment.IsFaulted)
             {
-                string userDataFolder = Path.Combine(UserDataRoot, allowMusicAutoplay ? "WebView2Music" : "WebView2");
+                string userDataFolder = Path.Combine(ActiveUserDataRoot, allowMusicAutoplay ? "WebView2Music" : "WebView2");
                 // HardwareMediaKeyHandling off: the hidden YouTube player does not register as a Windows media session,
                 // so it never shows up as "another app" in the mini player bar (the bar already controls it directly).
                 var options = allowMusicAutoplay

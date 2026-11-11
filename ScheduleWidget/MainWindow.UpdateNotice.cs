@@ -31,7 +31,7 @@ namespace ScheduleWidget
         /// <summary>Called once the app has loaded: schedules the background check — only with a repository set.</summary>
         private void StartUpdateNoticeChecks()
         {
-            if (updateNoticeTimer != null || closingApp || !UpdateClient.IsConfigured) return;
+            if (AppProfile.IsDemo || updateNoticeTimer != null || closingApp || !UpdateClient.IsConfigured) return;
             updateNoticeTimer = new DispatcherTimer(DispatcherPriority.Background) { Interval = UpdateNoticeFirstDelay };
             updateNoticeTimer.Tick += async (s, e) =>
             {
@@ -52,7 +52,7 @@ namespace ScheduleWidget
         /// <summary>One quiet check. Never throws and never asks anything: a failure leaves things as they were.</summary>
         internal async Task CheckForUpdateNoticeAsync()
         {
-            if (updateNoticeChecking || updateBusy || closingApp || !UpdateClient.IsConfigured) return;
+            if (AppProfile.IsDemo || updateNoticeChecking || updateBusy || closingApp || !UpdateClient.IsConfigured) return;
             updateNoticeChecking = true;
             if (updateNoticeFound == null) SetUpdateStatus("업데이트를 확인하는 중…");
             try

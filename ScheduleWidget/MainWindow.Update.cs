@@ -28,6 +28,7 @@ namespace ScheduleWidget
             UpdateCurrentVersionText.Text = "현재 버전 " + UpdateInfo.CurrentVersionText;
             UpdateUpdateButton();
             ShowUpdateStatus();
+            if (AppProfile.IsDemo) { SetUpdateStatus("시연을 종료한 뒤 일반 실행에서 업데이트할 수 있습니다."); return; }
             _ = CheckForUpdateNoticeAsync(); // look now: a version put on GitHub since the last check turns the button on
         }
 
@@ -35,7 +36,7 @@ namespace ScheduleWidget
         // GitHub, none yet or not reachable: off).
         private void UpdateUpdateButton()
         {
-            if (UpdateButton != null) UpdateButton.IsEnabled = UpdateClient.IsConfigured && !updateBusy && updateNoticeFound != null;
+            if (UpdateButton != null) UpdateButton.IsEnabled = !AppProfile.IsDemo && UpdateClient.IsConfigured && !updateBusy && updateNoticeFound != null;
             updateNotice?.SetBusy(updateBusy);
         }
 
@@ -59,7 +60,7 @@ namespace ScheduleWidget
         // the bubble points at then owns the confirm dialog).
         internal async Task RunUpdateAsync()
         {
-            if (updateBusy || !UpdateClient.IsConfigured) return;
+            if (AppProfile.IsDemo || updateBusy || !UpdateClient.IsConfigured) return;
             updateBusy = true;
             UpdateUpdateButton();
             SetUpdateStatus("업데이트를 확인하는 중…");

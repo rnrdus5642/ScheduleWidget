@@ -1,10 +1,16 @@
 # Google 검수용 시연 영상 구성
 
-2026-11-11 최신 앱 기준의 촬영 대본입니다. 실제 촬영·업로드·심사 제출은 아직 하지 않았습니다. [검수 준비 문서](google-oauth.md)의 콘솔 확인과 브랜딩 게시를 먼저 마칩니다.
+2026-11-12 최신 앱 기준의 촬영 대본입니다. 실제 촬영·업로드·데이터 접근 권한 심사 제출은 아직 하지 않았습니다. 사용자 화면에서 브랜딩 게시 완료와 외부/프로덕션 상태를 확인했으며, 별도 시연용 Google 계정을 보유하고 있습니다.
+
+## 현재 PC에서 시연 공간 준비
+
+일반 앱을 트레이에서 종료하고 같은 배포 실행 파일에 `--demo`를 붙여 실행합니다. 설정창의 `시연용 데이터` 표시를 확인합니다. 일정·로그인·캐릭터·내장 브라우저 캐시는 `%LocalAppData%\ScheduleWidget.Demo`에 저장되며 기존 데이터 폴더는 유지됩니다. 빈 저장 공간을 사용할 때 Google은 로그아웃 상태이고 두 동기화 스위치는 OFF입니다.
+
+시연 모드는 실제 Google 로그인과 동기화를 그대로 사용합니다. 기본 브라우저에는 기존 계정이 남아 있을 수 있으므로 계정 선택 화면과 로그인 후 앱의 이메일을 확인합니다. 녹화 전에 현재 개인 계정의 연결을 해제하거나 기존 일정을 삭제하지 않습니다. 촬영을 마치면 시연 앱을 종료하고 평소 앱 바로가기로 돌아갑니다.
 
 ## 촬영 준비
 
-- 제출 프로젝트 `schedulewidget-production`과 같은 OAuth 클라이언트를 사용하는 최신 배포를 사용합니다. 검수용 별도 Windows 프로필·PC에서 진행하면 일상 일정과 토큰이 영상에 섞이지 않습니다.
+- 제출 프로젝트 `schedulewidget-production`과 같은 OAuth 클라이언트를 사용하는 최신 배포의 시연 모드 또는 별도 Windows 프로필·PC에서 진행합니다.
 - 계정 비밀번호·2단계 인증 코드는 녹화하지 않습니다. 앱 이름, 요청 권한, 동의 화면 주소의 OAuth client ID는 Google이 확인할 수 있어야 합니다. 토큰이나 client secret 파일을 열지 않습니다.
 - 캘린더에는 시연용 일정만 준비합니다. 예: `ScheduleWidget review — created in widget`, `ScheduleWidget review — created in Google`.
 - Drive 시연에는 직접 만든 작은 PNG 또는 샘플 캐릭터 ZIP을 준비합니다. 기본 모찌·설치된 Codex 기본 캐릭터는 Drive에 올리지 않으므로 시연 대상으로 고르지 않습니다.
@@ -16,7 +22,7 @@
 
 | 장면 | 화면에서 보여 줄 작업 | 사용할 영문 설명 |
 | --- | --- | --- |
-| 1. 앱과 배포 | 홈페이지 → Windows용 다운로드, 설치 후 앱 정보에서 버전 확인 | ScheduleWidget is a Windows desktop calendar widget. Local scheduling works without a Google account. |
+| 1. 앱과 배포 | 설치는 촬영 전에 완료. 홈페이지와 시연 앱의 앱 정보에서 버전 확인 | ScheduleWidget is a Windows desktop calendar widget. Local scheduling works without a Google account. |
 | 2. 사전 안내 | 설정 → 연동 → 구글에서 권한 설명과 개인정보처리방침 링크 표시 | Before connecting, the app explains the requested access and links to its public privacy policy. Calendar sync and character storage are optional. |
 | 3. 동의 과정 | `Sign in with Google` → 기본 브라우저. 영어 동의 화면 전체, 앱 이름, client ID가 보이는 주소, 요청 권한을 보여 준 뒤 동의 | This native desktop app requests the declared Calendar, per-file Drive, and email scopes through Google's consent screen in the system browser. |
 | 4. 연결 결과 | 앱으로 돌아와 설정 → 연동 → 구글을 다시 열고 계정 표시 확인 | The email address identifies the connected account. The switches control which synchronization features are used. |

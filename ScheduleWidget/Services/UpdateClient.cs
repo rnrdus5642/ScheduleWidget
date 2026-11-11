@@ -113,7 +113,7 @@ namespace ScheduleWidget
         private static string GitHubWebBase => GitHubBaseUrlOverride != null ? GitHubBaseUrlOverride.TrimEnd('/') + "/" : "https://github.com/";
 
         /// <summary>%LocalAppData%\ScheduleWidget\updates — under the same data root the app (and the checks' redirection) use.</summary>
-        public static string UpdatesDirectory => UpdatesRootOverride ?? Path.Combine(EmbeddedBrowser.UserDataRoot, "updates");
+        public static string UpdatesDirectory => UpdatesRootOverride ?? Path.Combine(EmbeddedBrowser.ActiveUserDataRoot, "updates");
 
         // Redirects are followed by hand (GitHub sends release downloads on to its storage host; only https is followed).
         private static readonly HttpClient SharedClient =
@@ -499,6 +499,7 @@ namespace ScheduleWidget
         /// </summary>
         public static Process StartUpdater(string stagingRoot, string appDirectory = null, int? processId = null)
         {
+            if (AppProfile.IsDemo) throw new InvalidOperationException("시연을 종료한 뒤 일반 실행에서 업데이트해 주세요.");
             appDirectory = appDirectory ?? AppDomain.CurrentDomain.BaseDirectory;
             string source = new[] { Path.Combine(stagingRoot, UpdaterExeName), Path.Combine(appDirectory, UpdaterExeName) }
                 .FirstOrDefault(System.IO.File.Exists);

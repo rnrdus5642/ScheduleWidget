@@ -84,6 +84,7 @@ namespace ScheduleWidget.Checks
             Run("Automatic media policy follows active apps and preserves manual choices", AutomaticMediaSelection);
             Run("Fatal rendering errors are distinguished from recoverable COM errors", RenderingFailureClassification);
             RenderRecoveryChecks();
+            DemoProfileChecks();
             Run("Invisible blank browser surfaces cannot intercept desktop icons", BrowserInputSurfaces);
             Run("Browser input protection survives replacement surfaces and style resets", BrowserInputGuardRecovery);
             Run("WPF resources and auxiliary window layouts construct", WindowResources);
@@ -442,6 +443,25 @@ namespace ScheduleWidget.Checks
                 typeof(MainWindow).GetField("dataStore", flags).SetValue(main, Store("window"));
                 ((TrayService)typeof(MainWindow).GetField("trayService", flags).GetValue(main)).Dispose();
                 windows.Add(main);
+                Run("Demo settings identify the isolated profile and disable shared desktop controls", () =>
+                {
+                    try
+                    {
+                        AppProfile.Configure(new[] { "--demo" });
+                        var demoMain = new MainWindow();
+                        typeof(MainWindow).GetField("dataStore", flags).SetValue(demoMain, Store("demo-window"));
+                        ((TrayService)typeof(MainWindow).GetField("trayService", flags).GetValue(demoMain)).Dispose();
+                        windows.Add(demoMain);
+                        var demoSettings = new SettingsWindow();
+                        windows.Add(demoSettings);
+                        Require(((System.Windows.Controls.TextBlock)demoSettings.FindName("ProfileLabel")).Text == "시연용 데이터" && demoSettings.Title.Contains("시연"),
+                            "The separate profile is not identifiable in settings.");
+                        Require(!((System.Windows.Controls.Primitives.ToggleButton)demoMain.FindName("InlineStartupToggle")).IsEnabled &&
+                            !((System.Windows.Controls.Primitives.ToggleButton)demoMain.FindName("InlineHotKeyToggle")).IsEnabled,
+                            "Demo controls can change normal Windows startup or global shortcuts.");
+                    }
+                    finally { AppProfile.Configure(Array.Empty<string>()); }
+                });
                 var data = Data();
                 var mini = new MiniWindow(data, () => true, () => { });
                 windows.Add(mini);

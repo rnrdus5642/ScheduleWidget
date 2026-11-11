@@ -57,6 +57,12 @@ namespace ScheduleWidget
         public MainWindow()
         {
             InitializeComponent();
+            if (AppProfile.IsDemo)
+            {
+                Title += " · 시연";
+                InlineStartupToggle.IsEnabled = InlineHotKeyToggle.IsEnabled = false;
+                InlineStartupToggle.ToolTip = InlineHotKeyToggle.ToolTip = "시연용 실행은 일반 앱의 자동 시작과 단축키 설정에 영향을 주지 않습니다.";
+            }
             Opacity = 0; // This window bootstraps the app; only the calendar is shown at startup.
             // The 종료 날짜 pickers (여러 날) open the same themed calendar as the add form's date button.
             AddEndPicker.Resources = CalendarPicker.Resources;
@@ -380,6 +386,7 @@ namespace ScheduleWidget
             {
                 DataLoadResult loadResult = dataStore.LoadData();
                 appData = loadResult.Data;
+                AppProfile.ApplyRuntimeSettings(appData);
 
                 if (!string.IsNullOrWhiteSpace(loadResult.WarningMessage))
                 {
@@ -1070,6 +1077,11 @@ namespace ScheduleWidget
 
         private void InlineSettingsApplyButton_Click(object sender, RoutedEventArgs e)
         {
+            if (AppProfile.IsDemo)
+            {
+                _inlineStartupDraft = false;
+                InlineStartupToggle.IsChecked = InlineHotKeyToggle.IsChecked = false;
+            }
             if (_inlineSettingsDraft == null || appData == null) return;
             // Music, pets and Google actions already save immediately. Commit the deferred pages in one write.
             var communication = appData.Communication;

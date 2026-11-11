@@ -393,7 +393,7 @@ namespace ScheduleWidget
         public static string ClientFile => Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "google_client.json");
 
         // A client file picked in 설정 (구글 로그인 → 파일 선택) is kept with this PC's data, so the app folder needs no write access.
-        public static string SavedClientFile => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ScheduleWidget", "google_client.json");
+        public static string SavedClientFile => Path.Combine(AppProfile.DataDirectory, "google_client.json");
 
         /// <summary>Checks only: the OAuth client to use instead of the files and the built-in one (null = the normal order).</summary>
         public static Tuple<string, string> ClientOverride { get; set; }

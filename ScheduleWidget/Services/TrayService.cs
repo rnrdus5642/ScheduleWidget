@@ -20,7 +20,7 @@ namespace ScheduleWidget
             {
                 Icon = icon,
                 Visible = true,
-                Text = "일정 위젯"
+                Text = AppProfile.IsDemo ? "일정 위젯 · 시연용 데이터" : "일정 위젯"
             };
 
             menuFont = SystemFonts.MenuFont;

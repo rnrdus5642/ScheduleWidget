@@ -11,7 +11,6 @@ namespace ScheduleWidget
 {
     public sealed class DataManager : IAppDataStore
     {
-        private const string AppName = "ScheduleWidget";
         private const string DataFileName = "schedules.json";
 
         private readonly string dataDirectory;
@@ -27,10 +26,8 @@ namespace ScheduleWidget
 
         public DataManager()
             : this(
-                Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                    AppName),
-                Path.Combine(AppDomain.CurrentDomain.BaseDirectory, DataFileName))
+                AppProfile.DataDirectory,
+                AppProfile.IsDemo ? null : Path.Combine(AppDomain.CurrentDomain.BaseDirectory, DataFileName))
         {
         }
 
