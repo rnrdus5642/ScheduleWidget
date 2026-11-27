@@ -9,9 +9,8 @@ namespace ScheduleWidget
 {
     // 구글 연동 in 설정: 구글 로그인 / 로그아웃 first, then two ON/OFF switches that work only while signed in —
     // 구글 캘린더 연동 (schedules) and 캐릭터도 구글 드라이브에 보관 (imported characters). Syncs run on start, every
-    // 5 minutes, and a few seconds after the schedules or characters change (an edit saved while a sync runs: a few seconds
-    // after that sync); after a failed sync the next try waits longer (30 seconds, 2 minutes, then 5 minutes, or as long as
-    // Google asks), 지금 동기화 always tries at once.
+    // about 5 minutes, and a few seconds after schedules or characters change. Quota waits
+    // persist across restarts and manual actions; randomized timing spreads clients out.
     public partial class MainWindow
     {
         private readonly GoogleCalendarService googleCalendar = new GoogleCalendarService();
@@ -25,6 +24,7 @@ namespace ScheduleWidget
         private CancellationTokenSource googleSignIn;
         private int googleFailures;       // failed syncs in a row
         private DateTime googleRetryAt;   // (UTC) no automatic sync before this after failures
+        private readonly Random googleTiming = new Random(Guid.NewGuid().GetHashCode());
         private int googlePetsVersion = -1; // CharacterCatalog.Version the last Drive sync accounted for
 
         private GoogleCalendarSettings GoogleSettings => appData?.GoogleCalendar;
@@ -43,8 +43,12 @@ namespace ScheduleWidget
 
         private void StartGoogleCalendar()
         {
-            googlePeriodicTimer = new DispatcherTimer { Interval = TimeSpan.FromMinutes(5) };
-            googlePeriodicTimer.Tick += (s, e) => RequestGoogleSync(now: true);
+            googlePeriodicTimer = new DispatcherTimer { Interval = GoogleSyncRetryPolicy.PeriodicDelay(googleTiming.NextDouble()) };
+            googlePeriodicTimer.Tick += (s, e) =>
+            {
+                googlePeriodicTimer.Interval = GoogleSyncRetryPolicy.PeriodicDelay(googleTiming.NextDouble());
+                RequestGoogleSync(now: true);
+            };
             googleSoonTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(4) };
             googleSoonTimer.Tick += (s, e) => { googleSoonTimer.Stop(); RequestGoogleSync(now: true); };
             // A character imported or deleted here → keep Drive in step soon (not the characters a Drive sync itself brought).
@@ -55,8 +59,8 @@ namespace ScheduleWidget
             CharacterCatalog.Changed += petsChanged;
             Closed += (s, e) => { googlePeriodicTimer.Stop(); googleSoonTimer.Stop(); googleSignIn?.Cancel(); CharacterCatalog.Changed -= petsChanged; };
             UpdateGoogleTimers();
-            // Characters just brought over from an old app-folder Pet are backed up at once (캐릭터도 구글 드라이브에 보관).
-            if (GoogleActive) RequestGoogleSync(now: CharacterCatalog.LastMigrated > 0 && GooglePetsOn);
+            // The first sync also backs up migrated characters, after the randomized startup delay.
+            if (GoogleActive) ScheduleGoogleSync(GoogleSyncRetryPolicy.StartupDelay(googleTiming.NextDouble()));
         }
 
         private void UpdateGoogleTimers()
@@ -109,20 +113,32 @@ namespace ScheduleWidget
         private void RequestGoogleSync(bool now)
         {
             if (closingApp || !GoogleActive || googleSoonTimer == null) return;
-            TimeSpan wait = googleRetryAt - DateTime.UtcNow;
-            if (now && wait <= TimeSpan.FromSeconds(1)) { RunGoogleSync(); return; }
+            TimeSpan wait = GoogleSyncRetryPolicy.Deadline(googleRetryAt, GoogleSettings) - DateTime.UtcNow;
+            if (now && wait <= TimeSpan.Zero) { RunGoogleSync(); return; }
+            ScheduleGoogleSync(TimeSpan.FromSeconds(4));
+            UpdateGoogleUi();
+        }
+
+        private void ScheduleGoogleSync(TimeSpan delay)
+        {
+            if (closingApp || !GoogleActive || googleSoonTimer == null) return;
+            TimeSpan wait = GoogleSyncRetryPolicy.Deadline(googleRetryAt, GoogleSettings) - DateTime.UtcNow;
             googleSoonTimer.Stop();
-            googleSoonTimer.Interval = wait > TimeSpan.FromSeconds(4) ? wait : TimeSpan.FromSeconds(4);
+            googleSoonTimer.Interval = GoogleSyncRetryPolicy.TimerInterval(wait > delay ? wait : delay);
             googleSoonTimer.Start();
         }
 
         private async void RunGoogleSync()
         {
             if (closingApp || !GoogleActive) return;
+            if (GoogleSyncRetryPolicy.QuotaDeadline(GoogleSettings) > DateTime.UtcNow)
+            { RequestGoogleSync(now: true); return; }
             if (googleSyncing) { googleSyncAgain = true; return; }
+            googleSoonTimer?.Stop();
             googleSyncing = true;
             int generation = googleWorkGeneration;
             bool failed = false, more = false;
+            bool rateLimited = false, dailyLimit = false;
             TimeSpan? googleWait = null;
             try
             {
@@ -146,7 +162,8 @@ namespace ScheduleWidget
                     catch (Exception ex) when (!SystemMediaService.IsFatal(ex) && (closingApp || generation != googleWorkGeneration))
                     { throw new OperationCanceledException(); }
                     catch (GoogleSignInRequiredException) { throw; }
-                    catch (GoogleRateLimitException ex) { googleLastError = ex.Message; failed = true; googleWait = ex.RetryAfter; }
+                    catch (GoogleRateLimitException ex)
+                    { googleLastError = ex.Message; failed = rateLimited = true; dailyLimit = ex.IsDailyLimit; googleWait = ex.RetryAfter; }
                     catch (InvalidOperationException ex) { googleLastError = ex.Message; failed = true; } // offline etc.: tried again after a pause
                     finally { if (!closingApp && generation == googleWorkGeneration) googleLastSignature = ScheduleSignature(); }
                 }
@@ -157,6 +174,8 @@ namespace ScheduleWidget
             catch (GoogleRateLimitException ex)
             {
                 failed = true;
+                rateLimited = true;
+                dailyLimit |= ex.IsDailyLimit;
                 if (ex.RetryAfter.HasValue && (!googleWait.HasValue || ex.RetryAfter.Value > googleWait.Value)) googleWait = ex.RetryAfter;
             }
             catch (GoogleConnectionException) { failed = true; }
@@ -186,7 +205,7 @@ namespace ScheduleWidget
                 }
                 else if (!closingApp)
                 {
-                    NoteGoogleSyncResult(failed, googleWait);
+                    NoteGoogleSyncResult(failed, googleWait, rateLimited, dailyLimit);
                     UpdateGoogleUi();
                     if (googleSyncAgain || more) { googleSyncAgain = false; RequestGoogleSync(now: false); } // more new schedules wait: next batch soon
                     else if (GoogleCalendarOn && ScheduleSignature() != googleLastSignature) RequestGoogleSync(now: false); // edited during the sync
@@ -195,15 +214,30 @@ namespace ScheduleWidget
             }
         }
 
-        // Failed syncs in a row wait 30 seconds, 2 minutes, then 5 minutes before the next automatic try (longer when Google
-        // asks for it); one that goes through ends the pause. Before, a failure was retried every 4 seconds.
-        private void NoteGoogleSyncResult(bool failed, TimeSpan? googleWait)
+        private void NoteGoogleSyncResult(bool failed, TimeSpan? googleWait, bool rateLimited, bool dailyLimit)
         {
-            if (!failed) { googleFailures = 0; googleRetryAt = DateTime.MinValue; return; }
-            googleFailures++;
-            TimeSpan pause = TimeSpan.FromSeconds(googleFailures == 1 ? 30 : googleFailures == 2 ? 120 : 300);
-            if (googleWait.HasValue && googleWait.Value > pause) pause = googleWait.Value < TimeSpan.FromHours(1) ? googleWait.Value : TimeSpan.FromHours(1);
-            googleRetryAt = DateTime.UtcNow + pause;
+            if (!failed)
+            {
+                googleFailures = 0; googleRetryAt = DateTime.MinValue;
+                if (GoogleSettings.RateLimitRetryAtUtc.HasValue || GoogleSettings.RateLimitFailures != 0)
+                {
+                    GoogleSettings.RateLimitRetryAtUtc = null;
+                    GoogleSettings.RateLimitFailures = 0;
+                    SaveGoogleSyncResult();
+                }
+                return;
+            }
+            googleFailures = GoogleSyncRetryPolicy.NextFailure(googleFailures);
+            int attempt = googleFailures;
+            if (rateLimited)
+                attempt = GoogleSettings.RateLimitFailures = GoogleSyncRetryPolicy.NextFailure(GoogleSettings.RateLimitFailures);
+            TimeSpan pause = GoogleSyncRetryPolicy.Backoff(attempt, rateLimited, dailyLimit, googleWait, googleTiming.NextDouble());
+            googleRetryAt = GoogleSyncRetryPolicy.AddDelay(DateTime.UtcNow, pause);
+            if (rateLimited)
+            {
+                GoogleSettings.RateLimitRetryAtUtc = googleRetryAt;
+                SaveGoogleSyncResult();
+            }
             RequestGoogleSync(now: false);
         }
 
@@ -277,15 +311,24 @@ namespace ScheduleWidget
             GooglePetsSwitch.IsChecked = GooglePetsOn;
 
             GoogleSyncNowButton.Visibility = GoogleActive ? Visibility.Visible : Visibility.Collapsed;
-            GoogleSyncNowButton.IsEnabled = !googleSyncing;
+            DateTime quotaDeadline = GoogleSyncRetryPolicy.QuotaDeadline(settings);
+            bool quotaWaiting = quotaDeadline > DateTime.UtcNow;
+            string quotaMessage = quotaWaiting ? "구글 요청 한도로 동기화를 기다립니다. " +
+                quotaDeadline.ToLocalTime().ToString("M/d HH:mm") + " 이후 자동으로 다시 시도합니다. 일정 편집은 계속할 수 있습니다." : null;
+            GoogleSyncNowButton.IsEnabled = !googleSyncing && !quotaWaiting;
+            GoogleSyncNowButton.Content = quotaWaiting ? "재시도 대기" : "지금 동기화";
+            GoogleSyncNowButton.ToolTip = quotaMessage;
+            System.Windows.Controls.ToolTipService.SetShowOnDisabled(GoogleSyncNowButton, true);
             int refused = appData.Schedules.Count(GoogleCalendarSync.IsRefused); // sent again once edited here
             GoogleCalendarStatus.Text = !GoogleConnected ? "구글 로그인 후 켤 수 있습니다."
                 : !settings.Enabled ? "꺼짐"
                 : googleSyncing ? "동기화 중…"
+                : quotaWaiting ? quotaMessage
                 : googleLastError ?? ("연동됨" + (settings.LastSync.HasValue ? " · 마지막 동기화 " + settings.LastSync.Value.ToString("M/d HH:mm") : "") +
                     (refused > 0 ? " · 구글이 받지 않은 일정 " + refused + "개 (고치면 다시 보냅니다)" : ""));
             GooglePetsStatus.Text = !GoogleConnected ? "구글 로그인 후 켤 수 있습니다."
                 : !settings.PetsEnabled ? "꺼짐"
+                : quotaWaiting ? quotaMessage
                 : googlePetStatus ?? "드라이브의 'ScheduleWidget 캐릭터' 폴더에 보관합니다. 같은 이름의 캐릭터가 이미 있으면 받지 않습니다.";
         }
 
@@ -405,7 +448,7 @@ namespace ScheduleWidget
             UpdateGoogleUi();
         }
 
-        // 지금 동기화: at once, even while an automatic retry is still waiting.
+        // Manual sync can retry a connection failure immediately, but cannot bypass a quota deadline.
         private void GoogleSyncNow_Click(object sender, RoutedEventArgs e)
         {
             googleRetryAt = DateTime.MinValue;

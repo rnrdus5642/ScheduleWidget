@@ -31,6 +31,10 @@ namespace ScheduleWidget
         // Google since then (null → the whole list). Taken before the read and in UTC, so a sync that runs long (hundreds of
         // new events sent slowly) or a clock / time zone / DST change never makes a later read skip an edit made on Google.
         public DateTime? ReadStartedUtc { get; set; }
+        // UTC quota cooldown and consecutive quota failures are local to this app profile.
+        // They remain across sign-out/toggles so those actions cannot hammer the same project.
+        public DateTime? RateLimitRetryAtUtc { get; set; }
+        public int RateLimitFailures { get; set; }
         // Google event ids that were in sync last time; one that no longer has a local item was deleted here.
         public List<string> SyncedEventIds { get; set; } = new List<string>();
         // Of those, the events this app made that have no guests: deleting the schedule here deletes them on Google too.
@@ -1323,9 +1327,10 @@ namespace ScheduleWidget
             catch (Exception ex) when (ex is HttpRequestException || ex is IOException) { }
             string reasons = ErrorReasons(text);
             int status = (int)response.StatusCode;
-            if (status == 429 || (status == 403 && ContainsAny(reasons, "rateLimitExceeded", "userRateLimitExceeded", "quotaExceeded", "dailyLimitExceeded",
-                    "RATE_LIMIT_EXCEEDED", "RESOURCE_EXHAUSTED")))
-                throw new GoogleRateLimitException(RetryAfter(response));
+            bool dailyLimit = ContainsAny(reasons, "dailyLimitExceeded", "DAILY_LIMIT_EXCEEDED");
+            if (status == 429 || (status == 403 && (dailyLimit || ContainsAny(reasons, "rateLimitExceeded", "userRateLimitExceeded", "quotaExceeded",
+                    "RATE_LIMIT_EXCEEDED", "RESOURCE_EXHAUSTED"))))
+                throw new GoogleRateLimitException(RetryAfter(response), dailyLimit);
             if (status == 403)
             {
                 // Only a missing permission (signed in before 캐릭터 보관 existed, or a permission left unticked on Google's
@@ -1650,7 +1655,7 @@ namespace ScheduleWidget
                     operations.Check();
                     if (response.StatusCode == HttpStatusCode.BadRequest || response.StatusCode == HttpStatusCode.Unauthorized)
                         throw new GoogleAuthRejectedException();
-                    if (!response.IsSuccessStatusCode) throw new InvalidOperationException("구글 인증 실패 (HTTP " + (int)response.StatusCode + ").");
+                    if (!response.IsSuccessStatusCode) await ThrowForStatusAsync(response, new Uri(url));
                     return JObject.Parse(text);
                 }
             }
@@ -1758,8 +1763,12 @@ namespace ScheduleWidget
     /// <summary>Google asks to slow down (429 / rate limit): the sync stops and waits (as long as Google says, when it does).</summary>
     public sealed class GoogleRateLimitException : InvalidOperationException
     {
-        public GoogleRateLimitException(TimeSpan? retryAfter) : base("구글 요청 한도에 걸렸습니다. 잠시 쉬었다가 다시 동기화합니다.") { RetryAfter = retryAfter; }
+        public GoogleRateLimitException(TimeSpan? retryAfter, bool dailyLimit = false)
+            : base(dailyLimit ? "구글의 하루 요청 한도에 걸렸습니다. 대기 후 자동으로 다시 동기화합니다."
+                : "구글 요청 한도에 걸렸습니다. 대기 후 자동으로 다시 동기화합니다.")
+        { RetryAfter = retryAfter; IsDailyLimit = dailyLimit; }
         public TimeSpan? RetryAfter { get; }
+        public bool IsDailyLimit { get; }
     }
 
     /// <summary>Google could not be reached (offline, no answer in time): the whole sync waits for the next try.</summary>

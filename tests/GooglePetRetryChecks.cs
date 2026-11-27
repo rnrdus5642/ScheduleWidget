@@ -126,7 +126,9 @@ namespace ScheduleWidget.Checks
                     settings = JsonConvert.DeserializeObject<GoogleCalendarSettings>(JsonConvert.SerializeObject(settings));
                     var retried = await service.SyncPetsAsync(settings);
                     Require(retried.Downloaded == 1 && handler.Downloads == 2 && settings.FailedPetFiles.Count == 0,
-                        "The same valid revision could not be retried after recovery.");
+                        "The same valid revision could not be retried after recovery. Downloaded=" + retried.Downloaded +
+                        ", requests=" + handler.Downloads + ", cached=" + settings.FailedPetFiles.Count +
+                        ", failure=" + retried.FirstError + ", note=" + retried.Note);
                 }
             }
             finally { locked?.Dispose(); CharacterCatalog.PetRoot = oldRoot; }

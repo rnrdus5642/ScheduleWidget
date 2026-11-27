@@ -129,8 +129,8 @@ namespace ScheduleWidget.Checks
             foreach (string edge in new[] { "T", "B", "L", "R" })
             {
                 var data = PetModeData(500);
-                var mini = new MiniWindow(data, () => true, () => { });
-                SetField(mini, "calendarWorkAreaOverride", (Func<Rect>)(() => new Rect(0, 0, 1920, 1440)));
+                Func<Rect> workArea = () => new Rect(0, 0, 1920, 1440);
+                var mini = new MiniWindow(data, () => true, () => { }, calendarWorkArea: workArea);
                 MiniPetSpot Spot(double along, double gap) => edge == "T" || edge == "B"
                     ? new MiniPetSpot { Left = along, EdgeY = edge, OffsetY = gap }
                     : new MiniPetSpot { Top = along, EdgeX = edge, OffsetX = gap };
@@ -150,8 +150,7 @@ namespace ScheduleWidget.Checks
                     }
                     var store = Store("pet-edge-mode-" + edge); store.SaveData(data);
                     var restored = store.LoadData().Data;
-                    var reopened = new MiniWindow(restored, () => true, () => { });
-                    SetField(reopened, "calendarWorkAreaOverride", (Func<Rect>)(() => new Rect(0, 0, 1920, 1440)));
+                    var reopened = new MiniWindow(restored, () => true, () => { }, calendarWorkArea: workArea);
                     try
                     {
                         LayoutCalendarMode(reopened);

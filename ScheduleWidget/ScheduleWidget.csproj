@@ -106,6 +106,7 @@
     <Compile Include="Services\ErrorLog.cs" />
     <Compile Include="Services\SafeDatePicker.cs" />
     <Compile Include="Services\GoogleCalendarService.cs" />
+    <Compile Include="Services\GoogleSyncRetryPolicy.cs" />
     <Compile Include="Services\GoogleOperations.cs" />
     <Compile Include="Services\MediaAppActivator.cs" />
     <Compile Include="Services\TypingInput.cs" />

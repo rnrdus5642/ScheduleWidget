@@ -46,6 +46,7 @@
     <Compile Include="AppProfileChecks.cs" />
     <Compile Include="ReviewRegressionChecks.cs" />
     <Compile Include="GooglePetRetryChecks.cs" />
+    <Compile Include="GoogleQuotaChecks.cs" />
     <Compile Include="HardeningChecks.cs" />
     <Compile Include="CalendarModeChecks.cs" />
     <Compile Include="CalendarPetModeChecks.cs" />

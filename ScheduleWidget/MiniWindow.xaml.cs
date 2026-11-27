@@ -47,9 +47,12 @@ namespace ScheduleWidget
         /// (the TODO window's pets: no music bar, but they still dance to the music).</param>
         public MiniWindow(AppData data, Func<bool> changed, Action music,
             IMusicControls player = null, Action settings = null, bool companion = false,
-            Func<bool> musicPlaying = null)
+            Func<bool> musicPlaying = null, Func<Rect> calendarWorkArea = null)
         {
             this.data = data;
+            // Apply the existing layout-test override before restoring a saved monthly board.
+            // Setting it after construction allowed the real monitor/DPI to alter test data.
+            calendarWorkAreaOverride = calendarWorkArea;
             this.companion = companion;
             this.musicPlaying = musicPlaying ?? (player != null ? (Func<bool>)(() => player.IsPlaying) : null);
             if (data.MiniExtraCharacters == null) data.MiniExtraCharacters = new System.Collections.Generic.List<MiniCharacterSlot>();

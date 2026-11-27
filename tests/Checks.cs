@@ -76,6 +76,7 @@ namespace ScheduleWidget.Checks
             Run("Google account display works without Calendar metadata permission", GoogleAccountEmail);
             Run("Drive sync only deletes explicitly removed pets", DriveDeletion);
             GooglePetRetryAudit();
+            GoogleQuotaHttpAudit();
             Run("Default pet manifests and packaged assets load", PackagedAssets);
             Run("Updates reject a modified signed manifest", SignedUpdates);
             Run("Updater restores failed partial copies, removes new fragments, and preserves intact locked files", UpdaterPartialCopyRollback);
@@ -547,6 +548,7 @@ namespace ScheduleWidget.Checks
                 Run("Unified settings navigation, save, cancel and content lifecycle", () => UnifiedSettingsFlow(main, mini, data));
                 SettingsDismissalAudit();
                 GooglePetBackoffAudit();
+                GoogleQuotaUiAudit();
                 SettingsAudit();
             }
             finally { app.Shutdown(); }
